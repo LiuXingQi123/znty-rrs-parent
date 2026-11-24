@@ -1,8 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.rrs.mapper.CrmwForbiddenAutoOutMapper">
-    <!-- 业务角色：1. 标的债券是A公司发行的债券 2. CRMW凭证由B机构创设／提供信用保护
-         3. 分别读取标的与凭证主档的issuer_code定位A、B，不扩展担保人或未确认ABS权益人 -->
+    <!--
+        CRMW 关联禁投自动出池 Mapper
+        扫描生效的 CRMW 在池组合（ip_pool_status_crmw），读取凭证与标的的主档发行主体
+        查询证券和主体的有效禁止库记录，并更新符合条件的 CRMW 组合池状态
+    -->
+
+    <!--
+        业务角色：1. 标的债券是A公司发行的债券 2. CRMW凭证由B机构创设／提供信用保护
+        3. 分别读取标的与凭证主档的issuer_code定位A、B，不扩展担保人或未确认ABS权益人
+    -->
 
     <!-- 1. 一次读取有效在库组合，只关联投资池，不分页、不排序 -->
     <select id="queryCrmwInPoolList" resultType="com.znty.rrs.entity.schedule.CrmwForbiddenOutCandidateDto">

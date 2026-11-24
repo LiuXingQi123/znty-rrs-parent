@@ -1,12 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.rrs.mapper.FundNavExportMapper">
-    <!-- 分页查询未删除的基金基础信息及市场编码。 -->
+    <!--
+        基金净值导出 Mapper
+        从基金主档（rrs_fundinfo）分页查询可选基金，并批量读取已选基金信息
+        从基金净值表（rrs_fund_nav）读取指定交易日期范围内的有效单位净值
+    -->
+
+    <!-- 分页查询未删除的基金基础信息及市场编码 -->
     <select id="queryFundNavFundPage" resultType="com.znty.rrs.entity.fundnavexport.FundNavFundDto">
         SELECT id
-               ,fund_name
-               ,fund_code
-               ,market_code
+               , fund_name
+               , fund_code
+               , market_code
         FROM rrs_fundinfo
         <where>
             is_deleted = 0
@@ -25,16 +31,16 @@
             </if>
         </where>
         ORDER BY fund_name ASC
-                 ,fund_code ASC
-                 ,id ASC
+                 , fund_code ASC
+                 , id ASC
     </select>
 
-    <!-- 查询导出选择中仍有效的基金基础信息。 -->
+    <!-- 查询导出选择中仍有效的基金基础信息 -->
     <select id="querySelectedFundList" resultType="com.znty.rrs.entity.fundnavexport.FundNavFundDto">
         SELECT id
-               ,fund_name
-               ,fund_code
-               ,market_code
+               , fund_name
+               , fund_code
+               , market_code
         FROM rrs_fundinfo
         <where>
             is_deleted = 0
@@ -44,15 +50,15 @@
             </foreach>
         </where>
         ORDER BY fund_name ASC
-                 ,fund_code ASC
-                 ,id ASC
+                 , fund_code ASC
+                 , id ASC
     </select>
 
-    <!-- 查询所选基金在指定交易日期范围内的有效单位净值。 -->
+    <!-- 查询所选基金在指定交易日期范围内的有效单位净值 -->
     <select id="queryFundNavRecords" resultType="com.znty.rrs.entity.fundnavexport.FundNavRecordDto">
         SELECT nav.fund_code
-               ,nav.trade_date
-               ,nav.unit_nav
+               , nav.trade_date
+               , nav.unit_nav
         FROM rrs_fund_nav nav
         INNER JOIN rrs_fundinfo fi ON fi.fund_code = nav.fund_code
                                   AND fi.is_deleted = 0
@@ -66,7 +72,7 @@
             AND nav.trade_date &lt;= #{navDateEnd}
         </where>
         ORDER BY nav.fund_code ASC
-                 ,nav.trade_date ASC
-                 ,nav.id ASC
+                 , nav.trade_date ASC
+                 , nav.id ASC
     </select>
 </mapper>

@@ -1,8 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.rrs.mapper.ExternalRatingAgencyMapper">
+    <!--
+        外部评级机构配置查询 Mapper
+        从外部评级机构字典（dict_external_rating_agency）读取未删除且编码非空的机构
+        返回认可机构编码，供主体外评查询和校验使用
+    -->
 
-    <!-- 查询未删除且编码非空的外部评级机构，业务仅消费机构编码。 -->
+    <!-- 查询未删除且编码非空的外部评级机构，业务仅消费机构编码 -->
     <select id="queryActiveAgencyCodeList" resultType="java.lang.String">
         SELECT TRIM(b_info_creditratingagency) AS b_info_creditratingagency
         FROM dict_external_rating_agency
@@ -11,6 +16,6 @@
           AND TRIM(b_info_creditratingagency) != ''
         GROUP BY TRIM(b_info_creditratingagency)
         ORDER BY CAST(TRIM(b_info_creditratingagency) AS UNSIGNED) ASC
-                 ,TRIM(b_info_creditratingagency) ASC
+                 , TRIM(b_info_creditratingagency) ASC
     </select>
 </mapper>

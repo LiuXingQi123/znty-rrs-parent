@@ -3312,7 +3312,7 @@ public class SecurityPoolAdjustService {
     }
 
     /** 从现有规则执行最终复核，独立调入复用本批数据库状态 */
-    private void recheckBeforeFinalApproval(List<IpAdjustLogBo> logList, BatchSubmitData batch, boolean lockPools) {
+    private void recheckBeforeFinalApproval(List<IpAdjustLogBo> logList, BatchSubmitData batch, boolean queryTargetPools) {
         boolean independent = batch != null && batch.independent;
         if (!independent) {
             // 最终审批前先检查 ABS 在库和在途身份
@@ -3326,12 +3326,12 @@ public class SecurityPoolAdjustService {
         Set<String> excelBatches = collectExcelAdjustBatches(logList);
         Map<Long, InvestmentPoolBo> poolMap = batch == null ? investmentPoolMapper.queryPoolList().stream()
                 .collect(Collectors.toMap(InvestmentPoolBo::getId, p -> p)) : batch.data.pools;
-        if (lockPools) {
+        if (queryTargetPools) {
             List<Long> poolIds = logList.stream().map(IpAdjustLogBo::getTargetPoolId)
                     .filter(Objects::nonNull).distinct().sorted().collect(Collectors.toList());
             if (!poolIds.isEmpty()) {
-                // 锁定目标池，串行完成容量和池状态复核
-                investmentPoolMapper.lockPoolByIdsList(poolIds);
+                // 按 ID 查询本次调整涉及的目标池
+                investmentPoolMapper.queryExistingPoolIdList(poolIds);
             }
         }
         Map<Long, Integer> inboundIncrements = new HashMap<>();

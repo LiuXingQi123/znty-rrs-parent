@@ -309,11 +309,11 @@ public class CrmwPoolExcelImportService {
         initializeRatingCompanies(items);
 
         // 5. 保存批次及明细，再回查任务和第一页明细
-        crmwPoolExcelImportMapper.insertBatch(batch);
+        crmwPoolExcelImportMapper.addBatch(batch);
         int batchSize = 200;
         for (int i = 0; i < items.size(); i += batchSize) {
             int end = Math.min(i + batchSize, items.size());
-            crmwPoolExcelImportMapper.insertItemList(items.subList(i, end));
+            crmwPoolExcelImportMapper.addItemList(items.subList(i, end));
         }
 
         CrmwPoolExcelImportReq pageReq = new CrmwPoolExcelImportReq();
@@ -363,7 +363,7 @@ public class CrmwPoolExcelImportService {
         // 取得 Excel 导入批次
         requireBatch(req.getImpId());
         PageHelper.startPage(req.getPageIndex(), req.getPageSize());
-        List<SysImpTmpDetlBo> list = crmwPoolExcelImportMapper.queryItemList(
+        List<SysImpTmpDetlBo> list = crmwPoolExcelImportMapper.queryItemPage(
                 // 统一未填或纯空白的值，保留非空文本
                 req.getImpId().trim(), trimToNull(req.getChkRslt()), trimToNull(req.getKeyword()));
         PageInfo<SysImpTmpDetlBo> pageInfo = new PageInfo<>(list);
@@ -535,7 +535,7 @@ public class CrmwPoolExcelImportService {
         batch.setChkDscr("主体选择已更新，请重新校验");
         batch.setResultJson(null);
         batch.setUpdtTime(now);
-        crmwPoolExcelImportMapper.updateBatchCheckResult(batch);
+        crmwPoolExcelImportMapper.editBatchCheckResult(batch);
         req.setChkRslt(null);
         if (req.getPageIndex() <= 0) {
             req.setPageIndex(1);
@@ -736,7 +736,7 @@ public class CrmwPoolExcelImportService {
                 }
                 item.setChkDscr(description);
                 item.setUpdtTime(now);
-                crmwPoolExcelImportMapper.updateItemCheckResult(item);
+                crmwPoolExcelImportMapper.editItemCheckResult(item);
             } else {
                 List<String> failReasons = new ArrayList<>();
                 for (CrmwPoolExcelImportCheckItemDto ci : checkItems) {
@@ -801,7 +801,7 @@ public class CrmwPoolExcelImportService {
         // 将调库校验结果序列化写入 result_json
         batch.setResultJson(buildCheckResultJson(checkItems, checkPass, checkFail));
         batch.setUpdtTime(now);
-        crmwPoolExcelImportMapper.updateBatchCheckResult(batch);
+        crmwPoolExcelImportMapper.editBatchCheckResult(batch);
 
         CrmwPoolExcelImportReq pageReq = new CrmwPoolExcelImportReq();
         pageReq.setImpId(batch.getImpId());
@@ -962,7 +962,7 @@ public class CrmwPoolExcelImportService {
             source.setSaveRslt("1");
             source.setSaveDscr("提交成功");
             source.setUpdtTime(now);
-            crmwPoolExcelImportMapper.updateItemSaveResult(source);
+            crmwPoolExcelImportMapper.editItemSaveResult(source);
         }
 
         try {
@@ -977,7 +977,7 @@ public class CrmwPoolExcelImportService {
         batch.setSaveRslt("1");
         batch.setSaveDscr("提交成功，共 " + logIds.size() + " 条调库记录");
         batch.setUpdtTime(now);
-        crmwPoolExcelImportMapper.updateBatchSaveResult(batch);
+        crmwPoolExcelImportMapper.editBatchSaveResult(batch);
 
         // 7. 回查任务，附加本次生成的调库日志 ID
         CrmwPoolExcelImportDto dto = toTaskDto(crmwPoolExcelImportMapper.queryByImpId(batch.getImpId()));
@@ -2257,7 +2257,7 @@ public class CrmwPoolExcelImportService {
         // 整理导入失败原因以便保存
         item.setChkDscr(joinReasons(reasons));
         item.setUpdtTime(now);
-        crmwPoolExcelImportMapper.updateItemCheckResult(item);
+        crmwPoolExcelImportMapper.editItemCheckResult(item);
     }
 
     /**

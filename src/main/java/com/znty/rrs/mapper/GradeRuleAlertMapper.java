@@ -3,6 +3,7 @@ package com.znty.rrs.mapper;
 import com.znty.rrs.entity.bo.IpGradeRuleAlertBo;
 import com.znty.rrs.entity.graderulealert.GradeRuleAlertReq;
 import com.znty.rrs.entity.graderulealert.GradeRuleAlertScanDto;
+import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
@@ -10,6 +11,7 @@ import java.util.List;
 /**
  * 不符合主体债入池规则提醒
  */
+@Mapper
 public interface GradeRuleAlertMapper {
 
     /**
@@ -28,27 +30,33 @@ public interface GradeRuleAlertMapper {
     List<IpGradeRuleAlertBo> queryAlertPage(GradeRuleAlertReq req);
 
     /**
-     * 查询同一证券+当前池的待处理待办
+     * 查询指定证券在当前池的最新待处理分级提醒
      *
-     * @param securityCode   证券代码
-     * @param currentPoolId  当前池
-     * @return 待办
+     * 兼容未设置规则类型的历史提醒，按提醒 ID 倒序取一条
+     *
+     * @param securityCode 证券代码
+     * @param currentPoolId 当前投资池 ID
+     * @return 最新待处理提醒，未找到时为 null
      */
     IpGradeRuleAlertBo queryOpenAlert(@Param("securityCode") String securityCode,
                                       @Param("currentPoolId") Long currentPoolId);
 
     /**
-     * 查询同一证券+当前池最近一条分级规则待办（含已处理和已失效）
+     * 查询指定证券在当前池的最新分级提醒
      *
-     * @param securityCode   证券代码
-     * @param currentPoolId  当前池
-     * @return 待办
+     * 按提醒 ID 倒序取一条，包含已处理和已失效的提醒
+     *
+     * @param securityCode 证券代码
+     * @param currentPoolId 当前投资池 ID
+     * @return 最新提醒，未找到时为 null
      */
     IpGradeRuleAlertBo queryLatestGradeAlert(@Param("securityCode") String securityCode,
                                              @Param("currentPoolId") Long currentPoolId);
 
     /**
      * 新增待办
+     *
+     * 写入后将生成的主键回填到入参的 id 字段
      *
      * @param bo 待办
      * @return 行数
@@ -87,10 +95,10 @@ public interface GradeRuleAlertMapper {
     int editAlertProcessed(IpGradeRuleAlertBo bo);
 
     /**
-     * 按主键查询
+     * 按提醒 ID 查询未删除的提醒
      *
-     * @param id 主键
-     * @return 待办
+     * @param id 提醒 ID
+     * @return 匹配的提醒，未找到时为 null
      */
     IpGradeRuleAlertBo queryAlertById(@Param("id") Long id);
 }

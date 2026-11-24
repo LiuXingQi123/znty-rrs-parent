@@ -3,59 +3,40 @@
         PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.rrs.mapper.SysAttachmentMapper">
+    <!--
+        系统附件 Mapper
+        维护附件关联记录（sys_attachment），按 ID、业务类型及业务主键读取或逻辑删除附件
+        查询调库手工报告附件，并核对股票附件关联的报告来源
+    -->
 
     <!-- 新增附件关联记录 -->
     <insert id="addAttachment" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO sys_attachment (
-            table_name
-            ,main_id
-            ,attachment_category
-            ,source_attachment_id
-            ,file_type
-            ,original_file_name
-            ,new_file_name
-            ,file_size
-            ,content_type
-            ,full_url
-            ,file_name
-            ,uploader_id
-            ,is_deleted
-            ,crte_time
-            ,updt_time
+            table_name, main_id, attachment_category, source_attachment_id, file_type, original_file_name
+            , new_file_name, file_size, content_type, full_url, file_name, uploader_id
+            , is_deleted, crte_time, updt_time
         ) VALUES (
-            #{tableName}
-            ,#{mainId}
-            ,#{attachmentCategory}
-            ,#{sourceAttachmentId}
-            ,#{fileType}
-            ,#{originalFileName}
-            ,#{newFileName}
-            ,#{fileSize}
-            ,#{contentType}
-            ,#{fullUrl}
-            ,#{fileName}
-            ,#{uploaderId}
-            ,0
-            ,NOW()
-            ,NOW()
+            #{tableName}, #{mainId}, #{attachmentCategory}, #{sourceAttachmentId}, #{fileType}, #{originalFileName}
+            , #{newFileName}, #{fileSize}, #{contentType}, #{fullUrl}, #{fileName}, #{uploaderId}
+            , 0, NOW(), NOW()
         )
     </insert>
 
     <!-- 按调库日志 ID 列表查询附件列表 -->
     <select id="queryAttachmentList" resultType="com.znty.rrs.entity.sysattachment.SysAttachmentDto">
         SELECT a.id
-               ,a.main_id
-               ,a.attachment_category
-               ,a.original_file_name
-               ,a.file_type
-               ,a.file_size
-               ,a.content_type
-               ,a.full_url
-               ,a.source_attachment_id
-               ,s.main_id AS source_report_id
-               ,CASE s.table_name WHEN 'rrs_report_in' THEN 'internal'
+               , a.main_id
+               , a.attachment_category
+               , a.original_file_name
+               , a.file_type
+               , a.file_size
+               , a.content_type
+               , a.full_url
+               , a.source_attachment_id
+               , s.main_id AS source_report_id
+               , CASE s.table_name WHEN 'rrs_report_in' THEN 'internal'
                     WHEN 'rrs_report_out' THEN 'external' END AS source_report_source
-               ,CASE s.table_name WHEN 'rrs_report_in' THEN ri.report_title
+               , CASE s.table_name WHEN 'rrs_report_in' THEN ri.report_title
                     WHEN 'rrs_report_out' THEN ro.report_title END AS source_report_title
         FROM sys_attachment a
         LEFT JOIN sys_attachment s ON s.id = a.source_attachment_id
@@ -68,7 +49,7 @@
           </foreach>
           AND a.is_deleted = 0
         ORDER BY a.main_id ASC
-                 ,a.id ASC
+                 , a.id ASC
     </select>
 
     <!-- 按附件 ID 查询附件 -->
@@ -94,7 +75,7 @@
     <update id="deleteAttachmentByIdsList">
         UPDATE sys_attachment
         SET is_deleted = 1
-            ,updt_time = NOW()
+            , updt_time = NOW()
         WHERE table_name = 'ip_adjust_log'
           AND main_id = #{adjustLogId}
           AND is_deleted = 0
@@ -107,20 +88,20 @@
     <!-- 查询指定调库记录下手工上传的信评报告附件 -->
     <select id="queryHandCreditReportAttachments" resultType="com.znty.rrs.entity.bo.SysAttachmentBo">
         SELECT id
-               ,table_name
-               ,main_id
-               ,attachment_category
-               ,file_type
-               ,original_file_name
-               ,new_file_name
-               ,file_size
-               ,content_type
-               ,full_url
-               ,file_name
-               ,uploader_id
-               ,is_deleted
-               ,crte_time
-               ,updt_time
+               , table_name
+               , main_id
+               , attachment_category
+               , file_type
+               , original_file_name
+               , new_file_name
+               , file_size
+               , content_type
+               , full_url
+               , file_name
+               , uploader_id
+               , is_deleted
+               , crte_time
+               , updt_time
         FROM sys_attachment
         WHERE table_name = 'ip_adjust_log'
           AND main_id = #{adjustLogId}
@@ -146,15 +127,20 @@
           AND is_deleted = 0
         ORDER BY id ASC
     </select>
-    <!-- 业务表通过服务白名单校验，SQL 同时限定表、日志和附件 ID。 -->
+
+    <!-- 业务表通过服务白名单校验，SQL 同时限定表、日志和附件 ID -->
     <update id="deleteBusinessAttachmentByIdsList">
         UPDATE sys_attachment
         SET is_deleted = 1
-            ,updt_time = NOW()
+            , updt_time = NOW()
         WHERE table_name = #{tableName} AND main_id = #{adjustLogId} AND is_deleted = 0
           AND id IN
-        <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
     </update>
+
+    <!-- 按调库日志 ID 查询未删除的股票手工研究报告附件，按附件 ID 升序返回 -->
     <select id="queryHandStockReportAttachments" resultType="com.znty.rrs.entity.bo.SysAttachmentBo">
         SELECT *
         FROM sys_attachment
@@ -162,22 +148,29 @@
           AND attachment_category = 'stock_report_hand' AND is_deleted = 0
         ORDER BY id ASC
     </select>
-    <!-- 表名为值参数，由 choose 选择固定报告表，禁止任意表拼接。 -->
+
+    <!-- 表名为值参数，由 choose 选择固定报告表，禁止任意表拼接 -->
     <select id="queryMatchingStockReportSourceCount" resultType="int">
         SELECT COUNT(1)
         <choose>
-            <when test="tableName == 'rrs_report_in'">FROM rrs_report_in</when>
-            <otherwise>FROM rrs_report_out</otherwise>
+            <when test="tableName == 'rrs_report_in'">
+                FROM rrs_report_in
+            </when>
+            <otherwise>
+                FROM rrs_report_out
+            </otherwise>
         </choose>
         WHERE id = #{reportId} AND security_code = #{stockCode} AND security_type = 'stock' AND is_deleted = 0
     </select>
-    <!-- 读取股票调库关联，防止同日志 ID 混入其他业务附件。 -->
+
+    <!-- 读取股票调库关联，防止同日志 ID 混入其他业务附件 -->
     <select id="queryStockAdjustAttachmentList" resultType="com.znty.rrs.entity.bo.SysAttachmentBo">
         SELECT * FROM sys_attachment
         WHERE table_name = 'ip_adjust_log_stock' AND main_id = #{adjustLogId} AND is_deleted = 0
         ORDER BY id ASC
     </select>
-    <!-- 复制关联使用原物理文件，复核时按合法源报告及股票归属追踪。 -->
+
+    <!-- 复制关联使用原物理文件，复核时按合法源报告及股票归属追踪 -->
     <select id="queryMatchingStockBoundReportCount" resultType="int">
         SELECT COUNT(1)
         FROM sys_attachment a

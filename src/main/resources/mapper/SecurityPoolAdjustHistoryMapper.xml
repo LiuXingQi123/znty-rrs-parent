@@ -2,37 +2,41 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.rrs.mapper.SecurityPoolAdjustHistoryMapper">
-    <!-- 证券池调整历史 mapper，对应表：ip_adjust_log（证券池调整记录），提供调整历史分页查询及证券类型选项查询功能 -->
+    <!--
+        证券池调整历史 Mapper
+        从调库日志（ip_adjust_log）读取证券入池、出池历史
+        联查证券主档与投资池配置，查询分页历史及证券类型选项
+    -->
 
     <!-- 分页查询证券池调整历史列表 -->
     <select id="querySecurityPoolAdjustHistoryPage" resultType="com.znty.rrs.entity.securitypooladjusthistory.SecurityPoolAdjustHistoryDto">
         SELECT al.id
-               ,al.id AS adjustLogId
-               ,al.security_code
-               ,al.security_short_name
-               ,al.security_type
-               ,dst.security_type_name
-               ,sb.issuer
+               , al.id AS adjustLogId
+               , al.security_code
+               , al.security_short_name
+               , al.security_type
+               , dst.security_type_name
+               , sb.issuer
                , sb.issuer_code
                , sb.full_name
-               ,sb.abs_flag
-               ,sb.guarant_flag
-               ,sb.yx_flag
-               ,sb.cj_flag
-               ,sb.issue_type
-               ,sb.inner_class
-               ,sb.inright_flag
-               ,sb.std_credit_flag
-               ,al.adjust_type
-               ,al.adjust_mode
-               ,al.target_pool_id
-               ,al.adjust_batch_no
-               ,p.pool_name AS target_pool_path
-               ,al.pool_type
-               ,al.audit_status
-               ,al.adjuster_name
-               ,al.adjust_reason
-               ,al.submit_time
+               , sb.abs_flag
+               , sb.guarant_flag
+               , sb.yx_flag
+               , sb.cj_flag
+               , sb.issue_type
+               , sb.inner_class
+               , sb.inright_flag
+               , sb.std_credit_flag
+               , al.adjust_type
+               , al.adjust_mode
+               , al.target_pool_id
+               , al.adjust_batch_no
+               , p.pool_name AS target_pool_path
+               , al.pool_type
+               , al.audit_status
+               , al.adjuster_name
+               , al.adjust_reason
+               , al.submit_time
         FROM ip_adjust_log al
         LEFT JOIN ip_investment_pool p  ON p.id  = al.target_pool_id AND p.is_deleted  = 0
         LEFT JOIN rrs_securityinfo sb  ON sb.wind_code = al.security_code
@@ -65,7 +69,7 @@
                      END) = #{securityStatus}
             </if>
             <if test="adjustTimeStart != null and adjustTimeStart != ''">
-                AND al.submit_time &gt;= #{adjustTimeStart}
+                AND al.submit_time >= #{adjustTimeStart}
             </if>
             <if test="adjustTimeEnd != null and adjustTimeEnd != ''">
                 AND al.submit_time &lt;= CONCAT(#{adjustTimeEnd}, ' 23:59:59')
@@ -115,14 +119,14 @@
         </where>
         <!-- 与禁投/主体/CRMW 历史统一：时间优先；同秒内批次号聚拢同组；id 稳定次序 -->
         ORDER BY al.submit_time DESC
-                 ,al.adjust_batch_no DESC
-                 ,al.id DESC
+                 , al.adjust_batch_no DESC
+                 , al.id DESC
     </select>
 
     <!-- 查询调整历史中出现的证券类型选项（与列表同口径：债券大类，含 crmw） -->
     <select id="querySecurityTypeList" resultType="com.znty.rrs.entity.common.SecurityTypeOptionDto">
         SELECT DISTINCT al.security_type
-                       ,dst.security_type_name
+                       , dst.security_type_name
         FROM ip_adjust_log al
         INNER JOIN dict_security_type dst ON dst.security_type = al.security_type
                                          AND dst.is_deleted = 0
@@ -130,7 +134,7 @@
         WHERE al.is_deleted = 0
           AND al.security_type IS NOT NULL
         ORDER BY dst.sort_order ASC
-                 ,al.security_type ASC
+                 , al.security_type ASC
     </select>
 
 </mapper>

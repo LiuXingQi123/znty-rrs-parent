@@ -16,6 +16,7 @@ public interface CompanyPoolAdjustHistoryMapper {
      * 分页查询主体池调整历史
      *
      * @param req 查询条件
+     * @return 符合条件的主体池调整历史列表
      */
     List<CompanyPoolAdjustHistoryDto> queryCompanyPoolAdjustHistoryPage(CompanyPoolAdjustHistoryReq req);
 }

@@ -1,6 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.rrs.mapper.BusinessPermissionMapper">
+    <!--
+        页面业务入口权限 Mapper
+        从 AIS 用户角色关系和角色配置读取用户拥有的启用角色
+        按角色返回用户可访问的业务入口
+    -->
+
     <!-- 页面业务入口名单在 SQL 中配置；每个业务只返回一条，不递归角色层级 -->
     <select id="queryBusinessDomainList" resultType="com.znty.rrs.entity.mymatters.BusinessDomainDto">
         <!-- 债券入口：用户 1 或启用的直属角色 1～6、10 -->

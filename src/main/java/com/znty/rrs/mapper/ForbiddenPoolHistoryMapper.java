@@ -16,6 +16,7 @@ public interface ForbiddenPoolHistoryMapper {
      * 分页查询禁投池调整历史
      *
      * @param req 查询条件
+     * @return 符合条件的禁投池变更历史列表
      */
     List<ForbiddenPoolHistoryDto> queryForbiddenPoolHistoryPage(ForbiddenPoolHistoryReq req);
 }

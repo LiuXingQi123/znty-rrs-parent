@@ -15,11 +15,16 @@ public interface SecurityPoolQueryMapper {
 
     /**
      * 分页查询证券池中的证券列表（债券大类，含 crmw 跟债记录）
+     *
+     * @param req 证券在池记录查询条件
+     * @return 符合条件的证券在池记录列表
      */
     List<SecurityPoolQueryDto> querySecurityPoolPage(SecurityPoolQueryReq req);
 
     /**
      * 查询证券池中出现的证券类型选项（与列表同口径：债券大类，含 crmw）
+     *
+     * @return 符合条件的证券类型选项列表
      */
     List<SecurityTypeOptionDto> querySecurityTypeList();
 }

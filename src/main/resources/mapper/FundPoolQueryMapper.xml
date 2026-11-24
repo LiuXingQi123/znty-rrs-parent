@@ -1,33 +1,37 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.rrs.mapper.FundPoolQueryMapper">
-    <!-- 基金池查询 mapper：仅查询审批通过且未删除的基金当前池状态。 -->
+    <!--
+        基金池当前状态查询 Mapper
+        以基金池状态表（ip_pool_status_fund）为准查询已审批通过且未删除的当前记录
+        联查基金主档、投资池配置和类型字典，返回在池列表及基金类型选项
+    -->
 
     <!-- 分页查询基金池中已生效的基金列表 -->
     <select id="queryFundPoolPage" resultType="com.znty.rrs.entity.fundpoolquery.FundPoolQueryDto">
         SELECT ips.id
-               ,COALESCE(fi.fund_name, ips.fund_name) AS fundName
-               ,ips.fund_code
-               ,ips.adjuster_name
-               ,ips.entry_time
-               ,ips.target_pool_id
-               ,ips.adjust_log_id
-               ,ips.adjust_batch_no
-               ,p.pool_name AS targetPoolName
-               ,ips.security_type
-               ,dst.security_type_name
-               ,fi.fund_manager_names
-               ,fi.fund_administrator
-               ,fi.fund_custodian
-               ,fi.establishment_date
-               ,fi.issue_term
-               ,fi.latest_nav
-               ,fi.accumulated_nav
-               ,fi.daily_ten_thousand_income
-               ,fi.seven_day_annualized_yield
-               ,fi.latest_scale
-               ,fi.previous_close_price
-               ,fi.premium_discount_rate
+               , COALESCE(fi.fund_name, ips.fund_name) AS fundName
+               , ips.fund_code
+               , ips.adjuster_name
+               , ips.entry_time
+               , ips.target_pool_id
+               , ips.adjust_log_id
+               , ips.adjust_batch_no
+               , p.pool_name AS targetPoolName
+               , ips.security_type
+               , dst.security_type_name
+               , fi.fund_manager_names
+               , fi.fund_administrator
+               , fi.fund_custodian
+               , fi.establishment_date
+               , fi.issue_term
+               , fi.latest_nav
+               , fi.accumulated_nav
+               , fi.daily_ten_thousand_income
+               , fi.seven_day_annualized_yield
+               , fi.latest_scale
+               , fi.previous_close_price
+               , fi.premium_discount_rate
         FROM ip_pool_status_fund ips
         LEFT JOIN ip_investment_pool p ON ips.target_pool_id = p.id
                                       AND p.is_deleted = 0
@@ -66,13 +70,13 @@
             </if>
         </where>
         ORDER BY ips.entry_time DESC
-                 ,ips.id DESC
+                 , ips.id DESC
     </select>
 
     <!-- 查询基金池中已生效的基金类型选项 -->
     <select id="queryFundTypeList" resultType="com.znty.rrs.entity.common.SecurityTypeOptionDto">
         SELECT DISTINCT ips.security_type
-                       ,dst.security_type_name
+                       , dst.security_type_name
         FROM ip_pool_status_fund ips
         INNER JOIN dict_security_type dst ON dst.security_type = ips.security_type
                                          AND dst.category_type = 'fund'
@@ -80,6 +84,6 @@
         WHERE ips.is_deleted = 0
           AND ips.audit_status = '20'
         ORDER BY dst.sort_order ASC
-                 ,ips.security_type ASC
+                 , ips.security_type ASC
     </select>
 </mapper>

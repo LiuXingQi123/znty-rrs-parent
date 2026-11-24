@@ -5,10 +5,17 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import java.util.List;
 
-/** 查询用户与角色对应的页面业务入口 */
+/**
+ * 查询用户与角色对应的页面业务入口
+ */
 @Mapper
 public interface BusinessPermissionMapper {
-    /** 查询固定用户及其启用的直属角色可显示的业务入口 */
+    /**
+     * 查询固定用户及其启用的直属角色可显示的业务入口
+     *
+     * @param userId 用户 ID
+     * @return 符合条件的可访问的业务入口列表
+     */
     List<BusinessDomainDto> queryBusinessDomainList(@Param("userId") Long userId);
 
 }

@@ -1,24 +1,28 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.rrs.mapper.CompanyPoolAdjustHistoryMapper">
-    <!-- 主体池调整历史 mapper，对应表：ip_adjust_log（调库记录） -->
+    <!--
+        主体池调整历史 Mapper
+        从调库日志（ip_adjust_log）查询发行主体的入池和出池记录
+        联查投资池配置、证券类型字典和公司简介，返回分页历史
+    -->
 
     <!-- 分页查询主体池调整历史 -->
     <select id="queryCompanyPoolAdjustHistoryPage" resultType="com.znty.rrs.entity.companypool.CompanyPoolAdjustHistoryDto">
         SELECT al.id
-               ,al.adjuster_name
-               ,al.submit_time
-               ,al.security_short_name AS companyName
-               ,al.security_code AS companyCode
+               , al.adjuster_name
+               , al.submit_time
+               , al.security_short_name AS companyName
+               , al.security_code AS companyCode
                <!-- 主体简介按 COMP_ID 取统一社会信用代码 -->
-               ,wci.REGISTERNUMBER AS registerNumber
-               ,al.adjust_type
-               ,al.adjust_mode
-               ,al.target_pool_id
-               ,al.id AS adjustLogId
-               ,al.adjust_batch_no
-               ,COALESCE(al.target_pool_name, p.pool_name) AS target_pool_name
-               ,al.audit_status
+               , wci.REGISTERNUMBER
+               , al.adjust_type
+               , al.adjust_mode
+               , al.target_pool_id
+               , al.id AS adjustLogId
+               , al.adjust_batch_no
+               , COALESCE(al.target_pool_name, p.pool_name) AS target_pool_name
+               , al.audit_status
         FROM ip_adjust_log al
         INNER JOIN dict_security_type dst ON dst.security_type = al.security_type
                                          AND dst.is_deleted = 0
@@ -54,7 +58,7 @@
                 AND wci.REGISTERNUMBER LIKE CONCAT(#{registerNumber}, '%')
             </if>
             <if test="adjustTimeStart != null and adjustTimeStart != ''">
-                AND al.submit_time &gt;= #{adjustTimeStart}
+                AND al.submit_time >= #{adjustTimeStart}
             </if>
             <if test="adjustTimeEnd != null and adjustTimeEnd != ''">
                 AND al.submit_time &lt;= CONCAT(#{adjustTimeEnd}, ' 23:59:59')
@@ -71,8 +75,8 @@
         </where>
         <!-- 提交时间优先（最新在前）；同秒内按批次号聚拢同组手工/联动/互斥；id 稳定次序 -->
         ORDER BY al.submit_time DESC
-                 ,al.adjust_batch_no DESC
-                 ,al.id DESC
+                 , al.adjust_batch_no DESC
+                 , al.id DESC
     </select>
 
 </mapper>

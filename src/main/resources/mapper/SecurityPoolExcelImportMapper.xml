@@ -2,6 +2,11 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.rrs.mapper.SecurityPoolExcelImportMapper">
+    <!--
+        证券和主体 Excel 导入 Mapper
+        维护通用导入批次（sys_imp_tmp）和明细（sys_imp_tmp_detl），保存校验和提交结果
+        查询目标池及池内成员，匹配证券和主体，并读取清池时的报告豁免依据
+    -->
 
     <!-- ═══════════ 导入临时主表 sys_imp_tmp ═══════════ -->
 
@@ -120,7 +125,8 @@
                 AND fld001 LIKE CONCAT(#{keyword}, '%')
             </if>
         </where>
-        ORDER BY row_no ASC, id ASC
+        ORDER BY row_no ASC
+                 , id ASC
     </select>
 
     <!-- 查询批次下全部有效明细 -->
@@ -134,7 +140,8 @@
         FROM sys_imp_tmp_detl
         WHERE imp_id = #{impId}
           AND is_deleted = 0
-        ORDER BY row_no ASC, id ASC
+        ORDER BY row_no ASC
+                 , id ASC
     </select>
 
     <!-- 按明细 ID 查询本批有效导入行 -->
@@ -262,9 +269,9 @@
     <!-- 原查询值随结果返回，保留数据库比较语义；每次由服务层传入最多 500 个非空条件 -->
     <select id="queryCompanyMatchList" resultType="com.znty.rrs.entity.securitypoolexcelimport.CompanyImportMatchDto">
         SELECT lookup.lookup_value
-               ,c.COMP_ID AS companyCode
-               ,c.COMP_NAME AS companyFullName
-               ,c.COMP_SNAME AS companyShortName
+               , c.COMP_ID AS companyCode
+               , c.COMP_NAME AS companyFullName
+               , c.COMP_SNAME AS companyShortName
         FROM ais_inv_ods.wind_compintroduction c
         INNER JOIN (
             <foreach collection="values" item="value" separator="UNION ALL">
@@ -272,9 +279,15 @@
             </foreach>
         ) lookup ON
         <choose>
-            <when test="lookupType == 0">c.REGISTERNUMBER = lookup.lookup_value</when>
-            <when test="lookupType == 1">c.COMP_ID = lookup.lookup_value</when>
-            <otherwise>(c.COMP_NAME = lookup.lookup_value OR c.COMP_SNAME = lookup.lookup_value)</otherwise>
+            <when test="lookupType == 0">
+                c.REGISTERNUMBER = lookup.lookup_value
+            </when>
+            <when test="lookupType == 1">
+                c.COMP_ID = lookup.lookup_value
+            </when>
+            <otherwise>
+                (c.COMP_NAME = lookup.lookup_value OR c.COMP_SNAME = lookup.lookup_value)
+            </otherwise>
         </choose>
         WHERE c.COMP_ID IS NOT NULL
           AND TRIM(c.COMP_ID) != ''
@@ -285,37 +298,37 @@
     <!-- 按父池名称 + 子池名称解析启用叶子投资池；证券导入根叶子池时两列均填池名 -->
     <select id="queryEnabledLeafPoolByParentAndChildName" resultType="com.znty.rrs.entity.bo.InvestmentPoolBo">
         SELECT c.id
-               ,c.parent_id
-               ,c.pool_code
-               ,c.pool_name
-               ,c.pool_type
-               ,c.pool_level
-               ,c.market_codes
-               ,c.variety_codes
-               ,c.hs_pool_name
-               ,c.in_flow_id
-               ,c.in_flow_key
-               ,c.in_flow_name
-               ,c.out_flow_id
-               ,c.out_flow_key
-               ,c.out_flow_name
-               ,c.simple_in_flow_id
-               ,c.simple_in_flow_key
-               ,c.simple_out_flow_id
-               ,c.simple_out_flow_key
-               ,c.batch_in_flow_id
-               ,c.batch_in_flow_key
-               ,c.batch_in_flow_name
-               ,c.batch_out_flow_id
-               ,c.batch_out_flow_key
-               ,c.batch_out_flow_name
-               ,c.max_capacity
-               ,c.lock_flag
-               ,c.open_day_adjust
-               ,c.status
-               ,c.is_deleted
-               ,c.crte_time
-               ,c.updt_time
+               , c.parent_id
+               , c.pool_code
+               , c.pool_name
+               , c.pool_type
+               , c.pool_level
+               , c.market_codes
+               , c.variety_codes
+               , c.hs_pool_name
+               , c.in_flow_id
+               , c.in_flow_key
+               , c.in_flow_name
+               , c.out_flow_id
+               , c.out_flow_key
+               , c.out_flow_name
+               , c.simple_in_flow_id
+               , c.simple_in_flow_key
+               , c.simple_out_flow_id
+               , c.simple_out_flow_key
+               , c.batch_in_flow_id
+               , c.batch_in_flow_key
+               , c.batch_in_flow_name
+               , c.batch_out_flow_id
+               , c.batch_out_flow_key
+               , c.batch_out_flow_name
+               , c.max_capacity
+               , c.lock_flag
+               , c.open_day_adjust
+               , c.status
+               , c.is_deleted
+               , c.crte_time
+               , c.updt_time
         FROM ip_investment_pool c
         LEFT JOIN ip_investment_pool p
                ON p.id = c.parent_id
@@ -349,11 +362,11 @@
     <select id="queryPoolMemberList"
             resultType="com.znty.rrs.entity.securitypoolexcelimport.PoolMemberDto">
         SELECT ips.target_pool_id
-               ,ips.security_code
-               ,CASE WHEN ips.security_type = 'company' THEN ips.security_short_name
+               , ips.security_code
+               , CASE WHEN ips.security_type = 'company' THEN ips.security_short_name
                      ELSE COALESCE(si.short_name, ips.security_short_name)
                 END AS security_short_name
-               ,ips.security_type
+               , ips.security_type
         FROM ip_pool_status ips
         LEFT JOIN rrs_securityinfo si ON si.wind_code = ips.security_code AND ips.security_type != 'company'
         WHERE (ips.security_type = 'company' OR EXISTS (
@@ -366,8 +379,11 @@
         </foreach>
           AND ips.audit_status = '20'
           AND ips.is_deleted = 0
-        ORDER BY ips.target_pool_id ASC, ips.security_code ASC
+        ORDER BY ips.target_pool_id ASC
+                 , ips.security_code ASC
     </select>
+
+    <!-- 统计指定池当前有效在池的主体和债券数量 -->
     <select id="queryClearPoolSummaryList" resultType="com.znty.rrs.entity.securitypoolexcelimport.PoolClearSummaryDto">
         SELECT pool.id
              , pool.pool_name
@@ -385,7 +401,10 @@
         GROUP BY pool.id, pool.pool_name
         ORDER BY pool.id
     </select>
+
+    <!-- 查询可免交信评报告的候选主体和债券 -->
     <select id="queryClearReportExemptCodes" resultType="java.lang.String">
+        <!-- 从近 6 个月已通过的调入日志中提取关联了有效信评附件的证券和主体代码 -->
         WITH recent_report_logs AS (
             SELECT DISTINCT l.security_code
                  , l.security_type
@@ -399,6 +418,7 @@
               AND l.is_deleted = 0
               AND l.crte_time >= TIMESTAMPADD(MONTH, -6, NOW())
         )
+        <!-- 返回符合报告豁免条件的主体和同一发行主体的候选债券代码 -->
         SELECT security_code
         FROM recent_report_logs
         WHERE security_type = 'company'

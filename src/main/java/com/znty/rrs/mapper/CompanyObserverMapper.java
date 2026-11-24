@@ -4,16 +4,34 @@ import com.znty.rrs.entity.bo.IpPoolStatusBo;
 import com.znty.rrs.entity.schedule.CompanyObserverDto;
 import com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto;
 import java.util.List;
+import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
-/** AIS 主体观察名单及本轮调库基础数据查询。 */
+/**
+ * AIS 主体观察名单及本轮调库基础数据查询
+ */
+@Mapper
 public interface CompanyObserverMapper {
-    /** 查询观察名单及主体信息。 */
+    /**
+     * 查询观察名单及主体信息
+     *
+     * @return 符合条件的主体观察名单记录列表
+     */
     List<CompanyObserverDto> queryCompanyObserverList();
 
-    /** 查询目标池内主体及在池债券的发行主体。 */
+    /**
+     * 查询目标池内主体及在池债券的发行主体
+     *
+     * @param poolIds 投资池 ID 列表
+     * @return 符合条件的自动调库候选列表
+     */
     List<ScheduledAdjustCandidateDto> queryCurrentCompanyList(@Param("poolIds") List<Long> poolIds);
 
-    /** 批量读取本轮主体、债券在所有普通池中的有效状态。 */
+    /**
+     * 批量读取本轮主体、债券在所有普通池中的有效状态
+     *
+     * @param securityCodes 证券代码列表
+     * @return 符合条件的证券或主体池状态列表
+     */
     List<IpPoolStatusBo> queryObserverPoolStatusList(@Param("securityCodes") List<String> securityCodes);
 }

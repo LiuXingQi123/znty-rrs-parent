@@ -12,6 +12,11 @@ import java.util.List;
 @Mapper
 public interface CrmwPoolAdjustHistoryMapper {
 
-    /** 分页查询CRMW池调整历史列表 */
+    /**
+     * 分页查询CRMW池调整历史列表
+     *
+     * @param req 调库历史的查询条件
+     * @return 符合条件的CRMW 调库历史列表
+     */
     List<CrmwPoolAdjustHistoryDto> queryCrmwPoolAdjustHistoryPage(CrmwPoolAdjustHistoryReq req);
 }

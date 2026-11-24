@@ -8,7 +8,9 @@ import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
 
-/** 证券 Excel 直通提交批量写入 */
+/**
+ * 证券 Excel 直通提交批量写入
+ */
 @Mapper
 public interface BatchSecurityAdjustSubmitMapper {
 

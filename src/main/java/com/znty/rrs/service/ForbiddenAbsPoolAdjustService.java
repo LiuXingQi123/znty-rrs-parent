@@ -2978,8 +2978,8 @@ public class ForbiddenAbsPoolAdjustService {
         List<Long> poolIds = logList.stream().map(IpAdjustLogBo::getTargetPoolId)
                 .filter(Objects::nonNull).distinct().sorted().collect(Collectors.toList());
         if (!poolIds.isEmpty()) {
-            // 锁定目标池，串行完成容量和池状态复核
-            investmentPoolMapper.lockPoolByIdsList(poolIds);
+            // 按 ID 查询本次调整涉及的目标池
+            investmentPoolMapper.queryExistingPoolIdList(poolIds);
         }
         Map<Long, Integer> inboundIncrements = new HashMap<>();
         Map<Long, Map<String, List<Long>>> relationMap = buildPoolRelationMap(
@@ -3055,7 +3055,7 @@ public class ForbiddenAbsPoolAdjustService {
         if (logList == null || logList.isEmpty()) {
             return;
         }
-        // 按最终审批口径锁池并复核动态业务状态
+        // 按最终审批口径复核动态业务状态
         recheckBeforeFinalApproval(logList);
         // 将复核通过的直通调库日志统一应用到当前池状态
         applyPoolStatusChanges(logList);

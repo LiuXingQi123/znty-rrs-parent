@@ -260,8 +260,8 @@ public class StockPoolAdjustService {
         Map<String, StockInfoBo> lockedStocks = lockStockList(Collections.singletonList(firstLog.getStockCode()));
         // 使用已锁定的当前主档复核股票状态
         StockInfoBo stock = requireLockedStock(firstLog.getStockCode(), lockedStocks);
-        // 主档锁后按升序取得本组目标池锁，串行复核容量
-        lockTargetPools(logs.stream().map(StockAdjustLogBo::getTargetPoolId).collect(Collectors.toList()));
+        // 锁定股票主档后确认整组目标池仍存在
+        checkTargetPoolsExist(logs.stream().map(StockAdjustLogBo::getTargetPoolId).collect(Collectors.toList()));
         Map<Long, InvestmentPoolBo> poolMap = investmentPoolMapper.queryPoolList().stream()
                 .filter(pool -> pool.getId() != null)
                 .collect(Collectors.toMap(InvestmentPoolBo::getId, pool -> pool));
@@ -337,10 +337,10 @@ public class StockPoolAdjustService {
         reportService.addInternalStockReportsOnFinish(logs);
     }
 
-    /** 按升序锁定目标池，保护容量复核与并发成员写入。 */
-    private void lockTargetPools(List<Long> poolIds) {
+    /** 查询并确认整组目标池仍存在 */
+    private void checkTargetPoolsExist(List<Long> poolIds) {
         List<Long> ordered = poolIds.stream().filter(id -> id != null).distinct().sorted().collect(Collectors.toList());
-        if (ordered.size() == 0 || investmentPoolMapper.lockPoolByIdsList(ordered).size() != ordered.size()) {
+        if (ordered.size() == 0 || investmentPoolMapper.queryExistingPoolIdList(ordered).size() != ordered.size()) {
             throw new BizException("目标投资池不存在或已删除");
         }
     }
@@ -562,8 +562,8 @@ public class StockPoolAdjustService {
         // 整批主档按主键统一锁定，不允许边写边校验
         Map<String, StockInfoBo> stocks = lockStockList(requests.stream()
                 .map(StockPoolAdjustSubmitReq::getStockCode).collect(Collectors.toList()));
-        // 目标池统一按 ID 升序锁定，避免来源组顺序造成交叉锁
-        lockTargetPools(requests.stream().flatMap(req -> req.getItems().stream())
+        // 统一检查所有来源组的目标池是否存在
+        checkTargetPoolsExist(requests.stream().flatMap(req -> req.getItems().stream())
                 .map(StockPoolAdjustSubmitReq.AdjustItem::getTargetPoolId).collect(Collectors.toList()));
         List<PreparedSubmit> prepared = new ArrayList<>();
         for (StockPoolAdjustSubmitReq req : requests) {
@@ -707,7 +707,7 @@ public class StockPoolAdjustService {
     }
 
     /**
-     * 原子提交股票批量申请，全部股票和目标池锁定并复核后才写入。
+     * 原子提交股票批量申请，锁定股票主档并完成目标池和业务复核后才写入
      *
      * @param requests 各股票完整的手工及关系项申请
      * @param submissionFiles 整批共用的物理上传文件上下文
@@ -762,8 +762,8 @@ public class StockPoolAdjustService {
         validateBatchSharedMaterials(requests);
         // 一次按主档主键顺序锁定整批股票
         Map<String, StockInfoBo> lockedStocks = lockStockList(new ArrayList<>(codes));
-        // 在逐组复核前按全批目标池 ID 升序统一锁定，避免跨组锁顺序不同
-        lockTargetPools(requests.stream().flatMap(req -> req.getItems().stream())
+        // 逐组复核前统一检查全批目标池是否存在
+        checkTargetPoolsExist(requests.stream().flatMap(req -> req.getItems().stream())
                 .map(StockPoolAdjustSubmitReq.AdjustItem::getTargetPoolId).collect(Collectors.toList()));
         List<PreparedSubmit> preparedRequests = new ArrayList<>();
         for (StockPoolAdjustSubmitReq req : requests) {
@@ -855,8 +855,8 @@ public class StockPoolAdjustService {
         validateSubmitRequest(req, batch, excelImport);
         // 确认申请中的股票仍处于可调库状态
         StockInfoBo stock = requireLockedStock(req.getStockCode(), lockedStocks);
-        // 主档锁后按投资池 ID 升序锁定容量与成员状态
-        lockTargetPools(req.getItems().stream().map(StockPoolAdjustSubmitReq.AdjustItem::getTargetPoolId).collect(Collectors.toList()));
+        // 锁定股票主档后确认申请中的目标池仍存在
+        checkTargetPoolsExist(req.getItems().stream().map(StockPoolAdjustSubmitReq.AdjustItem::getTargetPoolId).collect(Collectors.toList()));
         Map<Long, InvestmentPoolBo> poolMap = investmentPoolMapper.queryPoolList().stream()
                 .filter(pool -> pool.getId() != null)
                 .collect(Collectors.toMap(InvestmentPoolBo::getId, pool -> pool));

@@ -346,7 +346,7 @@ public class BatchSecurityPoolAdjustServiceTest {
         when(adjust.addPoolStatus(any())).thenReturn(1);
 
         assertThat(submit.submitAdjustLogBatch(requests, files, preview)).hasSize(1000);
-        verify(pools, never()).lockPoolByIdsList(anyList());
+        verify(pools, never()).queryExistingPoolIdList(anyList());
         verify(batch).queryPoolCounts(Collections.singletonList(11L));
         verify(batch, times(2)).querySecurities(anyList());
         verify(batch, times(2)).queryActiveStates(anyList());

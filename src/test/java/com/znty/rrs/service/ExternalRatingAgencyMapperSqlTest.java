@@ -91,7 +91,8 @@ public class ExternalRatingAgencyMapperSqlTest {
         for (String queryId : Arrays.asList("queryCompanyByLowOuterRatingNotInPool",
                 "queryCompanyByNotLowOuterRatingInPool")) {
             assertThat(selectBlock(xml, queryId)).as(queryId)
-                    .contains(ratingDateFilter, ",ann_dt DESC")
+                    .contains(ratingDateFilter)
+                    .containsPattern(",\\s*ann_dt\\s+DESC")
                     .doesNotContain("ann_dt2");
         }
     }

@@ -1,17 +1,21 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.rrs.mapper.WindRatingMapper">
-    <!-- Wind 发行人评级跨库查询，对应表：ais_inv_ods.wind_cbondissuerrating（Wind 同步的外部评级数据，调库入库只读不写） -->
+    <!--
+        Wind 发行主体外评查询 Mapper
+        从 Wind 外评表（ais_inv_ods.wind_cbondissuerrating）读取发行人和担保人的主体评级
+        按认可机构和评级日期筛选最新外评，供调库校验使用
+    -->
 
     <!-- 按评级日期取发行人主体最新评级，认可机构由配置参数控制 -->
     <select id="queryLatestRating" resultType="com.znty.rrs.entity.bo.WindIssuerRatingBo">
         SELECT b_info_creditrating AS creditRating
-               ,b_info_precreditrating AS preCreditRating
-               ,b_creditratingchange AS creditRatingChange
+               , b_info_precreditrating AS preCreditRating
+               , b_creditratingchange AS creditRatingChange
         FROM ais_inv_ods.wind_cbondissuerrating
         WHERE s_info_compcode = #{compCode}
         <choose>
-            <when test="agencyCodes != null and agencyCodes.size() &gt; 0">
+            <when test="agencyCodes != null and agencyCodes.size() > 0">
               AND b_info_creditratingagency IN
               <foreach collection="agencyCodes" item="agencyCode" open="(" separator="," close=")">
                   #{agencyCode}

@@ -2,32 +2,36 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.rrs.mapper.TempSecurityCodeMapper">
-    <!-- 临时代码管理 mapper，对应表：rrs_temp_security_code，提供临时代码查询、新增、更新、取消发行和删除功能 -->
+    <!--
+        证券临时代码管理 Mapper
+        查询和维护临时代码登记（rrs_temp_security_code）及证券主档（rrs_securityinfo）
+        支持转正、取消发行和逻辑删除，处理普通池与 CRMW 的引用并记录转换结果
+    -->
 
     <!-- 分页查询临时代码列表 -->
     <select id="queryTempSecurityCodePage" resultType="com.znty.rrs.entity.tempsecuritycode.TempSecurityCodeDto">
         SELECT t.id
-               ,t.temp_security_name
-               ,t.temp_security_code
-               ,t.temp_security_market
-               ,t.temp_security_type
-               ,dst_temp.security_type_name AS tempSecurityTypeName
-               ,t.temp_mitigation_code
-               ,t.temp_company_code
-               ,t.temp_company_name_snapshot
-               ,t.temp_issue_date
-               ,t.temp_maturity_date
-               ,t.security_name
-               ,t.security_code
-               ,t.security_market
-               ,t.security_type
-               ,dst.security_type_name
-               ,t.update_time
-               ,t.status
-               ,t.oprt_source
-               ,t.memo
-               ,t.crte_time
-               ,t.updt_time
+               , t.temp_security_name
+               , t.temp_security_code
+               , t.temp_security_market
+               , t.temp_security_type
+               , dst_temp.security_type_name AS tempSecurityTypeName
+               , t.temp_mitigation_code
+               , t.temp_company_code
+               , t.temp_company_name_snapshot
+               , t.temp_issue_date
+               , t.temp_maturity_date
+               , t.security_name
+               , t.security_code
+               , t.security_market
+               , t.security_type
+               , dst.security_type_name
+               , t.update_time
+               , t.status
+               , t.oprt_source
+               , t.memo
+               , t.crte_time
+               , t.updt_time
         FROM rrs_temp_security_code t
         LEFT JOIN dict_security_type dst_temp ON dst_temp.security_type = t.temp_security_type
                                              AND dst_temp.is_deleted = 0
@@ -62,35 +66,35 @@
                      WHEN 'deleted' THEN 4
                      ELSE 5
                  END ASC
-                 ,t.update_time DESC
-                 ,t.crte_time DESC
-                 ,t.id DESC
+                 , t.update_time DESC
+                 , t.crte_time DESC
+                 , t.id DESC
     </select>
 
     <!-- 根据 ID 查询临时代码 -->
     <select id="queryTempSecurityCodeById" resultType="com.znty.rrs.entity.bo.TempSecurityCodeBo">
         SELECT id
-               ,sec_id
-               ,temp_security_name
-               ,temp_security_code
-               ,temp_security_market
-               ,temp_security_type
-               ,temp_mitigation_code
-               ,temp_company_code
-               ,temp_company_name_snapshot
-               ,temp_issue_date
-               ,temp_maturity_date
-               ,security_name
-               ,security_code
-               ,security_market
-               ,security_type
-               ,update_time
-               ,status
-               ,is_deleted
-               ,oprt_source
-               ,memo
-               ,crte_time
-               ,updt_time
+               , sec_id
+               , temp_security_name
+               , temp_security_code
+               , temp_security_market
+               , temp_security_type
+               , temp_mitigation_code
+               , temp_company_code
+               , temp_company_name_snapshot
+               , temp_issue_date
+               , temp_maturity_date
+               , security_name
+               , security_code
+               , security_market
+               , security_type
+               , update_time
+               , status
+               , is_deleted
+               , oprt_source
+               , memo
+               , crte_time
+               , updt_time
         FROM rrs_temp_security_code
         WHERE id = #{id}
           AND is_deleted = 0
@@ -99,27 +103,27 @@
     <!-- 根据 ID 查询临时代码详情 -->
     <select id="queryTempSecurityCodeDetail" resultType="com.znty.rrs.entity.tempsecuritycode.TempSecurityCodeDto">
         SELECT t.id
-               ,t.temp_security_name
-               ,t.temp_security_code
-               ,t.temp_security_market
-               ,t.temp_security_type
-               ,dst_temp.security_type_name AS tempSecurityTypeName
-               ,t.temp_mitigation_code
-               ,t.temp_company_code
-               ,t.temp_company_name_snapshot
-               ,t.temp_issue_date
-               ,t.temp_maturity_date
-               ,t.security_name
-               ,t.security_code
-               ,t.security_market
-               ,t.security_type
-               ,dst.security_type_name
-               ,t.update_time
-               ,t.status
-               ,t.oprt_source
-               ,t.memo
-               ,t.crte_time
-               ,t.updt_time
+               , t.temp_security_name
+               , t.temp_security_code
+               , t.temp_security_market
+               , t.temp_security_type
+               , dst_temp.security_type_name AS tempSecurityTypeName
+               , t.temp_mitigation_code
+               , t.temp_company_code
+               , t.temp_company_name_snapshot
+               , t.temp_issue_date
+               , t.temp_maturity_date
+               , t.security_name
+               , t.security_code
+               , t.security_market
+               , t.security_type
+               , dst.security_type_name
+               , t.update_time
+               , t.status
+               , t.oprt_source
+               , t.memo
+               , t.crte_time
+               , t.updt_time
         FROM rrs_temp_security_code t
         LEFT JOIN dict_security_type dst_temp ON dst_temp.security_type = t.temp_security_type
                                              AND dst_temp.is_deleted = 0
@@ -132,9 +136,9 @@
     <!-- 查询外部数据已补齐正式证券代码、等待定时替换的临时代码；正式主数据合法性由服务统一校验 -->
     <select id="queryJobReadyTempSecurityCodeList" resultType="com.znty.rrs.entity.bo.TempSecurityCodeBo">
         SELECT id
-              ,temp_security_code
-              ,temp_security_name
-              ,security_code
+              , temp_security_code
+              , temp_security_name
+              , security_code
         FROM rrs_temp_security_code
         WHERE is_deleted = 0
           AND status = 'temporary'
@@ -167,12 +171,12 @@
 
     <!--
       按关键字远程查询发行主体（最多 50 条）。
-      读取公司简介全量主体，以 COMP_ID 关联，显示 COMP_NAME 全称。
+      读取公司简介全量主体，以 COMP_ID 关联，显示 COMP_NAME 全称
     -->
     <select id="queryCompanyOptionList" resultType="com.znty.rrs.entity.tempsecuritycode.TempSecurityCodeDto$CompanyOption">
         SELECT c.COMP_ID AS companyCode
-               ,c.COMP_NAME AS fullName
-               ,c.COMP_SNAME AS shortName
+               , c.COMP_NAME AS fullName
+               , c.COMP_SNAME AS shortName
         FROM ais_inv_ods.wind_compintroduction c
         <where>
             AND c.COMP_ID IS NOT NULL
@@ -193,7 +197,7 @@
         SELECT c.COMP_ID AS company_code
                , c.COMP_NAME AS company_full_name
                , c.COMP_SNAME AS company_short_name
-               , c.REGISTERNUMBER AS register_number
+               , c.REGISTERNUMBER
         FROM ais_inv_ods.wind_compintroduction c
         <where>
             <if test="companyCode != null and companyCode != ''">
@@ -212,8 +216,8 @@
     <!-- 根据主体代码查询公司简介 -->
     <select id="queryCompanyByCode" resultType="com.znty.rrs.entity.tempsecuritycode.TempSecurityCodeDto$CompanyOption">
         SELECT c.COMP_ID AS companyCode
-               ,c.COMP_NAME AS fullName
-               ,c.COMP_SNAME AS shortName
+               , c.COMP_NAME AS fullName
+               , c.COMP_SNAME AS shortName
         FROM ais_inv_ods.wind_compintroduction c
         WHERE c.COMP_ID = #{companyCode}
         LIMIT 1
@@ -222,9 +226,9 @@
     <!-- 按关键字远程查询正式证券（对齐老系统债券选券：代码/名称模糊，排除临时代码占位与退市，最多 50 条） -->
     <select id="queryFormalSecurityOptionList" resultType="com.znty.rrs.entity.tempsecuritycode.TempSecurityCodeDto$FormalSecurityOption">
         SELECT si.wind_code AS securityCode
-               ,COALESCE(NULLIF(si.short_name, ''), si.full_name, si.wind_code) AS securityName
-               ,si.security_type
-               ,dst.security_type_name
+               , COALESCE(NULLIF(si.short_name, ''), si.full_name, si.wind_code) AS securityName
+               , si.security_type
+               , dst.security_type_name
         FROM rrs_securityinfo si
         LEFT JOIN dict_security_type dst ON dst.security_type = si.security_type
                                         AND dst.is_deleted = 0
@@ -241,16 +245,16 @@
             </if>
         </where>
         ORDER BY si.ts DESC
-                 ,si.wind_code DESC
+                 , si.wind_code DESC
         LIMIT 50
     </select>
 
     <!-- 根据正式证券代码查询正式证券（转正校验用） -->
     <select id="queryFormalSecurityByCode" resultType="com.znty.rrs.entity.tempsecuritycode.TempSecurityCodeDto$FormalSecurityOption">
         SELECT si.wind_code AS securityCode
-               ,COALESCE(NULLIF(si.short_name, ''), si.full_name, si.wind_code) AS securityName
-               ,si.security_type
-               ,dst.security_type_name
+               , COALESCE(NULLIF(si.short_name, ''), si.full_name, si.wind_code) AS securityName
+               , si.security_type
+               , dst.security_type_name
         FROM rrs_securityinfo si
         LEFT JOIN dict_security_type dst ON dst.security_type = si.security_type
                                         AND dst.is_deleted = 0
@@ -277,10 +281,12 @@
     <!-- 转正前检查正式代码组的调库日志，所有审批状态及软删除记录均阻断，不查询池状态 -->
     <select id="queryFormalSecurityAdjustHistory" resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
         SELECT id
-               ,security_code
+               , security_code
         FROM ip_adjust_log
         WHERE security_code IN
-        <foreach collection="codes" item="code" open="(" separator="," close=")">#{code}</foreach>
+        <foreach collection="codes" item="code" open="(" separator="," close=")">
+            #{code}
+        </foreach>
         ORDER BY id
         LIMIT 1
     </select>
@@ -288,15 +294,15 @@
     <!-- 查询证券类型选项 -->
     <select id="querySecurityTypeList" resultType="com.znty.rrs.entity.tempsecuritycode.TempSecurityCodeDto$SecurityTypeOption">
         SELECT security_type
-               ,security_type_name
-               ,category_type
-               ,category_type_name
+               , security_type_name
+               , category_type
+               , category_type_name
         FROM dict_security_type
         WHERE is_deleted = 0
           AND category_type != 'company'
         ORDER BY category_type ASC
-                 ,sort_order ASC
-                 ,id ASC
+                 , sort_order ASC
+                 , id ASC
     </select>
 
     <!-- 查询证券类型数量 -->
@@ -317,37 +323,15 @@
     <!-- 新增临时代码占位证券，状态写 L 表示上市中 -->
     <insert id="addSecurityInfo">
         INSERT INTO rrs_securityinfo (
-            wind_code
-            ,sec_id
-            ,full_name
-            ,short_name
-            ,security_type
-            ,abs_flag
-            ,market
-            ,issuer
-            ,issuer_code
-            ,firstissue_date
-            ,maturity_date
-            ,security_status
-            ,security_source
-            ,create_time
-            ,ts
+            wind_code, sec_id, full_name, short_name, security_type
+            , abs_flag, market, issuer, issuer_code
+            , firstissue_date, maturity_date, security_status, security_source
+            , create_time, ts
         ) VALUES (
-            #{securityCode}
-            ,#{secId}
-            ,#{securityName}
-            ,#{securityName}
-            ,#{securityType}
-            ,CASE WHEN #{securityType} = 'abs' THEN 1 ELSE NULL END
-            ,#{securityMarket}
-            ,#{tempCompanyNameSnapshot}
-            ,#{tempCompanyCode}
-            ,DATE_FORMAT(#{tempIssueDate}, '%Y%m%d')
-            ,DATE_FORMAT(#{tempMaturityDate}, '%Y%m%d')
-            ,'L'
-            ,#{securitySource}
-            ,#{updateTime}
-            ,#{updateTime}
+            #{securityCode}, #{secId}, #{securityName}, #{securityName}, #{securityType}
+            , CASE WHEN #{securityType} = 'abs' THEN 1 ELSE NULL END, #{securityMarket}, #{tempCompanyNameSnapshot}, #{tempCompanyCode}
+            , DATE_FORMAT(#{tempIssueDate}, '%Y%m%d'), DATE_FORMAT(#{tempMaturityDate}, '%Y%m%d'), 'L', #{securitySource}
+            , #{updateTime}, #{updateTime}
         )
     </insert>
 
@@ -355,12 +339,12 @@
     <update id="editSecurityInfo">
         UPDATE rrs_securityinfo
         SET full_name = #{securityName}
-           ,short_name = #{securityName}
-           ,security_type = #{securityType}
-           ,issuer = #{tempCompanyNameSnapshot}
-           ,firstissue_date = DATE_FORMAT(#{tempIssueDate}, '%Y%m%d')
-           ,maturity_date = DATE_FORMAT(#{tempMaturityDate}, '%Y%m%d')
-           ,ts = #{updateTime}
+           , short_name = #{securityName}
+           , security_type = #{securityType}
+           , issuer = #{tempCompanyNameSnapshot}
+           , firstissue_date = DATE_FORMAT(#{tempIssueDate}, '%Y%m%d')
+           , maturity_date = DATE_FORMAT(#{tempMaturityDate}, '%Y%m%d')
+           , ts = #{updateTime}
         WHERE wind_code = #{securityCode}
     </update>
 
@@ -368,9 +352,9 @@
     <update id="editSecurityInfoToCancelled">
         UPDATE rrs_securityinfo
         SET delist_date = #{cancelDate}
-           ,end_date = #{cancelDate}
-           ,security_status = 'D'
-           ,ts = #{updateTime}
+           , end_date = #{cancelDate}
+           , security_status = 'D'
+           , ts = #{updateTime}
         WHERE wind_code = #{tempSecurityCode}
     </update>
 
@@ -378,7 +362,7 @@
     <update id="editTempSecurityInfoToDisabled">
         UPDATE rrs_securityinfo
         SET security_status = 'D'
-           ,ts = #{updateTime}
+           , ts = #{updateTime}
         WHERE wind_code = #{tempSecurityCode}
           AND security_source = 'temporary'
     </update>
@@ -386,39 +370,13 @@
     <!-- 新增临时代码 -->
     <insert id="addTempSecurityCode" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO rrs_temp_security_code (
-            temp_security_name
-            ,sec_id
-            ,temp_security_code
-            ,temp_security_market
-            ,temp_security_type
-            ,temp_mitigation_code
-            ,temp_company_code
-            ,temp_company_name_snapshot
-            ,temp_issue_date
-            ,temp_maturity_date
-            ,status
-            ,is_deleted
-            ,oprt_source
-            ,memo
-            ,crte_time
-            ,updt_time
+            temp_security_name, sec_id, temp_security_code, temp_security_market, temp_security_type, temp_mitigation_code
+            , temp_company_code, temp_company_name_snapshot, temp_issue_date, temp_maturity_date, status, is_deleted
+            , oprt_source, memo, crte_time, updt_time
         ) VALUES (
-            #{tempSecurityName}
-            ,#{secId}
-            ,#{tempSecurityCode}
-            ,#{tempSecurityMarket}
-            ,#{tempSecurityType}
-            ,#{tempMitigationCode}
-            ,#{tempCompanyCode}
-            ,#{tempCompanyNameSnapshot}
-            ,#{tempIssueDate}
-            ,#{tempMaturityDate}
-            ,#{status}
-            ,#{isDeleted}
-            ,#{oprtSource}
-            ,#{memo}
-            ,#{crteTime}
-            ,#{updtTime}
+            #{tempSecurityName}, #{secId}, #{tempSecurityCode}, #{tempSecurityMarket}, #{tempSecurityType}, #{tempMitigationCode}
+            , #{tempCompanyCode}, #{tempCompanyNameSnapshot}, #{tempIssueDate}, #{tempMaturityDate}, #{status}, #{isDeleted}
+            , #{oprtSource}, #{memo}, #{crteTime}, #{updtTime}
         )
     </insert>
 
@@ -426,23 +384,23 @@
     <update id="editTempSecurityCodeToUpdated">
         UPDATE rrs_temp_security_code
         SET temp_security_name = #{bo.tempSecurityName}
-           ,temp_security_code = #{bo.tempSecurityCode}
-           ,temp_security_market = #{bo.tempSecurityMarket}
-           ,temp_security_type = #{bo.tempSecurityType}
-           ,temp_mitigation_code = #{bo.tempMitigationCode}
-           ,temp_company_code = #{bo.tempCompanyCode}
-           ,temp_company_name_snapshot = #{bo.tempCompanyNameSnapshot}
-           ,temp_issue_date = #{bo.tempIssueDate}
-           ,temp_maturity_date = #{bo.tempMaturityDate}
-           ,security_name = #{bo.securityName}
-           ,security_code = #{bo.securityCode}
-           ,security_market = #{bo.securityMarket}
-           ,security_type = #{bo.securityType}
-           ,update_time = #{bo.updateTime}
-           ,status = #{bo.status}
-           ,oprt_source = #{bo.oprtSource}
-           ,memo = #{bo.memo}
-           ,updt_time = #{bo.updtTime}
+           , temp_security_code = #{bo.tempSecurityCode}
+           , temp_security_market = #{bo.tempSecurityMarket}
+           , temp_security_type = #{bo.tempSecurityType}
+           , temp_mitigation_code = #{bo.tempMitigationCode}
+           , temp_company_code = #{bo.tempCompanyCode}
+           , temp_company_name_snapshot = #{bo.tempCompanyNameSnapshot}
+           , temp_issue_date = #{bo.tempIssueDate}
+           , temp_maturity_date = #{bo.tempMaturityDate}
+           , security_name = #{bo.securityName}
+           , security_code = #{bo.securityCode}
+           , security_market = #{bo.securityMarket}
+           , security_type = #{bo.securityType}
+           , update_time = #{bo.updateTime}
+           , status = #{bo.status}
+           , oprt_source = #{bo.oprtSource}
+           , memo = #{bo.memo}
+           , updt_time = #{bo.updtTime}
         WHERE id = #{bo.id}
           AND is_deleted = 0
           AND status = 'temporary'
@@ -452,9 +410,9 @@
     <update id="editTempSecurityCodeToCancelled">
         UPDATE rrs_temp_security_code
         SET update_time = #{updateTime}
-           ,status = #{status}
-           ,oprt_source = #{oprtSource}
-           ,updt_time = #{updtTime}
+           , status = #{status}
+           , oprt_source = #{oprtSource}
+           , updt_time = #{updtTime}
         WHERE id = #{id}
           AND is_deleted = 0
     </update>
@@ -511,7 +469,9 @@
         SELECT * FROM ip_pool_status_crmw
         WHERE crmw_scode = #{crmwScode} AND crmw_stype = #{crmwStype}
           AND is_deleted = 0 AND audit_status = '20' AND security_code IN
-        <foreach collection="codes" item="code" open="(" separator="," close=")">#{code}</foreach>
+        <foreach collection="codes" item="code" open="(" separator="," close=")">
+            #{code}
+        </foreach>
         ORDER BY id
     </select>
 
@@ -520,7 +480,9 @@
         SELECT * FROM ip_adjust_log
         WHERE crmw_scode = #{crmwScode} AND crmw_stype = #{crmwStype}
           AND pool_type = 'crmw' AND is_deleted = 0 AND audit_status IN ('00', '11') AND security_code IN
-        <foreach collection="codes" item="code" open="(" separator="," close=")">#{code}</foreach>
+        <foreach collection="codes" item="code" open="(" separator="," close=")">
+            #{code}
+        </foreach>
         ORDER BY id
     </select>
 
@@ -536,7 +498,9 @@
     <select id="queryFormalGroupPoolStatusList" resultType="com.znty.rrs.entity.bo.IpPoolStatusBo">
         SELECT * FROM ip_pool_status
         WHERE is_deleted = 0 AND audit_status = '20' AND security_code IN
-        <foreach collection="codes" item="code" open="(" separator="," close=")">#{code}</foreach>
+        <foreach collection="codes" item="code" open="(" separator="," close=")">
+            #{code}
+        </foreach>
         ORDER BY id
     </select>
 
@@ -545,7 +509,9 @@
         SELECT * FROM ip_adjust_log
         WHERE is_deleted = 0 AND audit_status IN ('00', '11') AND pool_type = 'credit_bond'
           AND security_code IN
-        <foreach collection="codes" item="code" open="(" separator="," close=")">#{code}</foreach>
+        <foreach collection="codes" item="code" open="(" separator="," close=")">
+            #{code}
+        </foreach>
         ORDER BY id
     </select>
 
@@ -553,7 +519,9 @@
     <select id="queryConversionPoolList" resultType="com.znty.rrs.entity.bo.InvestmentPoolBo">
         SELECT * FROM ip_investment_pool
         WHERE id IN
-        <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
         ORDER BY id
     </select>
 
@@ -561,10 +529,10 @@
     <update id="editConversionPendingLog">
         UPDATE ip_adjust_log
         SET security_code = #{log.securityCode}
-           ,security_short_name = #{log.securityShortName}
-           ,security_type = #{log.securityType}
-           ,adjust_reason = #{log.adjustReason}
-           ,updt_time = #{log.updtTime}
+           , security_short_name = #{log.securityShortName}
+           , security_type = #{log.securityType}
+           , adjust_reason = #{log.adjustReason}
+           , updt_time = #{log.updtTime}
         WHERE id = #{log.id} AND security_code = #{tempCode}
           AND audit_status = #{log.auditStatus} AND is_deleted = 0
     </update>
@@ -581,7 +549,7 @@
     <update id="deleteOrdinaryPoolStatusForConversion">
         UPDATE ip_pool_status
         SET is_deleted = 1
-           ,updt_time = #{updateTime}
+           , updt_time = #{updateTime}
         WHERE id = #{id} AND is_deleted = 0 AND audit_status = '20'
     </update>
 
@@ -643,31 +611,31 @@
     <!-- 查询有效在池状态（临时证券，audit_status=20） -->
     <select id="queryActivePoolStatusList" resultType="com.znty.rrs.entity.bo.IpPoolStatusBo">
         SELECT id
-               ,security_code
-               ,security_short_name
-               ,security_type
-               ,crmw_name
-               ,crmw_scode
-               ,crmw_mktcode
-               ,crmw_stype
-               ,adjust_type
-               ,adjust_mode
-               ,adjust_batch_no
-               ,adjust_log_id
-               ,target_pool_id
-               ,target_pool_name
-               ,pool_type
-               ,audit_status
-               ,adjuster_id
-               ,adjuster_name
-               ,adjust_reason
-               ,adjust_advice
-               ,submit_time
-               ,audit_time
-               ,entry_time
-               ,is_deleted
-               ,crte_time
-               ,updt_time
+               , security_code
+               , security_short_name
+               , security_type
+               , crmw_name
+               , crmw_scode
+               , crmw_mktcode
+               , crmw_stype
+               , adjust_type
+               , adjust_mode
+               , adjust_batch_no
+               , adjust_log_id
+               , target_pool_id
+               , target_pool_name
+               , pool_type
+               , audit_status
+               , adjuster_id
+               , adjuster_name
+               , adjust_reason
+               , adjust_advice
+               , submit_time
+               , audit_time
+               , entry_time
+               , is_deleted
+               , crte_time
+               , updt_time
         FROM ip_pool_status
         WHERE is_deleted = 0
           AND security_code = #{tempSecurityCode}
@@ -691,7 +659,7 @@
     <update id="deletePoolStatusSoftById">
         UPDATE ip_pool_status
         SET is_deleted = 1
-           ,updt_time = #{updateTime}
+           , updt_time = #{updateTime}
         WHERE id = #{id}
           AND is_deleted = 0
     </update>
@@ -720,31 +688,31 @@
     <!-- 查询 CRMW 池有效在池状态（security 为临时码） -->
     <select id="queryActiveCrmwPoolStatusList" resultType="com.znty.rrs.entity.bo.IpPoolStatusBo">
         SELECT id
-               ,security_code
-               ,security_short_name
-               ,security_type
-               ,crmw_name
-               ,crmw_scode
-               ,crmw_mktcode
-               ,crmw_stype
-               ,adjust_type
-               ,adjust_mode
-               ,adjust_batch_no
-               ,adjust_log_id
-               ,target_pool_id
-               ,target_pool_name
-               ,pool_type
-               ,audit_status
-               ,adjuster_id
-               ,adjuster_name
-               ,adjust_reason
-               ,adjust_advice
-               ,submit_time
-               ,audit_time
-               ,entry_time
-               ,is_deleted
-               ,crte_time
-               ,updt_time
+               , security_code
+               , security_short_name
+               , security_type
+               , crmw_name
+               , crmw_scode
+               , crmw_mktcode
+               , crmw_stype
+               , adjust_type
+               , adjust_mode
+               , adjust_batch_no
+               , adjust_log_id
+               , target_pool_id
+               , target_pool_name
+               , pool_type
+               , audit_status
+               , adjuster_id
+               , adjuster_name
+               , adjust_reason
+               , adjust_advice
+               , submit_time
+               , audit_time
+               , entry_time
+               , is_deleted
+               , crte_time
+               , updt_time
         FROM ip_pool_status_crmw
         WHERE is_deleted = 0
           AND security_code = #{tempSecurityCode}
@@ -767,7 +735,7 @@
     <update id="deleteCrmwPoolStatusSoftById">
         UPDATE ip_pool_status_crmw
         SET is_deleted = 1
-           ,updt_time = #{updateTime}
+           , updt_time = #{updateTime}
         WHERE id = #{id}
           AND is_deleted = 0
     </update>
@@ -786,9 +754,9 @@
     <update id="editAdjustLogSecurityReference">
         UPDATE ip_adjust_log
         SET security_code = #{bo.securityCode}
-           ,security_short_name = #{bo.securityName}
-           ,security_type = #{bo.securityType}
-           ,updt_time = #{bo.updateTime}
+           , security_short_name = #{bo.securityName}
+           , security_type = #{bo.securityType}
+           , updt_time = #{bo.updateTime}
         WHERE id IN
         <foreach collection="idList" item="item" open="(" separator="," close=")">
             #{item}
@@ -799,9 +767,9 @@
     <update id="editAdjustLogCrmwReference">
         UPDATE ip_adjust_log
         SET crmw_scode = #{bo.securityCode}
-           ,crmw_mktcode = #{bo.securityMarket}
-           ,crmw_stype = #{bo.securityType}
-           ,updt_time = #{bo.updateTime}
+           , crmw_mktcode = #{bo.securityMarket}
+           , crmw_stype = #{bo.securityType}
+           , updt_time = #{bo.updateTime}
         WHERE id IN
         <foreach collection="idList" item="item" open="(" separator="," close=")">
             #{item}
@@ -812,9 +780,9 @@
     <update id="editPoolStatusCrmwReference">
         UPDATE ip_pool_status
         SET crmw_scode = #{bo.securityCode}
-           ,crmw_mktcode = #{bo.securityMarket}
-           ,crmw_stype = #{bo.securityType}
-           ,updt_time = #{bo.updateTime}
+           , crmw_mktcode = #{bo.securityMarket}
+           , crmw_stype = #{bo.securityType}
+           , updt_time = #{bo.updateTime}
         WHERE id IN
         <foreach collection="idList" item="item" open="(" separator="," close=")">
             #{item}
@@ -825,9 +793,9 @@
     <update id="editCrmwPoolStatusCrmwReference">
         UPDATE ip_pool_status_crmw
         SET crmw_scode = #{bo.securityCode}
-           ,crmw_mktcode = #{bo.securityMarket}
-           ,crmw_stype = #{bo.securityType}
-           ,updt_time = #{bo.updateTime}
+           , crmw_mktcode = #{bo.securityMarket}
+           , crmw_stype = #{bo.securityType}
+           , updt_time = #{bo.updateTime}
         WHERE id IN
         <foreach collection="idList" item="item" open="(" separator="," close=")">
             #{item}
@@ -837,88 +805,28 @@
     <!-- 新增 CRMW 池状态（正式入库） -->
     <insert id="addCrmwPoolStatus" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO ip_pool_status_crmw (
-            security_code
-            ,security_short_name
-            ,security_type
-            ,crmw_name
-            ,crmw_scode
-            ,crmw_mktcode
-            ,crmw_stype
-            ,adjust_type
-            ,adjust_mode
-            ,adjust_batch_no
-            ,adjust_log_id
-            ,target_pool_id
-            ,target_pool_name
-            ,pool_type
-            ,audit_status
-            ,adjuster_id
-            ,adjuster_name
-            ,adjust_reason
-            ,adjust_advice
-            ,submit_time
-            ,entry_time
-            ,is_deleted
-            ,crte_time
-            ,updt_time
+            security_code, security_short_name, security_type, crmw_name, crmw_scode, crmw_mktcode
+            , crmw_stype, adjust_type, adjust_mode, adjust_batch_no, adjust_log_id, target_pool_id
+            , target_pool_name, pool_type, audit_status, adjuster_id, adjuster_name, adjust_reason
+            , adjust_advice, submit_time, entry_time, is_deleted, crte_time, updt_time
         ) VALUES (
-            #{securityCode}
-            ,#{securityShortName}
-            ,#{securityType}
-            ,#{crmwName}
-            ,#{crmwScode}
-            ,#{crmwMktcode}
-            ,#{crmwStype}
-            ,#{adjustType}
-            ,#{adjustMode}
-            ,#{adjustBatchNo}
-            ,#{adjustLogId}
-            ,#{targetPoolId}
-            ,#{targetPoolName}
-            ,#{poolType}
-            ,#{auditStatus}
-            ,#{adjusterId}
-            ,#{adjusterName}
-            ,#{adjustReason}
-            ,#{adjustAdvice}
-            ,#{submitTime}
-            ,#{entryTime}
-            ,0
-            ,#{crteTime}
-            ,#{updtTime}
+            #{securityCode}, #{securityShortName}, #{securityType}, #{crmwName}, #{crmwScode}, #{crmwMktcode}
+            , #{crmwStype}, #{adjustType}, #{adjustMode}, #{adjustBatchNo}, #{adjustLogId}, #{targetPoolId}
+            , #{targetPoolName}, #{poolType}, #{auditStatus}, #{adjusterId}, #{adjusterName}, #{adjustReason}
+            , #{adjustAdvice}, #{submitTime}, #{entryTime}, 0, #{crteTime}, #{updtTime}
         )
     </insert>
 
     <!-- 新增临时代码替换日志 -->
     <insert id="addTempSecurityCodeUpdateLog">
         INSERT INTO rrs_temp_security_code_update_log (
-            temp_security_name
-            ,temp_security_code
-            ,temp_security_market
-            ,temp_security_type
-            ,security_name
-            ,security_code
-            ,security_market
-            ,security_type
-            ,replace_table_name
-            ,replace_record_id
-            ,replace_status
-            ,replace_time
-            ,crte_time
+            temp_security_name, temp_security_code, temp_security_market, temp_security_type, security_name, security_code
+            , security_market, security_type, replace_table_name, replace_record_id, replace_status
+            , replace_time, crte_time
         ) VALUES (
-            #{tempSecurityName}
-            ,#{tempSecurityCode}
-            ,#{tempSecurityMarket}
-            ,#{tempSecurityType}
-            ,#{securityName}
-            ,#{securityCode}
-            ,#{securityMarket}
-            ,#{securityType}
-            ,#{replaceTableName}
-            ,#{replaceRecordId}
-            ,#{replaceStatus}
-            ,#{updateTime}
-            ,#{updateTime}
+            #{tempSecurityName}, #{tempSecurityCode}, #{tempSecurityMarket}, #{tempSecurityType}, #{securityName}, #{securityCode}
+            , #{securityMarket}, #{securityType}, #{replaceTableName}, #{replaceRecordId}, #{replaceStatus}
+            , #{updateTime}, #{updateTime}
         )
     </insert>
 </mapper>

@@ -1,42 +1,46 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.rrs.mapper.SecurityPoolQueryMapper">
-    <!-- 证券池查询 mapper，对应表：ip_pool_status（证券池状态），提供证券池分页查询及证券类型选项查询功能 -->
+    <!--
+        证券池当前状态查询 Mapper
+        从证券池状态表（ip_pool_status）读取生效的在池证券
+        联查投资池、证券主档及自选记录，返回分页列表和证券类型选项
+    -->
 
     <!-- 分页查询证券池中的证券列表 -->
     <select id="querySecurityPoolPage" resultType="com.znty.rrs.entity.securitypoolquery.SecurityPoolQueryDto">
         SELECT ips.id
-               ,ips.security_code
-               ,ips.security_short_name
-               ,ips.adjuster_name
-               ,ips.entry_time
-               ,ips.target_pool_id
-               ,ips.adjust_log_id
-               ,ips.adjust_batch_no
-               ,p.pool_name AS target_pool_name
-               ,ips.security_type
-               ,dst.security_type_name
-               ,mbp.id AS mySecurityPoolId
-               ,bi.coupon_rate
-               ,bi.issuer
+               , ips.security_code
+               , ips.security_short_name
+               , ips.adjuster_name
+               , ips.entry_time
+               , ips.target_pool_id
+               , ips.adjust_log_id
+               , ips.adjust_batch_no
+               , p.pool_name AS target_pool_name
+               , ips.security_type
+               , dst.security_type_name
+               , mbp.id AS mySecurityPoolId
+               , bi.coupon_rate
+               , bi.issuer
                , bi.issuer_code
-               ,bi.full_name
-               ,bi.firstissue_date AS issueDate
-               ,bi.carry_date
-               ,bi.maturity_date
-               ,bi.date_exists
-               ,bi.date_exists_str
-               ,bi.abs_flag
-               ,bi.guarant_flag
-               ,bi.yx_flag
-               ,bi.cj_flag
-               ,bi.issue_type
-               ,bi.inner_class
-               ,bi.inright_flag
-               ,bi.std_credit_flag
-               ,bi.security_status
-               ,bi.delist_date
-               ,bi.repurchase_date
+               , bi.full_name
+               , bi.firstissue_date AS issueDate
+               , bi.carry_date
+               , bi.maturity_date
+               , bi.date_exists
+               , bi.date_exists_str
+               , bi.abs_flag
+               , bi.guarant_flag
+               , bi.yx_flag
+               , bi.cj_flag
+               , bi.issue_type
+               , bi.inner_class
+               , bi.inright_flag
+               , bi.std_credit_flag
+               , bi.security_status
+               , bi.delist_date
+               , bi.repurchase_date
         FROM ip_pool_status ips
         LEFT JOIN ip_investment_pool p ON ips.target_pool_id = p.id
                                       AND p.is_deleted = 0
@@ -77,7 +81,7 @@
                 AND ips.security_type = #{securityType}
             </if>
             <if test="entryTimeStart != null and entryTimeStart != ''">
-                AND ips.entry_time &gt;= #{entryTimeStart}
+                AND ips.entry_time >= #{entryTimeStart}
             </if>
             <if test="entryTimeEnd != null and entryTimeEnd != ''">
                 AND ips.entry_time &lt;= #{entryTimeEnd}
@@ -120,13 +124,13 @@
             </if>
         </where>
         ORDER BY ips.entry_time DESC
-                 ,ips.id DESC
+                 , ips.id DESC
     </select>
 
     <!-- 查询证券池中出现的证券类型选项（与列表同口径：债券大类，含 crmw） -->
     <select id="querySecurityTypeList" resultType="com.znty.rrs.entity.common.SecurityTypeOptionDto">
         SELECT DISTINCT ips.security_type
-                       ,dst.security_type_name
+                       , dst.security_type_name
         FROM ip_pool_status ips
         INNER JOIN dict_security_type dst ON dst.security_type = ips.security_type
                                          AND dst.is_deleted = 0
@@ -134,7 +138,7 @@
         WHERE ips.is_deleted = 0
           AND ips.audit_status = '20'
         ORDER BY dst.sort_order ASC
-                 ,ips.security_type ASC
+                 , ips.security_type ASC
     </select>
 
 </mapper>

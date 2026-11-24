@@ -1,16 +1,22 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.rrs.mapper.BatchFundPoolAdjustMapper">
+    <!--
+        基金池批量调整查询 Mapper
+        查询支持基金的启用叶子池及当前基金在池数量
+        结合基金主档（rrs_fundinfo）和基金池状态（ip_pool_status_fund）筛选调库候选
+    -->
+
     <!-- 分页查询支持基金的启用叶子投资池，数量仅统计基金独立池状态 -->
     <select id="queryPoolPage" resultType="com.znty.rrs.entity.batchfundpooladjust.BatchFundPoolDto">
         SELECT p.id
-               ,p.pool_name
-               ,p.pool_type
-               ,p.market_codes
-               ,p.variety_codes
-               ,p.description
-               ,p.max_capacity
-               ,(SELECT COUNT(DISTINCT ps.fund_code)
+               , p.pool_name
+               , p.pool_type
+               , p.market_codes
+               , p.variety_codes
+               , p.description
+               , p.max_capacity
+               , (SELECT COUNT(DISTINCT ps.fund_code)
                  FROM ip_pool_status_fund ps
                  WHERE ps.target_pool_id = p.id
                    AND ps.audit_status = '20'
@@ -35,32 +41,32 @@
             </if>
         </where>
         ORDER BY p.outer_sort ASC
-                 ,p.inner_sort ASC
-                 ,p.id ASC
+                 , p.inner_sort ASC
+                 , p.id ASC
     </select>
 
     <!-- 候选基金沿用单笔主档字段，调入查不在池基金，调出查有效在池基金 -->
     <select id="queryFundPage" resultType="com.znty.rrs.entity.fundpooladjust.FundInfoDto">
         SELECT fi.fund_code
-               ,fi.fund_name
-               ,fi.fund_short_name
-               ,fi.security_type
-               ,dst.security_type_name
-               ,fi.security_status
-               ,fi.market_code
-               ,fi.currency_code
-               ,fi.latest_nav
-               ,fi.establishment_date
-               ,fi.fund_manager_names
-               ,fi.fund_administrator
-               ,fi.fund_custodian
-               ,fi.accumulated_nav
-               ,fi.investment_style
-               ,fi.trade_price
-               ,fi.issue_scale
-               ,fi.latest_scale
-               ,fi.data_date
-               ,fi.updt_time
+               , fi.fund_name
+               , fi.fund_short_name
+               , fi.security_type
+               , dst.security_type_name
+               , fi.security_status
+               , fi.market_code
+               , fi.currency_code
+               , fi.latest_nav
+               , fi.establishment_date
+               , fi.fund_manager_names
+               , fi.fund_administrator
+               , fi.fund_custodian
+               , fi.accumulated_nav
+               , fi.investment_style
+               , fi.trade_price
+               , fi.issue_scale
+               , fi.latest_scale
+               , fi.data_date
+               , fi.updt_time
         FROM rrs_fundinfo fi
         INNER JOIN dict_security_type dst ON dst.security_type = fi.security_type
                                          AND dst.category_type = 'fund'

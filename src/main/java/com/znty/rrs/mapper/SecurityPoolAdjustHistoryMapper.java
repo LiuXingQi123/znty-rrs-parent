@@ -13,9 +13,18 @@ import java.util.List;
 @Mapper
 public interface SecurityPoolAdjustHistoryMapper {
 
-    /** 分页查询证券池调整历史列表 */
+    /**
+     * 分页查询证券池调整历史列表
+     *
+     * @param req 调库历史的查询条件
+     * @return 符合条件的证券池调整历史列表
+     */
     List<SecurityPoolAdjustHistoryDto> querySecurityPoolAdjustHistoryPage(SecurityPoolAdjustHistoryReq req);
 
-    /** 查询调整历史中出现的证券类型选项 */
+    /**
+     * 查询调整历史中出现的证券类型选项
+     *
+     * @return 符合条件的证券类型选项列表
+     */
     List<SecurityTypeOptionDto> querySecurityTypeList();
 }

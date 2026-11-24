@@ -6,7 +6,7 @@ MyMattersService 显式分派 stock → StockMyMattersService / StockMyMattersMa
 
 ## 审核状态与事务
 
-状态 -1 无效 / 00 流程中 / 11 驳回待修改 / 20 通过 / 21 驳回 / 32 自动处理预留 / 99 撤回。只有 20 改变股票当前池状态。状态、步骤和整组日志在同一事务推进；终审锁定目标池，重新检查池权限、容量、行情状态、评级准入、行业来源、关系、开放日、冻结期和报告。
+状态 -1 无效 / 00 流程中 / 11 驳回待修改 / 20 通过 / 21 驳回 / 32 自动处理预留 / 99 撤回。只有 20 改变股票当前池状态。状态、步骤和整组日志在同一事务推进；终审锁定股票主档并确认目标池存在，重新检查池权限、容量、行情状态、评级准入、行业来源、关系、开放日、冻结期和报告。
 
 POST `/api/v1/stockPoolAdjust/submitAdjustAudit` 接收 stepId、adjustLogId、adjustBatchNo、handlerId/Name、processAction、processComment；实际步骤决定资格，伪造批次/日志上下文明确拒绝。`submitAdjustAuditWithFiles` 使用 request(JSON)、files、originalFileNameListJson。
 

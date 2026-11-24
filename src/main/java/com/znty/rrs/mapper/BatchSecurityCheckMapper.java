@@ -13,7 +13,9 @@ import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
 
-/** 手工和定时任务共用的调库批次校验数据访问 */
+/**
+ * 手工和定时任务共用的调库批次校验数据访问
+ */
 @Mapper
 public interface BatchSecurityCheckMapper {
     /**
@@ -183,7 +185,7 @@ public interface BatchSecurityCheckMapper {
             @Param("days") int days);
 
     /**
-     * 读取满足近六个自然月同发行人报告豁免的主体
+     * 查询满足同发行人信评报告豁免条件的主体，按调入日志创建时间筛选，起点为从当前时刻往前推六个月（近六个自然月）
      *
      * @param companyCodes 发行主体或担保人代码
      * @return 对应的数据库记录

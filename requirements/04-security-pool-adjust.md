@@ -366,7 +366,7 @@
 
 旧简易流程的“本券剩余天数≤同主体目标池最大剩余天数”“同目标池180天内非简易入池”及原主体/展望/担保人评级下调条件不再参与简易命中。
 
-简易资格仅在“下一步”的 `checkAdjust` 阶段判定，正式提交时不重新核验简易资格。最终落池仍沿用锁池后的动态校验子集，不再次判断简易资格。
+简易资格仅在“下一步”的 `checkAdjust` 阶段判定，正式提交时不重新核验简易资格。最终落池仍沿用落池前的动态校验子集，不再次判断简易资格。
 
 ### 3.7 后端 addAdjustLog / submitAdjustLog 完整逻辑
 
@@ -378,7 +378,7 @@
 | `submitAdjustLog(req, submissionFiles, batchNoContext)` | 实际五阶段落库；批量/存量整批共享附件与批次号时直接调用 |
 | `addExcelImportAdjustLogList(requests)` | Excel 导入内部调用，先检查整批已有在途流程，再按导入行复用提交步骤；各行可使用不同评级主体，并分别保存证券快照 |
 | `isDirectAdjustFlow(flowId, flowKey)` | 对外直通判断（解析流程后与内部 `isDirectFlow` 同口径），供批量整批预检 |
-| `recheckBeforeFinalApproval(logList)` | 直通/终审前锁池动态复核（容量、在池、限制等） |
+| `recheckBeforeFinalApproval(logList)` | 直通/终审前动态复核（容量、在池、限制等） |
 | `ReportService.addInternalReportsOnFinish(logList)` | 简易直通/终审落池成功后，将手工信评附件生成内部报告 |
 
 入口 `addAdjustLog(req, files)` → `submitAdjustLog`，`@Transactional(rollbackFor=Exception.class)`，分五阶段：

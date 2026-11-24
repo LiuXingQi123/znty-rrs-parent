@@ -8,11 +8,13 @@ import org.apache.ibatis.annotations.Param;
 import java.util.Date;
 import java.util.List;
 
-/** 恒生池 Excel 导出数据访问。 */
+/**
+ * 恒生池 Excel 导出数据访问
+ */
 @Mapper
 public interface HsPoolExcelExportMapper {
     /**
-     * 查询指定范围内的叶子投资池，未指定范围时查询全部叶子池。
+     * 查询指定范围内的叶子投资池，未指定范围时查询全部叶子池
      *
      * @param poolIds 指定投资池 ID；为空时查询全部叶子池
      * @return 可导出的叶子投资池
@@ -20,7 +22,7 @@ public interface HsPoolExcelExportMapper {
     List<HsPoolExportPoolDto> queryExportPoolList(@Param("poolIds") List<Long> poolIds);
 
     /**
-     * 查询指定叶子投资池当前有效的非主体证券及 CRMW。
+     * 查询指定叶子投资池当前有效的非主体证券及 CRMW
      *
      * @param poolId 投资池 ID
      * @param includeExpired 是否包含已到期普通证券；独立 CRMW 组合不校验摘牌日
@@ -30,7 +32,7 @@ public interface HsPoolExcelExportMapper {
                                                     @Param("includeExpired") boolean includeExpired);
 
     /**
-     * 查询指定叶子投资池在时间窗口内审批通过的调入、调出证券及 CRMW。
+     * 查询指定叶子投资池在时间窗口内审批通过的调入、调出证券及 CRMW
      *
      * @param poolId 投资池 ID
      * @param startTime 时间窗口下界

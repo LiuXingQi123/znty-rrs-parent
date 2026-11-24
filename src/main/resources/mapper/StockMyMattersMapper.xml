@@ -2,29 +2,33 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.rrs.mapper.StockMyMattersMapper">
-    <!-- 我的事宜 mapper，对应调库记录、调库步骤和流程定义表，提供当前用户相关流程事项查询功能 -->
+    <!--
+        股票调库我的事宜 Mapper
+        读取股票调库日志（ip_adjust_log_stock）、审批步骤（ip_adjust_step_stock）和流程定义
+        查询当前用户的待办、已办、已发起事项及可筛选的流程
+    -->
 
     <!-- 分页查询我的事宜列表（待处理 / 已完成） -->
     <select id="queryMyMattersPage" resultType="com.znty.rrs.entity.mymatters.MyMattersDto">
         <bind name="adminUser" value="@com.znty.rrs.common.util.AdminUserIdUtil@isAdminUser(currentUserId)"/>
         SELECT s.id
-               ,'stock' AS businessDomain
-               ,al.stock_code AS objectCode
-               ,al.stock_short_name AS objectName
-               ,s.adjust_log_id
-               ,al.stock_code
-               ,al.stock_short_name
-               ,al.target_pool_id
-               ,al.target_pool_name
-               ,al.adjust_batch_no
-               ,s.id AS stepId
-               ,f.name AS flowName
-               ,s.node_label AS stepName
-               ,'stockAdjust' AS businessScene
-               ,al.audit_status
-               ,s.step_status
+               , 'stock' AS businessDomain
+               , al.stock_code AS objectCode
+               , al.stock_short_name AS objectName
+               , s.adjust_log_id
+               , al.stock_code
+               , al.stock_short_name
+               , al.target_pool_id
+               , al.target_pool_name
+               , al.adjust_batch_no
+               , s.id AS stepId
+               , f.name AS flowName
+               , s.node_label AS stepName
+               , 'stockAdjust' AS businessScene
+               , al.audit_status
+               , s.step_status
                <!-- 处理资格独立于展示步骤：按审核页的批次范围查本人待办，管理员允许代办 -->
-               ,CASE WHEN al.audit_status IN ('00', '11') AND EXISTS (
+               , CASE WHEN al.audit_status IN ('00', '11') AND EXISTS (
                     SELECT 1
                     FROM ip_adjust_step_stock ps
                     WHERE ps.step_status = 'pending'
@@ -56,19 +60,19 @@
                           )
                       </if>
                 ) THEN 1 ELSE 0 END AS canProcess
-               ,CONCAT(
-                    COALESCE(al.adjuster_name, ''),
-                    ' 将 ',
-                    COALESCE(al.stock_short_name, ''),
-                    ' ',
-                    COALESCE(al.adjust_mode, ''),
-                    ' ',
-                    COALESCE(al.target_pool_name, ''),
-                    ' 的审批申请'
+               , CONCAT(
+                    COALESCE(al.adjuster_name, '')
+                    , ' 将 '
+                    , COALESCE(al.stock_short_name, '')
+                    , ' '
+                    , COALESCE(al.adjust_mode, '')
+                    , ' '
+                    , COALESCE(al.target_pool_name, '')
+                    , ' 的审批申请'
                 ) AS processDescription
-               ,al.adjuster_name AS initiatorName
-               ,s.start_time
-               ,CASE WHEN TIMESTAMPDIFF(MINUTE, s.start_time, NOW()) &lt; 60
+               , al.adjuster_name AS initiatorName
+               , s.start_time
+               , CASE WHEN TIMESTAMPDIFF(MINUTE, s.start_time, NOW()) &lt; 60
                      THEN CONCAT(TIMESTAMPDIFF(MINUTE, s.start_time, NOW()), '分钟前')
                      WHEN TIMESTAMPDIFF(HOUR, s.start_time, NOW()) &lt; 24
                      THEN CONCAT(TIMESTAMPDIFF(HOUR, s.start_time, NOW()), '小时前')
@@ -82,7 +86,7 @@
             <when test="stepStatus == 'pending'">
                 INNER JOIN (
                     SELECT adjust_log_id
-                           ,MAX(id) AS step_id
+                           , MAX(id) AS step_id
                     FROM ip_adjust_step_stock
                     <where>
                         step_status = 'pending'
@@ -100,7 +104,7 @@
             <otherwise>
                 INNER JOIN (
                     SELECT adjust_log_id
-                           ,MAX(id) AS step_id
+                           , MAX(id) AS step_id
                     FROM ip_adjust_step_stock
                     GROUP BY adjust_log_id
                 ) latest ON latest.adjust_log_id = al.id
@@ -136,21 +140,21 @@
                 AND al.stock_short_name LIKE CONCAT('%', #{securityShortName}, '%')
             </if>
             <if test="startDateStart != null and startDateStart != ''">
-                AND s.start_time &gt;= CONCAT(#{startDateStart}, ' 00:00:00')
+                AND s.start_time >= CONCAT(#{startDateStart}, ' 00:00:00')
             </if>
             <if test="startDateEnd != null and startDateEnd != ''">
                 AND s.start_time &lt;= CONCAT(#{startDateEnd}, ' 23:59:59')
             </if>
             <if test="processDescription != null and processDescription != ''">
                 AND CONCAT(
-                        COALESCE(al.adjuster_name, ''),
-                        ' 将 ',
-                        COALESCE(al.stock_short_name, ''),
-                        ' ',
-                        COALESCE(al.adjust_mode, ''),
-                        ' ',
-                        COALESCE(al.target_pool_name, ''),
-                        ' 的审批申请'
+                        COALESCE(al.adjuster_name, '')
+                        , ' 将 '
+                        , COALESCE(al.stock_short_name, '')
+                        , ' '
+                        , COALESCE(al.adjust_mode, '')
+                        , ' '
+                        , COALESCE(al.target_pool_name, '')
+                        , ' 的审批申请'
                     ) LIKE CONCAT('%', #{processDescription}, '%')
             </if>
             <if test="auditStatus != null and auditStatus != ''">
@@ -175,23 +179,23 @@
     <select id="queryMyInitiatedMattersPage" resultType="com.znty.rrs.entity.mymatters.MyMattersDto">
         <bind name="adminUser" value="@com.znty.rrs.common.util.AdminUserIdUtil@isAdminUser(currentUserId)"/>
         SELECT s.id
-               ,'stock' AS businessDomain
-               ,al.stock_code AS objectCode
-               ,al.stock_short_name AS objectName
-               ,s.adjust_log_id
-               ,al.stock_code
-               ,al.stock_short_name
-               ,al.target_pool_id
-               ,al.target_pool_name
-               ,al.adjust_batch_no
-               ,s.id AS stepId
-               ,f.name AS flowName
-               ,s.node_label AS stepName
-               ,'stockAdjust' AS businessScene
-               ,al.audit_status
-               ,s.step_status
+               , 'stock' AS businessDomain
+               , al.stock_code AS objectCode
+               , al.stock_short_name AS objectName
+               , s.adjust_log_id
+               , al.stock_code
+               , al.stock_short_name
+               , al.target_pool_id
+               , al.target_pool_name
+               , al.adjust_batch_no
+               , s.id AS stepId
+               , f.name AS flowName
+               , s.node_label AS stepName
+               , 'stockAdjust' AS businessScene
+               , al.audit_status
+               , s.step_status
                <!-- 处理资格独立于展示步骤：按审核页的批次范围查本人待办，管理员允许代办 -->
-               ,CASE WHEN al.audit_status IN ('00', '11') AND EXISTS (
+               , CASE WHEN al.audit_status IN ('00', '11') AND EXISTS (
                     SELECT 1
                     FROM ip_adjust_step_stock ps
                     WHERE ps.step_status = 'pending'
@@ -223,22 +227,22 @@
                           )
                       </if>
                 ) THEN 1 ELSE 0 END AS canProcess
-               ,CONCAT(
-                    COALESCE(al.adjuster_name, ''),
-                    ' 将 ',
-                    COALESCE(al.stock_short_name, ''),
-                    ' ',
-                    COALESCE(al.adjust_mode, ''),
-                    ' ',
-                    COALESCE(al.target_pool_name, ''),
-                    ' 的审批申请'
+               , CONCAT(
+                    COALESCE(al.adjuster_name, '')
+                    , ' 将 '
+                    , COALESCE(al.stock_short_name, '')
+                    , ' '
+                    , COALESCE(al.adjust_mode, '')
+                    , ' '
+                    , COALESCE(al.target_pool_name, '')
+                    , ' 的审批申请'
                 ) AS processDescription
-               ,al.adjuster_name AS initiatorName
-               ,s.start_time
+               , al.adjuster_name AS initiatorName
+               , s.start_time
         FROM ip_adjust_log_stock al
         INNER JOIN (
             SELECT adjust_log_id
-                   ,MAX(id) AS step_id
+                   , MAX(id) AS step_id
             FROM ip_adjust_step_stock
             GROUP BY adjust_log_id
         ) latest ON latest.adjust_log_id = al.id
@@ -267,21 +271,21 @@
                 AND al.stock_short_name LIKE CONCAT('%', #{securityShortName}, '%')
             </if>
             <if test="startDateStart != null and startDateStart != ''">
-                AND s.start_time &gt;= CONCAT(#{startDateStart}, ' 00:00:00')
+                AND s.start_time >= CONCAT(#{startDateStart}, ' 00:00:00')
             </if>
             <if test="startDateEnd != null and startDateEnd != ''">
                 AND s.start_time &lt;= CONCAT(#{startDateEnd}, ' 23:59:59')
             </if>
             <if test="processDescription != null and processDescription != ''">
                 AND CONCAT(
-                        COALESCE(al.adjuster_name, ''),
-                        ' 将 ',
-                        COALESCE(al.stock_short_name, ''),
-                        ' ',
-                        COALESCE(al.adjust_mode, ''),
-                        ' ',
-                        COALESCE(al.target_pool_name, ''),
-                        ' 的审批申请'
+                        COALESCE(al.adjuster_name, '')
+                        , ' 将 '
+                        , COALESCE(al.stock_short_name, '')
+                        , ' '
+                        , COALESCE(al.adjust_mode, '')
+                        , ' '
+                        , COALESCE(al.target_pool_name, '')
+                        , ' 的审批申请'
                     ) LIKE CONCAT('%', #{processDescription}, '%')
             </if>
             <if test="auditStatus != null and auditStatus != ''">
@@ -295,13 +299,13 @@
     <select id="queryFlowOptionList" resultType="com.znty.rrs.entity.flow.FlowOptionDto">
         <bind name="adminUser" value="@com.znty.rrs.common.util.AdminUserIdUtil@isAdminUser(currentUserId)"/>
         SELECT DISTINCT f.id AS flowId
-                       ,f.flow_key
-                       ,f.name AS flowName
-                       ,f.description
+                       , f.flow_key
+                       , f.name AS flowName
+                       , f.description
         FROM ip_adjust_log_stock al
         INNER JOIN (
             SELECT adjust_log_id
-                   ,MAX(id) AS step_id
+                   , MAX(id) AS step_id
             FROM ip_adjust_step_stock
             GROUP BY adjust_log_id
         ) latest ON latest.adjust_log_id = al.id
@@ -323,6 +327,6 @@
             </if>
         </where>
         ORDER BY f.name ASC
-                 ,f.id ASC
+                 , f.id ASC
     </select>
 </mapper>

@@ -1,31 +1,39 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.rrs.mapper.HsPoolExcelExportMapper">
+    <!--
+        恒生池 Excel 导出 Mapper
+        从投资池配置（ip_investment_pool）读取叶子池及完整路径
+        查询普通池和 CRMW 池的当前状态与调库日志，提供全量和增量导出数据
+    -->
+
     <!-- 递归生成投资池完整层级名称，再筛选未删除的叶子池 -->
     <select id="queryExportPoolList" resultType="com.znty.rrs.entity.schedule.HsPoolExportPoolDto">
+        <!-- 从未删除的顶层池逐级查找未删除的子池，拼接投资池全路径名称 -->
         WITH RECURSIVE pool_tree AS (
             SELECT p.id
-                   ,p.parent_id
-                   ,p.pool_name
-                   ,p.hs_pool_name
-                   ,CAST(p.pool_name AS CHAR(2000)) AS poolFullName
+                   , p.parent_id
+                   , p.pool_name
+                   , p.hs_pool_name
+                   , CAST(p.pool_name AS CHAR(2000)) AS poolFullName
             FROM ip_investment_pool p
             WHERE p.is_deleted = 0
               AND p.parent_id IS NULL
             UNION ALL
             SELECT child.id
-                   ,child.parent_id
-                   ,child.pool_name
-                   ,child.hs_pool_name
-                   ,CONCAT(parent.poolFullName, '/', child.pool_name) AS poolFullName
+                   , child.parent_id
+                   , child.pool_name
+                   , child.hs_pool_name
+                   , CONCAT(parent.poolFullName, '/', child.pool_name) AS poolFullName
             FROM ip_investment_pool child
             INNER JOIN pool_tree parent ON parent.id = child.parent_id
             WHERE child.is_deleted = 0
         )
+        <!-- 只返回没有未删除子池的投资池，传入池 ID 时再按指定范围筛选 -->
         SELECT p.id AS poolId
-               ,p.pool_name
-               ,p.poolFullName
-               ,p.hs_pool_name
+               , p.pool_name
+               , p.poolFullName
+               , p.hs_pool_name
         FROM pool_tree p
         WHERE NOT EXISTS (
             SELECT 1
@@ -45,13 +53,13 @@
     <!-- 合并普通池状态与独立 CRMW 状态：普通证券按任务参数决定是否排除已到期数据，CRMW 按老系统口径不校验到期日 -->
     <select id="queryFullExportRowList" resultType="com.znty.rrs.entity.schedule.HsPoolExportRowDto">
         SELECT export_row.securityShortName
-               ,export_row.securityCode
-               ,export_row.operationType
+               , export_row.security_code
+               , export_row.operationType
         FROM (
             <!-- 普通证券当前状态：排除主体；含 ip_pool_status 中的 crmw 凭证跟债记录 -->
             SELECT si.short_name AS securityShortName
-                   ,ips.security_code AS securityCode
-                   ,'' AS operationType
+                   , ips.security_code
+                   , '' AS operationType
             FROM ip_pool_status ips
             INNER JOIN rrs_securityinfo si ON si.wind_code = ips.security_code
             INNER JOIN dict_security_type dst ON dst.security_type = ips.security_type
@@ -67,8 +75,8 @@
             UNION ALL
             <!-- CRMW 当前状态：导出凭证本身，按状态表中的凭证代码输出，名称保留原回显口径 -->
             SELECT COALESCE(crmw_si.short_name, ips.crmw_name) AS securityShortName
-                   ,ips.crmw_scode AS securityCode
-                   ,'' AS operationType
+                   , ips.crmw_scode AS security_code
+                   , '' AS operationType
             FROM ip_pool_status_crmw ips
             LEFT JOIN rrs_securityinfo crmw_si ON crmw_si.wind_code = ips.crmw_scode
             WHERE ips.target_pool_id = #{poolId}
@@ -81,13 +89,13 @@
     <!-- 合并普通调库日志与 CRMW 调库日志，查询时间窗口内审批通过的调入、调出事件 -->
     <select id="queryIncrementExportRowList" resultType="com.znty.rrs.entity.schedule.HsPoolExportRowDto">
         SELECT export_row.securityShortName
-               ,export_row.securityCode
-               ,export_row.operationType
+               , export_row.security_code
+               , export_row.operationType
         FROM (
             <!-- 普通证券增量：含 ip_pool_status 中 crmw 跟债日志；不校验当前仍在池，按主档排除失效临时代码 -->
             SELECT COALESCE(si.short_name, al.security_short_name) AS securityShortName
-                   ,al.security_code AS securityCode
-                   ,CASE WHEN al.adjust_mode = '调出' THEN '删除' ELSE '' END AS operationType
+                   , al.security_code
+                   , CASE WHEN al.adjust_mode = '调出' THEN '删除' ELSE '' END AS operationType
             FROM ip_adjust_log al
             INNER JOIN rrs_securityinfo si ON si.wind_code = al.security_code
             INNER JOIN dict_security_type dst ON dst.security_type = al.security_type
@@ -96,22 +104,22 @@
               AND al.is_deleted = 0
               AND al.audit_status = '20'
               AND al.adjust_mode IN ('调入', '调出')
-              AND al.audit_time &gt; #{startTime}
+              AND al.audit_time > #{startTime}
               AND al.audit_time &lt;= #{endTime}
               AND dst.category_type != 'company'
               AND NOT (si.security_source = 'temporary' AND si.security_status = 'D')
             UNION ALL
             <!-- CRMW 增量：同一调库日志按凭证信息生成调入或删除记录，按主档排除失效临时代码 -->
             SELECT COALESCE(crmw_si.short_name, al.crmw_name) AS securityShortName
-                   ,al.crmw_scode AS securityCode
-                   ,CASE WHEN al.adjust_mode = '调出' THEN '删除' ELSE '' END AS operationType
+                   , al.crmw_scode AS security_code
+                   , CASE WHEN al.adjust_mode = '调出' THEN '删除' ELSE '' END AS operationType
             FROM ip_adjust_log al
             INNER JOIN rrs_securityinfo crmw_si ON crmw_si.wind_code = al.crmw_scode
             WHERE al.target_pool_id = #{poolId}
               AND al.is_deleted = 0
               AND al.audit_status = '20'
               AND al.adjust_mode IN ('调入', '调出')
-              AND al.audit_time &gt; #{startTime}
+              AND al.audit_time > #{startTime}
               AND al.audit_time &lt;= #{endTime}
               AND al.crmw_scode IS NOT NULL
               AND TRIM(al.crmw_scode) != ''

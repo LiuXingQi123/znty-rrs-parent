@@ -239,7 +239,7 @@ public PageResult<FlowDto> queryFlowPage(FlowReq req) {
  * 统计指定流程 Key 下未删除的流程定义，用于校验 Key 是否重复
  *
  * @param flowKey 待校验的流程 Key
- * @param excludeId 编辑时排除的流程定义 ID，为 {@code null} 时不排除记录
+ * @param excludeId 编辑时排除的流程定义 ID，为 null 时不排除记录
  * @return 符合条件的流程定义数量
  */
 int countByFlowKey(@Param("flowKey") String flowKey, @Param("excludeId") Long excludeId);
@@ -256,9 +256,10 @@ int countByFlowKey(@Param("flowKey") String flowKey, @Param("excludeId") Long ex
 - **复杂 SQL 的 CTE 别名分段必须加注释**：对 `WITH rated AS (...)`、`, old_pick AS (...)`、`, recent_pick AS (...)` 等有业务含义的 CTE，在定义上方使用 `<!-- ... -->` 说明该段用途、数据来源及关键筛选/聚合/排序口径；最终查询前也应说明候选筛选目标。普通字段映射或计算列的 `AS` 别名无需逐字段添加注释。
 - 禁止使用 `<sql>` + `<include>` 抽取公共片段
 - 禁止手动拼 `WHERE 1=1`，统一使用 `<where>` + `<if>`
-- **逗号前置**：`,` 写在列/字段/排序项的前面，逗号后加一个空格，不写在后缀行尾
-  - SELECT 列表第二列起、INSERT 列名/值、UPDATE SET 第二项起、ORDER BY 第二项起 — 都以 `, column` 开头，参数值同样写为 `, #{field}`
-  - 第一项行不加逗号，后续每行以逗号打头，逗号与后面的字段、表达式或参数之间保留一个空格
+- **逗号前置**：多行 SQL 在续行开头写逗号，逗号后加一个空格
+  - SELECT 列表、UPDATE SET 和 ORDER BY 使用逐项前置逗号的写法，第一项不加逗号
+  - Mapper XML 的 `INSERT INTO` 目标列名和每组 `VALUES` 分组书写，通常每行 5–6 项。首行直接写第一组，续行以 `, ` 开头，行内各项也用 `, ` 分隔
+  - `INSERT ... SELECT` 的目标列名按同样方式分组，SELECT 部分遵循查询排版。批量插入的每组 `VALUES` 同样分组，保留原有的 `<foreach>` 和参数顺序
 - **禁止冗余 AS 别名**：已配置 `map-underscore-to-camel-case: true`，`column_name` 会自动映射为 `columnName`，无需 `AS columnName`
   - 仅以下情况保留 AS：① 计算表达式（COALESCE、COUNT、GROUP_CONCAT 等）② 字面量（如 `'在池' AS status`）③ 返回字段名与数据库列名不一致（如 `id AS flowId`、`b_info_issuer AS issuer`）
 - 演示/初始化 SQL 中新增测试数据字段时，应优先在原始 `INSERT INTO` 数据中补全；不要用后置 `UPDATE` 修补初始化数据，除非是明确的数据迁移脚本或用户特别要求。
@@ -279,16 +280,14 @@ int countByFlowKey(@Param("flowKey") String flowKey, @Param("excludeId") Long ex
              , d.id DESC
 </select>
 
-<!-- 新增记录 -->
-<insert id="addFlow" useGeneratedKeys="true" keyProperty="id">
-    INSERT INTO t_flow (
-        name
-        , flow_key
-        , create_time
+<!-- 添加个人自选证券 -->
+<insert id="addSecurityToMyPool" useGeneratedKeys="true" keyProperty="id">
+    INSERT INTO my_security_pool (
+        security_code, security_type, market, user_id, status, remark
+        , create_time, update_time
     ) VALUES (
-        #{name}
-        , #{flowKey}
-        , #{crteTime}
+        #{securityCode}, #{securityType}, #{market}, #{userId}, 'use', #{remark}
+        , NOW(), NOW()
     )
 </insert>
 ```
@@ -358,7 +357,7 @@ int countByFlowKey(@Param("flowKey") String flowKey, @Param("excludeId") Long ex
 | 11 | 未经确认引入新的第三方库 |
 | 12 | 类、方法、字段缺少注释 |
 | 13 | SELECT 列表中写可自动映射的 AS 别名（如 `column_name AS columnName`） |
-| 14 | SQL 逗号放行尾，或前置逗号后未保留一个空格（统一逗号前置，逗号后加一个空格） |
+| 14 | SQL 换行处的逗号留在上一行行尾，或逗号后未保留一个空格 |
 | 15 | 后端做 code → name 的中文字典映射（应由前端维护） |
 | 16 | `@RequestMapping` 类级别只写 `/api/v1`（应写完整路径） |
 | 17 | URL 路径使用 kebab-case（统一 camelCase） |

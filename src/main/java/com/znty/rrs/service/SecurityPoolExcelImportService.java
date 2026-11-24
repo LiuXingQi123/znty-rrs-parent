@@ -1446,8 +1446,8 @@ public class SecurityPoolExcelImportService {
                 .distinct().collect(Collectors.toList());
         List<Long> targetPoolIds = items.stream().map(SecurityPoolExcelImportCheckItemDto::getTargetPoolId)
                 .distinct().sorted().collect(Collectors.toList());
-        // 和终审使用同一池锁，避免两批并发调入同一对象
-        investmentPoolMapper.lockPoolByIdsList(targetPoolIds);
+        // 批量查询本次导入涉及的目标池，再检查在途和重复调入
+        investmentPoolMapper.queryExistingPoolIdList(targetPoolIds);
         Map<Long, InvestmentPoolBo> pools = investmentPoolMapper.queryPoolList().stream()
                 .collect(Collectors.toMap(InvestmentPoolBo::getId, pool -> pool));
         Map<String, Set<Long>> pendingGroups = new HashMap<>();
@@ -1513,8 +1513,8 @@ public class SecurityPoolExcelImportService {
             throw new BizException("所选投资池不存在、已停用或无操作权限");
         }
         Collections.sort(poolIds);
-        // 锁定所选池后再批量读取本次要处理的成员
-        investmentPoolMapper.lockPoolByIdsList(poolIds);
+        // 查询所选池后再批量读取本次要处理的成员
+        investmentPoolMapper.queryExistingPoolIdList(poolIds);
         List<SecurityPoolExcelImportCheckItemDto> items = checkClearTargetOutbound(poolIds, poolMap);
         // 独立清空沿用单笔出库的报告要求，批量核对已有报告豁免
         checkClearReportRequirements(items);

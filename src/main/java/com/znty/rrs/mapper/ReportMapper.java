@@ -16,45 +16,67 @@ import java.util.List;
 @Mapper
 public interface ReportMapper {
 
-    /** 按来源与主键精确查询报告 */
+    /**
+     * 按来源与主键精确查询报告
+     *
+     * @param req 报告信息查询条件
+     * @return 报告信息，未找到时为 null
+     */
     ReportDto queryReportDetail(ReportReq req);
 
     /**
      * 分页查询内部报告库列表
+     *
+     * @param req 报告信息查询条件
+     * @return 符合条件的报告信息列表
      */
     List<ReportDto> queryInReportPage(ReportReq req);
 
     /**
      * 分页查询外部报告库列表
+     *
+     * @param req 报告信息查询条件
+     * @return 符合条件的报告信息列表
      */
     List<ReportDto> queryOutReportPage(ReportReq req);
 
     /**
      * 按内部报告 ID 批量查询报告附件
+     *
+     * @param reportIds 报告 ID 列表
+     * @return 符合条件的附件信息列表
      */
     List<SysAttachmentDto> queryInReportAttachmentList(@Param("reportIds") List<Long> reportIds);
 
     /**
      * 按外部报告 ID 批量查询报告附件
+     *
+     * @param reportIds 报告 ID 列表
+     * @return 符合条件的附件信息列表
      */
     List<SysAttachmentDto> queryOutReportAttachmentList(@Param("reportIds") List<Long> reportIds);
 
     /**
-     * 查询报告生成所需的证券基础信息。
+     * 查询报告生成所需的证券基础信息
      *
      * @param securityCode 证券 Wind 代码（CRMW 使用标的证券代码）
+     * @return 证券主档信息，未找到时为 null
      */
     SecurityInfoBo querySecurityBoByCode(@Param("securityCode") String securityCode);
 
     /**
-     * 查询报告类型映射所需的证券大类。
+     * 查询报告类型映射所需的证券大类
      *
      * @param securityType 证券类型代码
+     * @return 证券大类代码，无匹配类型时为 null
      */
     String queryCategoryTypeBySecurityType(@Param("securityType") String securityType);
 
     /**
      * 新增内部报告记录，回填主键 ID
+     *
+     * @param bo 待写入的内部报告
+     * @return 受影响的行数
      */
     int addInReport(ReportInBo bo);
 }

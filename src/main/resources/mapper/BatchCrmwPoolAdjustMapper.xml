@@ -2,23 +2,27 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.rrs.mapper.BatchCrmwPoolAdjustMapper">
-    <!-- CRMW 池批量调整 mapper，提供可调整 CRMW 投资池及候选组合查询 -->
+    <!--
+        CRMW 池批量调整 Mapper
+        从投资池配置（ip_investment_pool）查询可调整的 CRMW 叶子池
+        读取凭证和标的证券主档，查询调入、调出候选及当前组合在池数量
+    -->
 
     <!-- 分页查询启用叶子 CRMW 投资池 -->
     <select id="queryPoolPage" resultType="com.znty.rrs.entity.batchcrmwpooladjust.BatchCrmwPoolDto">
         SELECT p.id
-               ,p.pool_name
-               ,p.pool_type
-               ,p.market_codes
-               ,p.variety_codes
-               ,p.description
-               ,p.max_capacity
-               ,p.batch_in_flow_id
-               ,p.batch_in_flow_key
-               ,p.batch_in_flow_name
-               ,p.batch_out_flow_id
-               ,p.batch_out_flow_key
-               ,p.batch_out_flow_name
+               , p.pool_name
+               , p.pool_type
+               , p.market_codes
+               , p.variety_codes
+               , p.description
+               , p.max_capacity
+               , p.batch_in_flow_id
+               , p.batch_in_flow_key
+               , p.batch_in_flow_name
+               , p.batch_out_flow_id
+               , p.batch_out_flow_key
+               , p.batch_out_flow_name
         FROM ip_investment_pool p
         WHERE p.status = 'enabled'
           AND p.is_deleted = 0
@@ -37,16 +41,16 @@
                 AND child.is_deleted = 0
           )
         ORDER BY p.outer_sort ASC
-                 ,p.inner_sort ASC
-                 ,p.id ASC
+                 , p.inner_sort ASC
+                 , p.id ASC
     </select>
 
     <!-- 查询指定 CRMW 池当前有效组合数量（按类型分项，批量页「现有数量」展示） -->
     <select id="queryPoolCurrentCountByTypeList"
             resultType="com.znty.rrs.entity.batchcrmwpooladjust.BatchCrmwPoolTypeCountDto">
         SELECT ips.target_pool_id AS poolId
-               ,'crmw' AS typeCode
-               ,COUNT(1) AS count
+               , 'crmw' AS typeCode
+               , COUNT(1) AS count
         FROM ip_pool_status_crmw ips
         WHERE ips.audit_status = '20'
           AND ips.is_deleted = 0
@@ -61,28 +65,28 @@
     <!-- 分页查询目标池可调出候选组合（当前在池组合） -->
     <select id="queryOutboundCandidatePage" resultType="com.znty.rrs.entity.batchcrmwpooladjust.BatchCrmwCandidateDto">
         SELECT si.wind_code AS securityCode
-               ,si.short_name AS securityShortName
-               ,si.security_type
-               ,si.abs_flag
-               ,si.guarant_flag
-               ,si.yx_flag
-               ,si.cj_flag
-               ,si.issue_type
-               ,si.inner_class
-               ,si.inright_flag
-               ,si.std_credit_flag
-               ,ips.crmw_name
-               ,ips.crmw_scode
-               ,ips.crmw_stype
-               ,si.issuer
-               ,si.rating_bond
-               ,si.rating_bondissuer
-               ,si.inner_issuer_rating
-               ,si.maturity_date
-               ,si.date_exists
-               ,si.date_exists_str
-               ,si.guarantor
-               ,si.guarantor_id
+               , si.short_name AS securityShortName
+               , si.security_type
+               , si.abs_flag
+               , si.guarant_flag
+               , si.yx_flag
+               , si.cj_flag
+               , si.issue_type
+               , si.inner_class
+               , si.inright_flag
+               , si.std_credit_flag
+               , ips.crmw_name
+               , ips.crmw_scode
+               , ips.crmw_stype
+               , si.issuer
+               , si.rating_bond
+               , si.rating_bondissuer
+               , si.inner_issuer_rating
+               , si.maturity_date
+               , si.date_exists
+               , si.date_exists_str
+               , si.guarantor
+               , si.guarantor_id
                , si.inner_guarantor_rating
         FROM ip_pool_status_crmw ips
         LEFT JOIN rrs_securityinfo si ON si.wind_code = ips.security_code
@@ -150,7 +154,7 @@
             </if>
         </where>
         ORDER BY ips.crmw_scode ASC
-                 ,ips.security_code ASC
+                 , ips.security_code ASC
     </select>
 
     <!-- 分页查询债券产品库1中的凭证与债券组合，排除目标池已有组合 -->
@@ -169,28 +173,28 @@
         )
         <!-- 债券和凭证各自在来源范围内即可跨子库组合，使用 EXISTS 避免多池持有造成重复分页 -->
         SELECT bond.wind_code AS securityCode
-               ,bond.short_name AS securityShortName
-               ,bond.security_type
-               ,bond.abs_flag
-               ,bond.guarant_flag
-               ,bond.yx_flag
-               ,bond.cj_flag
-               ,bond.issue_type
-               ,bond.inner_class
-               ,bond.inright_flag
-               ,bond.std_credit_flag
-               ,crmw.short_name AS crmwName
-               ,crmw.wind_code AS crmwScode
-               ,'crmw' AS crmwStype
-               ,bond.issuer
-               ,bond.rating_bond
-               ,bond.rating_bondissuer
-               ,bond.inner_issuer_rating
-               ,bond.maturity_date
-               ,bond.date_exists
-               ,bond.date_exists_str
-               ,bond.guarantor
-               ,bond.guarantor_id
+               , bond.short_name AS securityShortName
+               , bond.security_type
+               , bond.abs_flag
+               , bond.guarant_flag
+               , bond.yx_flag
+               , bond.cj_flag
+               , bond.issue_type
+               , bond.inner_class
+               , bond.inright_flag
+               , bond.std_credit_flag
+               , crmw.short_name AS crmwName
+               , crmw.wind_code AS crmwScode
+               , 'crmw' AS crmwStype
+               , bond.issuer
+               , bond.rating_bond
+               , bond.rating_bondissuer
+               , bond.inner_issuer_rating
+               , bond.maturity_date
+               , bond.date_exists
+               , bond.date_exists_str
+               , bond.guarantor
+               , bond.guarantor_id
                , bond.inner_guarantor_rating
         FROM rrs_securityinfo bond
         INNER JOIN dict_security_type dst ON dst.security_type = bond.security_type
@@ -288,7 +292,7 @@
             </if>
         </where>
         ORDER BY crmw.wind_code ASC
-                 ,bond.wind_code ASC
+                 , bond.wind_code ASC
     </select>
 
     <!-- 查询指定投资池是否为启用叶子 CRMW 池 -->
@@ -311,24 +315,24 @@
     <!-- 查询操作人最近一次 CRMW 批量提交的全部手工调库记录 -->
     <select id="queryRecentBatchManualAdjustLogList" resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
         SELECT al.id
-               ,al.security_code
-               ,al.crmw_scode
-               ,al.crmw_stype
-               ,al.adjust_type
-               ,al.adjust_mode
-               ,al.adjust_batch_no
-               ,al.target_pool_id
-               ,al.flow_id
-               ,al.flow_key
-               ,al.audit_status
-               ,al.adjuster_id
-               ,al.adjust_reason
-               ,al.adjust_advice
-               ,al.submit_time
+               , al.security_code
+               , al.crmw_scode
+               , al.crmw_stype
+               , al.adjust_type
+               , al.adjust_mode
+               , al.adjust_batch_no
+               , al.target_pool_id
+               , al.flow_id
+               , al.flow_key
+               , al.audit_status
+               , al.adjuster_id
+               , al.adjust_reason
+               , al.adjust_advice
+               , al.submit_time
         FROM ip_adjust_log al
         INNER JOIN (
             SELECT CASE
-                       WHEN CHAR_LENGTH(adjust_batch_no) &gt;= 25 THEN LEFT(adjust_batch_no, 21)
+                       WHEN CHAR_LENGTH(adjust_batch_no) >= 25 THEN LEFT(adjust_batch_no, 21)
                        ELSE LEFT(adjust_batch_no, 18)
                    END AS batch_prefix
             FROM ip_adjust_log
@@ -337,12 +341,12 @@
               AND pool_type = 'crmw'
               AND audit_status NOT IN ('-1', '99')
               AND is_deleted = 0
-              AND submit_time &gt;= DATE_SUB(NOW(), INTERVAL #{seconds} SECOND)
+              AND submit_time >= DATE_SUB(NOW(), INTERVAL #{seconds} SECOND)
             ORDER BY submit_time DESC
-                     ,id DESC
+                     , id DESC
             LIMIT 1
         ) latest ON CASE
-                        WHEN CHAR_LENGTH(al.adjust_batch_no) &gt;= 25 THEN LEFT(al.adjust_batch_no, 21)
+                        WHEN CHAR_LENGTH(al.adjust_batch_no) >= 25 THEN LEFT(al.adjust_batch_no, 21)
                         ELSE LEFT(al.adjust_batch_no, 18)
                     END = latest.batch_prefix
         WHERE al.adjuster_id = #{adjusterId}
@@ -351,8 +355,8 @@
           AND al.audit_status NOT IN ('-1', '99')
           AND al.is_deleted = 0
         ORDER BY al.crmw_scode ASC
-                 ,al.security_code ASC
-                 ,al.target_pool_id ASC
-                 ,al.id ASC
+                 , al.security_code ASC
+                 , al.target_pool_id ASC
+                 , al.id ASC
     </select>
 </mapper>

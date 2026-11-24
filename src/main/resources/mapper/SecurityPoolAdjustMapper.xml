@@ -1,12 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.rrs.mapper.SecurityPoolAdjustMapper">
-    <!-- 证券池调整 mapper，对应表：rrs_securityinfo（证券信息）、ip_adjust_log（调整记录）、ip_pool_status（证券池状态）、ip_pool_relation（投资池关系），提供证券查询、调库记录新增、池状态查询及业务规则校验功能 -->
+    <!--
+        证券池手工调整 Mapper
+        读取证券主档、发行主体财报、评级主体、在池状态及投资池关系
+        保存调库日志（ip_adjust_log）、审批步骤和证券快照，维护证券池状态（ip_pool_status）
+    -->
 
     <!-- 分页查询人工可调整的债券，包含 CRMW 凭证 -->
     <select id="querySecurityPage" resultType="com.znty.rrs.entity.securitypooladjust.SecurityInfoDto">
         SELECT si.*
-               ,dst.security_type_name
+               , dst.security_type_name
         FROM rrs_securityinfo si
         INNER JOIN dict_security_type dst ON dst.security_type = si.security_type
                                          AND dst.is_deleted = 0
@@ -58,40 +62,40 @@
     <!-- 查询人工候选证券的类型选项，债券大类包含 CRMW 凭证 -->
     <select id="querySecurityTypeList" resultType="com.znty.rrs.entity.common.SecurityTypeOptionDto">
         SELECT DISTINCT si.security_type
-                       ,dst.security_type_name
+                       , dst.security_type_name
         FROM rrs_securityinfo si
         INNER JOIN dict_security_type dst ON dst.security_type = si.security_type
                                          AND dst.is_deleted = 0
                                          AND dst.category_type = 'bond'
         WHERE si.security_status != 'D'
         ORDER BY dst.sort_order ASC
-                 ,si.security_type ASC
+                 , si.security_type ASC
     </select>
 
     <!-- 查询操作人近期有效的手工调库记录 -->
     <select id="queryRecentManualAdjustLogList" resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
         SELECT id
-               ,security_code
-               ,adjust_type
-               ,adjust_mode
-               ,adjust_batch_no
-               ,target_pool_id
-               ,flow_id
-               ,flow_key
-               ,audit_status
-               ,adjuster_id
-               ,adjust_reason
-               ,adjust_advice
-               ,submit_time
+               , security_code
+               , adjust_type
+               , adjust_mode
+               , adjust_batch_no
+               , target_pool_id
+               , flow_id
+               , flow_key
+               , audit_status
+               , adjuster_id
+               , adjust_reason
+               , adjust_advice
+               , submit_time
         FROM ip_adjust_log
         WHERE security_code = #{securityCode}
           AND adjuster_id = #{adjusterId}
           AND adjust_type = '手工调整'
           AND audit_status NOT IN ('-1', '99')
           AND is_deleted = 0
-          AND submit_time &gt;= DATE_SUB(NOW(), INTERVAL #{seconds} SECOND)
+          AND submit_time >= DATE_SUB(NOW(), INTERVAL #{seconds} SECOND)
         ORDER BY submit_time DESC
-                 ,id DESC
+                 , id DESC
     </select>
 
     <!-- 查询证券活动流程同批全部手工、联动和互斥项涉及的目标池 ID -->
@@ -114,7 +118,7 @@
     <!-- 查询证券详情 -->
     <select id="querySecurityDetail" resultType="com.znty.rrs.entity.securitypooladjust.SecurityInfoDetailDto">
         SELECT si.*
-               ,dst.security_type_name
+               , dst.security_type_name
         FROM rrs_securityinfo si
         LEFT JOIN dict_security_type dst ON dst.security_type = si.security_type AND dst.is_deleted = 0
         WHERE si.wind_code = #{securityCode}
@@ -131,21 +135,21 @@
     <!-- 精确查询四期，缺失期由服务层补充日期和空指标 -->
     <select id="queryIssuerFinancialList"
             resultType="com.znty.rrs.entity.securitypooladjust.IssuerFinancialDto">
-        SELECT f.REPORTDATE AS report_date
-               ,f.TOT_ASSETS
-               ,f.SHAREHOLDER_EQUITY
-               ,f.DEBT_ASSETS_RATIO
-               ,f.TOT_REV
-               ,f.NET_PROFIT
-               ,f.NET_CASH_OPER
-               ,f.NET_CASH_INV
-               ,f.GRP
-               ,f.GENERAL_BUDGET_REV
-               ,f.GENERAL_BUDGET_EXP
-               ,f.ROE
-               ,f.EXP_TO_EBITDA
-               ,f.EBITDA
-               ,f.DEBT_TO_EBITDA
+        SELECT f.REPORTDATE
+               , f.TOT_ASSETS
+               , f.SHAREHOLDER_EQUITY
+               , f.DEBT_ASSETS_RATIO
+               , f.TOT_REV
+               , f.NET_PROFIT
+               , f.NET_CASH_OPER
+               , f.NET_CASH_INV
+               , f.GRP
+               , f.GENERAL_BUDGET_REV
+               , f.GENERAL_BUDGET_EXP
+               , f.ROE
+               , f.EXP_TO_EBITDA
+               , f.EBITDA
+               , f.DEBT_TO_EBITDA
         FROM ais_inv_ods.wind_companyfinancial f
         INNER JOIN rrs_securityinfo si ON si.issuer_code = f.COMPANYCODE
         WHERE si.wind_code = #{securityCode}
@@ -159,21 +163,21 @@
     <!-- 查询证券发行主体指定报告日期的财务指标 -->
     <select id="queryIssuerFinancialByReportDate"
             resultType="com.znty.rrs.entity.securitypooladjust.IssuerFinancialDto">
-        SELECT f.REPORTDATE AS report_date
-               ,f.TOT_ASSETS
-               ,f.SHAREHOLDER_EQUITY
-               ,f.DEBT_ASSETS_RATIO
-               ,f.TOT_REV
-               ,f.NET_PROFIT
-               ,f.NET_CASH_OPER
-               ,f.NET_CASH_INV
-               ,f.GRP
-               ,f.GENERAL_BUDGET_REV
-               ,f.GENERAL_BUDGET_EXP
-               ,f.ROE
-               ,f.EXP_TO_EBITDA
-               ,f.EBITDA
-               ,f.DEBT_TO_EBITDA
+        SELECT f.REPORTDATE
+               , f.TOT_ASSETS
+               , f.SHAREHOLDER_EQUITY
+               , f.DEBT_ASSETS_RATIO
+               , f.TOT_REV
+               , f.NET_PROFIT
+               , f.NET_CASH_OPER
+               , f.NET_CASH_INV
+               , f.GRP
+               , f.GENERAL_BUDGET_REV
+               , f.GENERAL_BUDGET_EXP
+               , f.ROE
+               , f.EXP_TO_EBITDA
+               , f.EBITDA
+               , f.DEBT_TO_EBITDA
         FROM ais_inv_ods.wind_companyfinancial f
         INNER JOIN rrs_securityinfo si ON si.issuer_code = f.COMPANYCODE
         WHERE si.wind_code = #{securityCode}
@@ -183,55 +187,35 @@
     <!-- 覆盖报告期的完整财务指标，保留地域及其他非页面指标 -->
     <insert id="saveIssuerFinancial">
         INSERT INTO ais_inv_ods.wind_companyfinancial (
-            COMPANYCODE
-           ,REPORTDATE
-           ,TOT_ASSETS
-           ,SHAREHOLDER_EQUITY
-           ,DEBT_ASSETS_RATIO
-           ,TOT_REV
-           ,NET_PROFIT
-           ,NET_CASH_OPER
-           ,NET_CASH_INV
-           ,GRP
-           ,GENERAL_BUDGET_REV
-           ,GENERAL_BUDGET_EXP
-           ,ROE
-           ,EXP_TO_EBITDA
-           ,EBITDA
-           ,DEBT_TO_EBITDA
+            COMPANYCODE, REPORTDATE, TOT_ASSETS, SHAREHOLDER_EQUITY
+            , DEBT_ASSETS_RATIO, TOT_REV, NET_PROFIT
+            , NET_CASH_OPER, NET_CASH_INV, GRP
+            , GENERAL_BUDGET_REV, GENERAL_BUDGET_EXP
+            , ROE, EXP_TO_EBITDA
+            , EBITDA, DEBT_TO_EBITDA
         ) VALUES (
-            #{issuerCode}
-           ,#{financial.reportDate}
-           ,#{financial.totAssets,jdbcType=DECIMAL}
-           ,#{financial.shareholderEquity,jdbcType=DECIMAL}
-           ,#{financial.debtAssetsRatio,jdbcType=DECIMAL}
-           ,#{financial.totRev,jdbcType=DECIMAL}
-           ,#{financial.netProfit,jdbcType=DECIMAL}
-           ,#{financial.netCashOper,jdbcType=DECIMAL}
-           ,#{financial.netCashInv,jdbcType=DECIMAL}
-           ,#{financial.grp,jdbcType=DECIMAL}
-           ,#{financial.generalBudgetRev,jdbcType=DECIMAL}
-           ,#{financial.generalBudgetExp,jdbcType=DECIMAL}
-           ,#{financial.roe,jdbcType=DECIMAL}
-           ,#{financial.expToEbitda,jdbcType=DECIMAL}
-           ,#{financial.ebitda,jdbcType=DECIMAL}
-           ,#{financial.debtToEbitda,jdbcType=DECIMAL}
+            #{issuerCode}, #{financial.reportDate}, #{financial.totAssets,jdbcType=DECIMAL}, #{financial.shareholderEquity,jdbcType=DECIMAL}
+            , #{financial.debtAssetsRatio,jdbcType=DECIMAL}, #{financial.totRev,jdbcType=DECIMAL}, #{financial.netProfit,jdbcType=DECIMAL}
+            , #{financial.netCashOper,jdbcType=DECIMAL}, #{financial.netCashInv,jdbcType=DECIMAL}, #{financial.grp,jdbcType=DECIMAL}
+            , #{financial.generalBudgetRev,jdbcType=DECIMAL}, #{financial.generalBudgetExp,jdbcType=DECIMAL}
+            , #{financial.roe,jdbcType=DECIMAL}, #{financial.expToEbitda,jdbcType=DECIMAL}
+            , #{financial.ebitda,jdbcType=DECIMAL}, #{financial.debtToEbitda,jdbcType=DECIMAL}
         )
         ON DUPLICATE KEY UPDATE
             TOT_ASSETS = VALUES(TOT_ASSETS)
-           ,SHAREHOLDER_EQUITY = VALUES(SHAREHOLDER_EQUITY)
-           ,DEBT_ASSETS_RATIO = VALUES(DEBT_ASSETS_RATIO)
-           ,TOT_REV = VALUES(TOT_REV)
-           ,NET_PROFIT = VALUES(NET_PROFIT)
-           ,NET_CASH_OPER = VALUES(NET_CASH_OPER)
-           ,NET_CASH_INV = VALUES(NET_CASH_INV)
-           ,GRP = VALUES(GRP)
-           ,GENERAL_BUDGET_REV = VALUES(GENERAL_BUDGET_REV)
-           ,GENERAL_BUDGET_EXP = VALUES(GENERAL_BUDGET_EXP)
-           ,ROE = VALUES(ROE)
-           ,EXP_TO_EBITDA = VALUES(EXP_TO_EBITDA)
-           ,EBITDA = VALUES(EBITDA)
-           ,DEBT_TO_EBITDA = VALUES(DEBT_TO_EBITDA)
+           , SHAREHOLDER_EQUITY = VALUES(SHAREHOLDER_EQUITY)
+           , DEBT_ASSETS_RATIO = VALUES(DEBT_ASSETS_RATIO)
+           , TOT_REV = VALUES(TOT_REV)
+           , NET_PROFIT = VALUES(NET_PROFIT)
+           , NET_CASH_OPER = VALUES(NET_CASH_OPER)
+           , NET_CASH_INV = VALUES(NET_CASH_INV)
+           , GRP = VALUES(GRP)
+           , GENERAL_BUDGET_REV = VALUES(GENERAL_BUDGET_REV)
+           , GENERAL_BUDGET_EXP = VALUES(GENERAL_BUDGET_EXP)
+           , ROE = VALUES(ROE)
+           , EXP_TO_EBITDA = VALUES(EXP_TO_EBITDA)
+           , EBITDA = VALUES(EBITDA)
+           , DEBT_TO_EBITDA = VALUES(DEBT_TO_EBITDA)
     </insert>
 
     <!-- 根据证券代码查询证券基础信息实体 -->
@@ -244,19 +228,19 @@
     <!-- 证券池调库相关评级主体：担保人、权益人均查询四类关系主体 -->
     <select id="queryRelatedRatingCompanyList"
             resultType="com.znty.rrs.entity.securitypooladjust.RelatedRatingCompanyDto">
-        <!-- 从 Wind 债券发行主体关系表读取当前证券的四类候选；同一主体兼多类关系时按类型分别返回。 -->
+        <!-- 从 Wind 债券发行主体关系表读取当前证券的四类候选；同一主体兼多类关系时按类型分别返回 -->
         WITH source_company AS (
             SELECT issuer.s_info_windcode AS security_code
-                   ,issuer.s_info_compcode AS company_code
-                   ,issuer.s_info_compname AS company_name
-                   ,issuer.s_info_typecode AS relation_type_code
-                   ,CASE issuer.s_info_typecode
+                   , issuer.s_info_compcode AS company_code
+                   , issuer.s_info_compname AS company_name
+                   , issuer.s_info_typecode AS relation_type_code
+                   , CASE issuer.s_info_typecode
                         WHEN 115004000 THEN 1
                         WHEN 115203000 THEN 2
                         WHEN 115200000 THEN 3
                         WHEN 115201000 THEN 4
                     END AS relation_sort_no
-                   ,ROW_NUMBER() OVER (
+                   , ROW_NUMBER() OVER (
                        PARTITION BY issuer.s_info_windcode, issuer.s_info_compcode, issuer.s_info_typecode
                        ORDER BY issuer.opdate DESC
                    ) AS row_num
@@ -266,23 +250,23 @@
               AND issuer.s_info_compcode != ''
               AND issuer.s_info_typecode IN (115004000, 115203000, 115200000, 115201000)
         )
-        <!-- 同证券、同主体、同类型仅保留一条；兼多类关系的主体按类型各保留一行。 -->
-        ,eligible_company AS (
+        <!-- 同证券、同主体、同类型仅保留一条；兼多类关系的主体按类型各保留一行 -->
+        , eligible_company AS (
             SELECT security_code
-                   ,company_code
-                   ,company_name
-                   ,relation_type_code
-                   ,relation_sort_no
+                   , company_code
+                   , company_name
+                   , relation_type_code
+                   , relation_sort_no
             FROM source_company
             WHERE row_num = 1
         )
-        <!-- 从投资分析评级视图读取候选主体内评，并按更新时间倒序编号。 -->
-        ,ranked_grade AS (
+        <!-- 从投资分析评级视图读取候选主体内评，并按更新时间倒序编号 -->
+        , ranked_grade AS (
             SELECT grade.windcode
-                   ,grade.windname
-                   ,grade.total_score
-                   ,grade.ts
-                   ,ROW_NUMBER() OVER (
+                   , grade.windname
+                   , grade.total_score
+                   , grade.ts
+                   , ROW_NUMBER() OVER (
                        PARTITION BY grade.windcode
                        ORDER BY grade.ts DESC
                    ) AS row_num
@@ -294,7 +278,7 @@
             )
         )
         <!-- 按评级日期取认可机构最新外评，评级与机构来自同一行 -->
-        ,ranked_outer_rating AS (
+        , ranked_outer_rating AS (
             SELECT rating.s_info_compcode
                    , rating.b_info_creditrating
                    , rating.b_info_creditratingagency
@@ -315,13 +299,13 @@
                   WHERE candidate.company_code = rating.s_info_compcode
               )
         )
-        <!-- 返回当前证券关系主体；无内评时评分字段为空。 -->
+        <!-- 返回当前证券关系主体；无内评时评分字段为空 -->
         SELECT eligible.security_code
-               ,eligible.company_code
-               ,COALESCE(grade.windname, eligible.company_name) AS company_name
-               ,eligible.relation_type_code
-               ,grade.total_score AS inner_rating
-               ,grade.ts AS rating_time
+               , eligible.company_code
+               , COALESCE(grade.windname, eligible.company_name) AS company_name
+               , eligible.relation_type_code
+               , grade.total_score AS inner_rating
+               , grade.ts AS rating_time
                , outer_rating.b_info_creditrating AS rating_bondissuer
                , outer_rating.b_info_creditratingagency AS rating_bondissuer_agency
         FROM eligible_company eligible
@@ -330,8 +314,8 @@
         LEFT JOIN ranked_outer_rating outer_rating ON outer_rating.s_info_compcode = eligible.company_code
                                                    AND outer_rating.row_num = 1
         ORDER BY eligible.relation_sort_no ASC
-                 ,grade.ts DESC
-                 ,eligible.company_code ASC
+                 , grade.ts DESC
+                 , eligible.company_code ASC
     </select>
 
     <!-- 按入库快照确定的主体代码读取最新内评，与人工调库采用相同评级视图及时间排序 -->
@@ -350,10 +334,10 @@
     <!-- 全市场自选权益人：按投资分析主体表去重，并关联最新内评 -->
     <select id="querySelfSelectedRightsHolderPage"
             resultType="com.znty.rrs.entity.securitypooladjust.SelfSelectedRightsHolderDto">
-        <!-- 从投资分析主体表按编码汇总可选择主体，并应用页面查询条件。 -->
+        <!-- 从投资分析主体表按编码汇总可选择主体，并应用页面查询条件 -->
         WITH source_company AS (
             SELECT company.wind_code AS company_code
-                   ,MAX(COALESCE(NULLIF(company.full_name, ''), NULLIF(company.short_names, ''))) AS company_name
+                   , MAX(COALESCE(NULLIF(company.full_name, ''), NULLIF(company.short_names, ''))) AS company_name
             FROM ais_inv_analysis.t_inv_company company
             <where>
                 AND company.wind_code IS NOT NULL
@@ -369,13 +353,13 @@
             </where>
             GROUP BY company.wind_code
         )
-        <!-- 从投资分析评级视图读取候选主体内评，并按更新时间倒序编号。 -->
-        ,ranked_grade AS (
+        <!-- 从投资分析评级视图读取候选主体内评，并按更新时间倒序编号 -->
+        , ranked_grade AS (
             SELECT grade.windcode
-                   ,grade.windname
-                   ,grade.total_score
-                   ,grade.ts
-                   ,ROW_NUMBER() OVER (
+                   , grade.windname
+                   , grade.total_score
+                   , grade.ts
+                   , ROW_NUMBER() OVER (
                        PARTITION BY grade.windcode
                        ORDER BY grade.ts DESC
                    ) AS row_num
@@ -387,7 +371,7 @@
             )
         )
         <!-- 按评级日期取认可机构最新外评，评级与机构来自同一行 -->
-        ,ranked_outer_rating AS (
+        , ranked_outer_rating AS (
             SELECT rating.s_info_compcode
                    , rating.b_info_creditrating
                    , rating.b_info_creditratingagency
@@ -408,11 +392,11 @@
                   WHERE candidate.company_code = rating.s_info_compcode
               )
         )
-        <!-- 返回主体及其最新内评；无内评主体仍可作为自选权益人展示。 -->
+        <!-- 返回主体及其最新内评；无内评主体仍可作为自选权益人展示 -->
         SELECT company.company_code
-               ,COALESCE(grade.windname, company.company_name) AS company_name
-               ,grade.total_score AS inner_rating
-               ,grade.ts AS rating_time
+               , COALESCE(grade.windname, company.company_name) AS company_name
+               , grade.total_score AS inner_rating
+               , grade.ts AS rating_time
                , outer_rating.b_info_creditrating AS rating_bondissuer
                , outer_rating.b_info_creditratingagency AS rating_bondissuer_agency
         FROM source_company company
@@ -426,22 +410,22 @@
     <!-- 自选权益人提交防伪：按精确主体编码重新查询投资分析主体和最新内评 -->
     <select id="querySelfSelectedRightsHolderByCode"
             resultType="com.znty.rrs.entity.securitypooladjust.SelfSelectedRightsHolderDto">
-        <!-- 按提交编码从投资分析主体表精确读取有效主体。 -->
+        <!-- 按提交编码从投资分析主体表精确读取有效主体 -->
         WITH source_company AS (
             SELECT company.wind_code AS company_code
-                   ,MAX(COALESCE(NULLIF(company.full_name, ''), NULLIF(company.short_names, ''))) AS company_name
+                   , MAX(COALESCE(NULLIF(company.full_name, ''), NULLIF(company.short_names, ''))) AS company_name
             FROM ais_inv_analysis.t_inv_company company
             WHERE company.wind_code = #{companyCode}
               AND COALESCE(NULLIF(company.full_name, ''), NULLIF(company.short_names, '')) IS NOT NULL
             GROUP BY company.wind_code
         )
-        <!-- 读取该主体的内评，并按更新时间倒序编号。 -->
-        ,ranked_grade AS (
+        <!-- 读取该主体的内评，并按更新时间倒序编号 -->
+        , ranked_grade AS (
             SELECT grade.windcode
-                   ,grade.windname
-                   ,grade.total_score
-                   ,grade.ts
-                   ,ROW_NUMBER() OVER (
+                   , grade.windname
+                   , grade.total_score
+                   , grade.ts
+                   , ROW_NUMBER() OVER (
                        PARTITION BY grade.windcode
                        ORDER BY grade.ts DESC
                    ) AS row_num
@@ -449,7 +433,7 @@
             WHERE grade.windcode = #{companyCode}
         )
         <!-- 按评级日期取认可机构最新外评，评级与机构来自同一行 -->
-        ,ranked_outer_rating AS (
+        , ranked_outer_rating AS (
             SELECT rating.s_info_compcode
                    , rating.b_info_creditrating
                    , rating.b_info_creditratingagency
@@ -470,11 +454,11 @@
                   WHERE candidate.company_code = rating.s_info_compcode
               )
         )
-        <!-- 返回防伪校验后的主体及其最新内评。 -->
+        <!-- 返回防伪校验后的主体及其最新内评 -->
         SELECT company.company_code
-               ,COALESCE(grade.windname, company.company_name) AS company_name
-               ,grade.total_score AS inner_rating
-               ,grade.ts AS rating_time
+               , COALESCE(grade.windname, company.company_name) AS company_name
+               , grade.total_score AS inner_rating
+               , grade.ts AS rating_time
                , outer_rating.b_info_creditrating AS rating_bondissuer
                , outer_rating.b_info_creditratingagency AS rating_bondissuer_agency
         FROM source_company company
@@ -487,66 +471,29 @@
 
     <!-- 新增调库记录 -->
     <insert id="addAdjustLog" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO ip_adjust_log (security_code
-                                  ,security_short_name
-                                  ,security_type
-                                  ,crmw_name
-                                  ,crmw_scode
-                                  ,crmw_mktcode
-                                  ,crmw_stype
-                                  ,adjust_type
-                                  ,adjust_mode
-                                  ,adjust_batch_no
-                                  ,target_pool_id
-                                  ,target_pool_name
-                                  ,pool_type
-                                  ,flow_id
-                                  ,flow_key
-                                  ,flow_type
-                                  ,audit_status
-                                  ,adjuster_id
-                                  ,adjuster_name
-                                  ,adjust_reason
-                                  ,adjust_advice
-                                  ,submit_time
-                                  ,is_deleted
-                                  ,crte_time
-                                  ,updt_time)
-        VALUES (#{securityCode}
-               ,#{securityShortName}
-               ,#{securityType}
-               ,#{crmwName}
-               ,#{crmwScode}
-               ,#{crmwMktcode}
-               ,#{crmwStype}
-               ,#{adjustType}
-               ,#{adjustMode}
-               ,#{adjustBatchNo}
-               ,#{targetPoolId}
-               ,#{targetPoolName}
-               ,#{poolType}
-               ,#{flowId}
-               ,#{flowKey}
-               ,#{flowType}
-               ,#{auditStatus}
-               ,#{adjusterId}
-               ,#{adjusterName}
-               ,#{adjustReason}
-               ,#{adjustAdvice}
-               ,COALESCE(#{submitTime}, NOW())
-               ,0
-               ,NOW()
-               ,NOW())
+        INSERT INTO ip_adjust_log (
+            security_code, security_short_name, security_type, crmw_name, crmw_scode, crmw_mktcode
+            , crmw_stype, adjust_type, adjust_mode, adjust_batch_no, target_pool_id, target_pool_name
+            , pool_type, flow_id, flow_key, flow_type, audit_status, adjuster_id
+            , adjuster_name, adjust_reason, adjust_advice, submit_time, is_deleted
+            , crte_time, updt_time
+        ) VALUES (
+            #{securityCode}, #{securityShortName}, #{securityType}, #{crmwName}, #{crmwScode}, #{crmwMktcode}
+            , #{crmwStype}, #{adjustType}, #{adjustMode}, #{adjustBatchNo}, #{targetPoolId}, #{targetPoolName}
+            , #{poolType}, #{flowId}, #{flowKey}, #{flowType}, #{auditStatus}, #{adjusterId}
+            , #{adjusterName}, #{adjustReason}, #{adjustAdvice}, COALESCE(#{submitTime}, NOW()), 0
+            , NOW(), NOW()
+        )
     </insert>
 
     <!-- 查询当前证券所在池列表（仅叶子节点） -->
     <select id="querySecurityPoolStatusList" resultType="com.znty.rrs.entity.securitypooladjust.PoolStatusDto">
         SELECT ips.target_pool_id
-               ,p.pool_name
-               ,ips.pool_type
-               ,ips.adjust_batch_no
-               ,ips.adjust_log_id
-               ,DATE_FORMAT(ips.entry_time, '%Y-%m-%d') AS entryDate
+               , p.pool_name
+               , ips.pool_type
+               , ips.adjust_batch_no
+               , ips.adjust_log_id
+               , DATE_FORMAT(ips.entry_time, '%Y-%m-%d') AS entryDate
         FROM ip_pool_status ips
         INNER JOIN ip_investment_pool p ON p.id = ips.target_pool_id
                                        AND p.is_deleted = 0
@@ -564,11 +511,11 @@
     <!-- 查询当前证券主体（发行人）所在池列表（仅叶子节点） -->
     <select id="queryIssuerPoolStatusList" resultType="com.znty.rrs.entity.securitypooladjust.PoolStatusDto">
         SELECT ips.target_pool_id
-               ,p.pool_name
-               ,ips.pool_type
-               ,MAX(ips.adjust_batch_no) AS adjustBatchNo
-               ,DATE_FORMAT(MIN(ips.entry_time), '%Y-%m-%d') AS entryDate
-               ,COUNT(DISTINCT ips.security_code) AS bondCount
+               , p.pool_name
+               , ips.pool_type
+               , MAX(ips.adjust_batch_no) AS adjustBatchNo
+               , DATE_FORMAT(MIN(ips.entry_time), '%Y-%m-%d') AS entryDate
+               , COUNT(DISTINCT ips.security_code) AS bondCount
         FROM ip_pool_status ips
         INNER JOIN rrs_securityinfo sb ON ips.security_code = sb.wind_code
         INNER JOIN ip_investment_pool p ON p.id = ips.target_pool_id
@@ -585,35 +532,35 @@
                 AND child.is_deleted = 0
           )
         GROUP BY p.id
-                 ,ips.target_pool_id
-                 ,p.pool_name
-                 ,ips.pool_type
+                 , ips.target_pool_id
+                 , p.pool_name
+                 , ips.pool_type
     </select>
 
-    <!-- 调库记录列表：固定按当前证券代码查询全部历史；批次仅用于流程定位，不参与本列表过滤。 -->
+    <!-- 调库记录列表：固定按当前证券代码查询全部历史；批次仅用于流程定位，不参与本列表过滤 -->
     <select id="queryAdjustLogList" resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
         SELECT al.id
-               ,al.security_code
-               ,al.security_short_name
-               ,al.security_type
-               ,al.adjust_type
-               ,al.adjust_mode
-               ,al.adjust_batch_no
-               ,al.target_pool_id
-               ,al.target_pool_name
-               ,al.pool_type
-               ,al.flow_id
-               ,al.flow_key
-               ,al.flow_type
-               ,fd.name AS flowName
-               ,al.audit_status
-               ,al.adjuster_id
-               ,al.adjuster_name
-               ,al.adjust_reason
-               ,al.adjust_advice
-               ,al.submit_time
-               ,al.audit_time
-               ,al.entry_time
+               , al.security_code
+               , al.security_short_name
+               , al.security_type
+               , al.adjust_type
+               , al.adjust_mode
+               , al.adjust_batch_no
+               , al.target_pool_id
+               , al.target_pool_name
+               , al.pool_type
+               , al.flow_id
+               , al.flow_key
+               , al.flow_type
+               , fd.name AS flowName
+               , al.audit_status
+               , al.adjuster_id
+               , al.adjuster_name
+               , al.adjust_reason
+               , al.adjust_advice
+               , al.submit_time
+               , al.audit_time
+               , al.entry_time
         FROM ip_adjust_log al
         LEFT JOIN wf_flow_definition fd ON fd.id = al.flow_id
         WHERE al.is_deleted = 0
@@ -629,7 +576,7 @@
           </if>
         -->
         ORDER BY al.submit_time DESC
-                 ,al.id DESC
+                 , al.id DESC
     </select>
 
     <!-- 查询证券当前有效所在池 ID 列表 -->
@@ -677,7 +624,7 @@
     <!-- 查询各投资池当前有效证券数量 -->
     <select id="queryPoolCurrentCountList" resultType="com.znty.rrs.entity.securitypooladjust.PoolDto">
         SELECT target_pool_id AS id
-               ,COUNT(DISTINCT security_code) AS currentCount
+               , COUNT(DISTINCT security_code) AS currentCount
         FROM ip_pool_status
         WHERE audit_status = '20'
           AND is_deleted = 0
@@ -703,9 +650,9 @@
           AND al.is_deleted = 0
           AND s.step_status = 'pending'
         ORDER BY s.sort_order ASC
-                 ,s.id ASC
-                 ,al.submit_time DESC
-                 ,al.id DESC
+                 , s.id ASC
+                 , al.submit_time DESC
+                 , al.id DESC
         LIMIT 1
     </select>
 
@@ -807,7 +754,7 @@
         WHERE l.audit_status = '20'
           AND l.adjust_mode = '调入'
           AND l.is_deleted = 0
-          AND l.crte_time &gt;= DATE_SUB(NOW(), INTERVAL 6 MONTH)
+          AND l.crte_time >= DATE_SUB(NOW(), INTERVAL 6 MONTH)
           AND l.security_code IN (
               SELECT si.wind_code FROM rrs_securityinfo si
               WHERE si.issuer_code = (SELECT issuer_code FROM rrs_securityinfo WHERE wind_code = #{securityCode} LIMIT 1)
@@ -829,7 +776,7 @@
         WHERE l.audit_status = '20'
           AND l.adjust_mode = '调入'
           AND l.is_deleted = 0
-          AND l.crte_time &gt;= DATE_SUB(NOW(), INTERVAL 6 MONTH)
+          AND l.crte_time >= DATE_SUB(NOW(), INTERVAL 6 MONTH)
           AND l.security_code = #{securityCode}
           AND EXISTS (
               SELECT 1
@@ -840,7 +787,7 @@
                 AND a.attachment_category IN ('credit_report_in', 'credit_report_out', 'credit_report_hand')
           )
         ORDER BY l.crte_time DESC
-                 ,l.id DESC
+                 , l.id DESC
         LIMIT 1
     </select>
 
@@ -851,7 +798,7 @@
         WHERE l.audit_status = '20'
           AND l.adjust_mode = '调入'
           AND l.is_deleted = 0
-          AND l.crte_time &gt;= DATE_SUB(NOW(), INTERVAL 6 MONTH)
+          AND l.crte_time >= DATE_SUB(NOW(), INTERVAL 6 MONTH)
           AND l.security_code IN (
               SELECT si.wind_code
               FROM rrs_securityinfo si
@@ -871,27 +818,27 @@
                 AND a.attachment_category IN ('credit_report_in', 'credit_report_out', 'credit_report_hand')
           )
         ORDER BY l.crte_time DESC
-                 ,l.id DESC
+                 , l.id DESC
         LIMIT 1
     </select>
 
     <!-- 调库日志下首选信评报告附件（手工、内部库、外部库依次优先，同类附件按 ID 降序） -->
     <select id="queryFirstCreditReportAttachment" resultType="com.znty.rrs.entity.bo.SysAttachmentBo">
         SELECT id
-               ,table_name
-               ,main_id
-               ,attachment_category
-               ,file_type
-               ,original_file_name
-               ,new_file_name
-               ,file_size
-               ,content_type
-               ,full_url
-               ,file_name
-               ,uploader_id
-               ,is_deleted
-               ,crte_time
-               ,updt_time
+               , table_name
+               , main_id
+               , attachment_category
+               , file_type
+               , original_file_name
+               , new_file_name
+               , file_size
+               , content_type
+               , full_url
+               , file_name
+               , uploader_id
+               , is_deleted
+               , crte_time
+               , updt_time
         FROM sys_attachment
         WHERE table_name = 'ip_adjust_log'
           AND main_id = #{adjustLogId}
@@ -903,27 +850,27 @@
                      WHEN 'credit_report_out' THEN 1
                      ELSE 0
                  END DESC
-                 ,id DESC
+                 , id DESC
         LIMIT 1
     </select>
 
     <!-- 按物理路径反查报告库附件（copyReportAttachments 复用 file_name） -->
     <select id="queryReportLibraryAttachmentByFileName" resultType="com.znty.rrs.entity.bo.SysAttachmentBo">
         SELECT id
-               ,table_name
-               ,main_id
-               ,attachment_category
-               ,file_type
-               ,original_file_name
-               ,new_file_name
-               ,file_size
-               ,content_type
-               ,full_url
-               ,file_name
-               ,uploader_id
-               ,is_deleted
-               ,crte_time
-               ,updt_time
+               , table_name
+               , main_id
+               , attachment_category
+               , file_type
+               , original_file_name
+               , new_file_name
+               , file_size
+               , content_type
+               , full_url
+               , file_name
+               , uploader_id
+               , is_deleted
+               , crte_time
+               , updt_time
         FROM sys_attachment
         WHERE is_deleted = 0
           AND table_name = #{tableName}
@@ -936,14 +883,14 @@
     <!-- 内部报告简要 -->
     <select id="queryInReportById" resultType="com.znty.rrs.entity.report.ReportDto">
         SELECT id
-               ,author_name
-               ,report_title
-               ,report_type
-               ,security_code
-               ,company_code
-               ,security_type
-               ,data_source
-               ,crte_time
+               , author_name
+               , report_title
+               , report_type
+               , security_code
+               , company_code
+               , security_type
+               , data_source
+               , crte_time
         FROM rrs_report_in
         WHERE id = #{id}
           AND is_deleted = 0
@@ -953,15 +900,15 @@
     <!-- 外部报告简要 -->
     <select id="queryOutReportById" resultType="com.znty.rrs.entity.report.ReportDto">
         SELECT id
-               ,author_name
-               ,source_org_name
-               ,report_title
-               ,report_type
-               ,security_code
-               ,company_code
-               ,security_type
-               ,data_source
-               ,crte_time
+               , author_name
+               , source_org_name
+               , report_title
+               , report_type
+               , security_code
+               , company_code
+               , security_type
+               , data_source
+               , crte_time
         FROM rrs_report_out
         WHERE id = #{id}
           AND is_deleted = 0
@@ -990,7 +937,7 @@
           AND ips.flow_type != ''
           AND ips.flow_type != 'simpleInbound'
           AND ips.audit_status = '20'
-          AND ips.entry_time &gt;= DATE_SUB(NOW(), INTERVAL #{days} DAY)
+          AND ips.entry_time >= DATE_SUB(NOW(), INTERVAL #{days} DAY)
           AND ips.entry_time &lt;= NOW()
     </select>
 
@@ -1072,13 +1019,15 @@
           AND snap.analysis IS NOT NULL
           AND TRIM(snap.analysis) != ''
         ORDER BY l.crte_time DESC
-                 ,l.id DESC
+                 , l.id DESC
         LIMIT 1
     </select>
 
-    <!-- 旧口径：查询指定天数内同主体、同目标池的非简易入库记录，已出池软删历史仍计。
-         当前证券池简易匹配不调用此查询，改用 queryIssuerHasNonSimpleCreditBondInboundWithinDays，
-         按同发行人信用债大库任意层级的非简易入库经历判断，不限定历史目标层级。 -->
+    <!--
+        旧口径：查询指定天数内同主体、同目标池的非简易入库记录，已出池软删历史仍计。
+        当前证券池简易匹配不调用此查询，改用 queryIssuerHasNonSimpleCreditBondInboundWithinDays，
+        按同发行人信用债大库任意层级的非简易入库经历判断，不限定历史目标层级
+    -->
     <select id="queryIssuerHasNonSimpleInboundWithinDays" resultType="boolean">
         SELECT COUNT(1) > 0
         FROM ip_pool_status ips
@@ -1092,72 +1041,31 @@
           AND ips.target_pool_id = #{targetPoolId}
           AND ips.flow_type != 'simpleInbound'
           AND ips.audit_status = '20'
-          AND ips.entry_time &gt;= DATE_SUB(NOW(), INTERVAL #{days} DAY)
+          AND ips.entry_time >= DATE_SUB(NOW(), INTERVAL #{days} DAY)
     </select>
 
     <!-- 新增入池状态记录（直通流程：start→end 跳过审批，直接写入已生效状态） -->
     <insert id="addPoolStatus">
-        INSERT INTO ip_pool_status (security_code
-                                  ,security_short_name
-                                  ,security_type
-                                  ,crmw_name
-                                  ,crmw_scode
-                                  ,crmw_mktcode
-                                  ,crmw_stype
-                                  ,adjust_type
-                                  ,adjust_mode
-                                  ,adjust_batch_no
-                                  ,adjust_log_id
-                                  ,target_pool_id
-                                  ,target_pool_name
-                                  ,pool_type
-                                  ,flow_id
-                                  ,flow_key
-                                  ,flow_type
-                                  ,audit_status
-                                  ,adjuster_id
-                                  ,adjuster_name
-                                  ,adjust_reason
-                                  ,adjust_advice
-                                  ,submit_time
-                                  ,entry_time
-                                  ,is_deleted
-                                  ,crte_time
-                                  ,updt_time)
-        VALUES (#{securityCode}
-               ,#{securityShortName}
-               ,#{securityType}
-               ,#{crmwName}
-               ,#{crmwScode}
-               ,#{crmwMktcode}
-               ,#{crmwStype}
-               ,#{adjustType}
-               ,#{adjustMode}
-               ,#{adjustBatchNo}
-               ,#{adjustLogId}
-               ,#{targetPoolId}
-               ,#{targetPoolName}
-               ,#{poolType}
-               ,#{flowId}
-               ,#{flowKey}
-               ,#{flowType}
-               ,#{auditStatus}
-               ,#{adjusterId}
-               ,#{adjusterName}
-               ,#{adjustReason}
-               ,#{adjustAdvice}
-               ,NOW()
-               ,NOW()
-               ,0
-               ,NOW()
-               ,NOW())
+        INSERT INTO ip_pool_status (
+            security_code, security_short_name, security_type, crmw_name, crmw_scode, crmw_mktcode
+            , crmw_stype, adjust_type, adjust_mode, adjust_batch_no, adjust_log_id, target_pool_id
+            , target_pool_name, pool_type, flow_id, flow_key, flow_type, audit_status
+            , adjuster_id, adjuster_name, adjust_reason, adjust_advice, submit_time, entry_time
+            , is_deleted, crte_time, updt_time
+        ) VALUES (
+            #{securityCode}, #{securityShortName}, #{securityType}, #{crmwName}, #{crmwScode}, #{crmwMktcode}
+            , #{crmwStype}, #{adjustType}, #{adjustMode}, #{adjustBatchNo}, #{adjustLogId}, #{targetPoolId}
+            , #{targetPoolName}, #{poolType}, #{flowId}, #{flowKey}, #{flowType}, #{auditStatus}
+            , #{adjusterId}, #{adjusterName}, #{adjustReason}, #{adjustAdvice}, NOW(), NOW()
+            , 0, NOW(), NOW()
+        )
     </insert>
 
     <!-- 软删除入池状态（直通调出：将该证券在目标池中的生效记录标记为删除） -->
     <update id="deletePoolStatusSoft">
         UPDATE ip_pool_status
         SET is_deleted = 1
-           ,updt_time = NOW()
+           , updt_time = NOW()
         WHERE security_code = #{securityCode}
           AND target_pool_id = #{targetPoolId}
           AND audit_status = '20'
@@ -1207,144 +1115,119 @@
     <update id="editSecurityInfoForAdjust">
         UPDATE rrs_securityinfo
         SET wind_code = #{securityInfo.windCode}
-           ,full_name = #{securityInfo.fullName}
-           ,issue_announcement = #{securityInfo.issueAnnouncement}
-           ,short_name = #{securityInfo.shortName}
-           ,security_type = #{securityInfo.securityType}
-           ,term_year = #{securityInfo.termYear}
-           ,term_day = #{securityInfo.termDay}
-           ,maturityembedded_desc = #{securityInfo.maturityembeddedDesc}
-           ,form_desc = #{securityInfo.formDesc}
-           ,sec_typename = #{securityInfo.secTypename}
-           ,comp_type = #{securityInfo.compType}
-           ,issuer = #{securityInfo.issuer}
-           ,issuer_code = #{securityInfo.issuerCode}
-           ,crncy_code = #{securityInfo.crncyCode}
-           ,issue_amountplan = #{securityInfo.issueAmountplan}
-           ,list_date = #{securityInfo.listDate}
-           ,firstissue_date = #{securityInfo.firstissueDate}
-           ,maturity_date = #{securityInfo.maturityDate}
-           ,carry_date = #{securityInfo.carryDate}
-           ,end_date = #{securityInfo.endDate}
-           ,interest_type = #{securityInfo.interestType}
-           ,interest_frequency = #{securityInfo.interestFrequency}
-           ,interest_yearcount = #{securityInfo.interestYearcount}
-           ,coupon_rate = #{securityInfo.couponRate}
-           ,spread = #{securityInfo.spread}
-           ,redemption_flag = #{securityInfo.redemptionFlag}
-           ,redemption_date = #{securityInfo.redemptionDate}
-           ,redemption_price = #{securityInfo.redemptionPrice}
-           ,date_call_exists = #{securityInfo.dateCallExists}
-           ,callbkorputbk_date = #{securityInfo.callbkorputbkDate}
-           ,redemption_content = #{securityInfo.redemptionContent}
-           ,repurchase_flag = #{securityInfo.repurchaseFlag}
-           ,repurchase_date = #{securityInfo.repurchaseDate}
-           ,repurchase_price = #{securityInfo.repurchasePrice}
-           ,repurchase_content = #{securityInfo.repurchaseContent}
-           ,payment_date = #{securityInfo.paymentDate}
-           ,delist_date = #{securityInfo.delistDate}
-           ,securities_types_dq = #{securityInfo.securitiesTypesDq}
-           ,coupon_desc = #{securityInfo.couponDesc}
-           ,issue_type = #{securityInfo.issueType}
-           ,corporate_bond_flag = #{securityInfo.corporateBondFlag}
-           ,payadvanced_flag = #{securityInfo.payadvancedFlag}
-           ,chooseright_flag = #{securityInfo.chooserightFlag}
-           ,incbonds_flag = #{securityInfo.incbondsFlag}
-           ,industry_name = #{securityInfo.industryName}
-           ,industry_name2 = #{securityInfo.industryName2}
-           ,inner_class = #{securityInfo.innerClass}
-           ,cj_flag = #{securityInfo.cjFlag}
-           ,yx_flag = #{securityInfo.yxFlag}
-           ,dy_flag = #{securityInfo.dyFlag}
-           ,date_exists = #{securityInfo.dateExists}
-           ,rating_bond = #{securityInfo.ratingBond}
-           ,rating_bondissuer = #{securityInfo.ratingBondissuer}
-           ,rating_outlook = #{securityInfo.ratingOutlook}
-           ,rating_bond_agency = #{securityInfo.ratingBondAgency}
-           ,rating_bondissuer_agency = #{securityInfo.ratingBondissuerAgency}
-           ,rating_cnbd = #{securityInfo.ratingCnbd}
-           ,inright_flag = #{securityInfo.inrightFlag}
-           ,date_inright_exists = #{securityInfo.dateInrightExists}
-           ,date_inright_next = #{securityInfo.dateInrightNext}
-           ,issue_amountact = #{securityInfo.issueAmountact}
-           ,guarantor = #{securityInfo.guarantor}
-           ,guarantor_id = #{securityInfo.guarantorId}
-           ,agency_name = #{securityInfo.agencyName}
-           ,agency_nameid = #{securityInfo.agencyNameid}
-           ,create_time = #{securityInfo.createTime}
-           ,ts = NOW()
-           ,security_status = #{securityInfo.securityStatus}
-           ,date_next = #{securityInfo.dateNext}
-           ,fund_use = #{securityInfo.fundUse}
-           ,par = #{securityInfo.par}
-           ,info_pledge_ratio = #{securityInfo.infoPledgeRatio}
-           ,inner_issuer_rating = #{securityInfo.innerIssuerRating}
-           ,inner_guarantor_rating = #{securityInfo.innerGuarantorRating}
-           ,prompt_reason = #{securityInfo.promptReason}
-           ,analysis = #{securityInfo.analysis}
-           ,date_repurchase_exists = #{securityInfo.dateRepurchaseExists}
-           ,guarant_flag = #{securityInfo.guarantFlag}
-           ,guarant_type = #{securityInfo.guarantType}
-           ,abs_flag = #{securityInfo.absFlag}
+           , full_name = #{securityInfo.fullName}
+           , issue_announcement = #{securityInfo.issueAnnouncement}
+           , short_name = #{securityInfo.shortName}
+           , security_type = #{securityInfo.securityType}
+           , term_year = #{securityInfo.termYear}
+           , term_day = #{securityInfo.termDay}
+           , maturityembedded_desc = #{securityInfo.maturityembeddedDesc}
+           , form_desc = #{securityInfo.formDesc}
+           , sec_typename = #{securityInfo.secTypename}
+           , comp_type = #{securityInfo.compType}
+           , issuer = #{securityInfo.issuer}
+           , issuer_code = #{securityInfo.issuerCode}
+           , crncy_code = #{securityInfo.crncyCode}
+           , issue_amountplan = #{securityInfo.issueAmountplan}
+           , list_date = #{securityInfo.listDate}
+           , firstissue_date = #{securityInfo.firstissueDate}
+           , maturity_date = #{securityInfo.maturityDate}
+           , carry_date = #{securityInfo.carryDate}
+           , end_date = #{securityInfo.endDate}
+           , interest_type = #{securityInfo.interestType}
+           , interest_frequency = #{securityInfo.interestFrequency}
+           , interest_yearcount = #{securityInfo.interestYearcount}
+           , coupon_rate = #{securityInfo.couponRate}
+           , spread = #{securityInfo.spread}
+           , redemption_flag = #{securityInfo.redemptionFlag}
+           , redemption_date = #{securityInfo.redemptionDate}
+           , redemption_price = #{securityInfo.redemptionPrice}
+           , date_call_exists = #{securityInfo.dateCallExists}
+           , callbkorputbk_date = #{securityInfo.callbkorputbkDate}
+           , redemption_content = #{securityInfo.redemptionContent}
+           , repurchase_flag = #{securityInfo.repurchaseFlag}
+           , repurchase_date = #{securityInfo.repurchaseDate}
+           , repurchase_price = #{securityInfo.repurchasePrice}
+           , repurchase_content = #{securityInfo.repurchaseContent}
+           , payment_date = #{securityInfo.paymentDate}
+           , delist_date = #{securityInfo.delistDate}
+           , securities_types_dq = #{securityInfo.securitiesTypesDq}
+           , coupon_desc = #{securityInfo.couponDesc}
+           , issue_type = #{securityInfo.issueType}
+           , corporate_bond_flag = #{securityInfo.corporateBondFlag}
+           , payadvanced_flag = #{securityInfo.payadvancedFlag}
+           , chooseright_flag = #{securityInfo.chooserightFlag}
+           , incbonds_flag = #{securityInfo.incbondsFlag}
+           , industry_name = #{securityInfo.industryName}
+           , industry_name2 = #{securityInfo.industryName2}
+           , inner_class = #{securityInfo.innerClass}
+           , cj_flag = #{securityInfo.cjFlag}
+           , yx_flag = #{securityInfo.yxFlag}
+           , dy_flag = #{securityInfo.dyFlag}
+           , date_exists = #{securityInfo.dateExists}
+           , rating_bond = #{securityInfo.ratingBond}
+           , rating_bondissuer = #{securityInfo.ratingBondissuer}
+           , rating_outlook = #{securityInfo.ratingOutlook}
+           , rating_bond_agency = #{securityInfo.ratingBondAgency}
+           , rating_bondissuer_agency = #{securityInfo.ratingBondissuerAgency}
+           , rating_cnbd = #{securityInfo.ratingCnbd}
+           , inright_flag = #{securityInfo.inrightFlag}
+           , date_inright_exists = #{securityInfo.dateInrightExists}
+           , date_inright_next = #{securityInfo.dateInrightNext}
+           , issue_amountact = #{securityInfo.issueAmountact}
+           , guarantor = #{securityInfo.guarantor}
+           , guarantor_id = #{securityInfo.guarantorId}
+           , agency_name = #{securityInfo.agencyName}
+           , agency_nameid = #{securityInfo.agencyNameid}
+           , create_time = #{securityInfo.createTime}
+           , ts = NOW()
+           , security_status = #{securityInfo.securityStatus}
+           , date_next = #{securityInfo.dateNext}
+           , fund_use = #{securityInfo.fundUse}
+           , par = #{securityInfo.par}
+           , info_pledge_ratio = #{securityInfo.infoPledgeRatio}
+           , inner_issuer_rating = #{securityInfo.innerIssuerRating}
+           , inner_guarantor_rating = #{securityInfo.innerGuarantorRating}
+           , prompt_reason = #{securityInfo.promptReason}
+           , analysis = #{securityInfo.analysis}
+           , date_repurchase_exists = #{securityInfo.dateRepurchaseExists}
+           , guarant_flag = #{securityInfo.guarantFlag}
+           , guarant_type = #{securityInfo.guarantType}
+           , abs_flag = #{securityInfo.absFlag}
         WHERE wind_code = #{securityCode}
     </update>
 
     <!-- 新增流程步骤记录 -->
     <insert id="addAdjustStep" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO ip_adjust_step (adjust_log_id
-                                   ,adjust_batch_no
-                                   ,flow_node_id
-                                   ,node_code
-                                   ,node_label
-                                   ,node_type
-                                   ,approval_strategy
-                                   ,sort_order
-                                   ,step_status
-                                   ,handler_id
-                                   ,handler_name
-                                   ,process_action
-                                   ,process_comment
-                                   ,start_time
-                                   ,process_time
-                                   ,crte_time
-                                   ,updt_time)
-        VALUES (#{adjustLogId}
-               ,#{adjustBatchNo}
-               ,#{flowNodeId}
-               ,#{nodeCode}
-               ,#{nodeLabel}
-               ,#{nodeType}
-               ,#{approvalStrategy}
-               ,#{sortOrder}
-               ,#{stepStatus}
-               ,#{handlerId}
-               ,#{handlerName}
-               ,#{processAction}
-               ,#{processComment}
-               ,#{startTime}
-               ,#{processTime}
-               ,NOW()
-               ,NOW())
+        INSERT INTO ip_adjust_step (
+            adjust_log_id, adjust_batch_no, flow_node_id, node_code, node_label, node_type
+            , approval_strategy, sort_order, step_status, handler_id, handler_name, process_action
+            , process_comment, start_time, process_time, crte_time, updt_time
+        ) VALUES (
+            #{adjustLogId}, #{adjustBatchNo}, #{flowNodeId}, #{nodeCode}, #{nodeLabel}, #{nodeType}
+            , #{approvalStrategy}, #{sortOrder}, #{stepStatus}, #{handlerId}, #{handlerName}, #{processAction}
+            , #{processComment}, #{startTime}, #{processTime}, NOW(), NOW()
+        )
     </insert>
 
     <!-- 查询指定调库记录的流程步骤列表 -->
     <select id="queryAdjustStepList" resultType="com.znty.rrs.entity.bo.IpAdjustStepBo">
         SELECT id
-               ,adjust_log_id
-               ,adjust_batch_no
-               ,flow_node_id
-               ,node_code
-               ,node_label
-               ,node_type
-               ,approval_strategy
-               ,sort_order
-               ,step_status
-               ,handler_id
-               ,handler_name
-               ,process_action
-               ,process_comment
-               ,start_time
-               ,process_time
+               , adjust_log_id
+               , adjust_batch_no
+               , flow_node_id
+               , node_code
+               , node_label
+               , node_type
+               , approval_strategy
+               , sort_order
+               , step_status
+               , handler_id
+               , handler_name
+               , process_action
+               , process_comment
+               , start_time
+               , process_time
         FROM ip_adjust_step
         WHERE adjust_log_id = #{adjustLogId}
         ORDER BY id ASC
@@ -1353,21 +1236,21 @@
     <!-- 查询指定批次或调库记录的流程步骤列表 -->
     <select id="queryAdjustStepByBatchList" resultType="com.znty.rrs.entity.bo.IpAdjustStepBo">
         SELECT id
-               ,adjust_log_id
-               ,adjust_batch_no
-               ,flow_node_id
-               ,node_code
-               ,node_label
-               ,node_type
-               ,approval_strategy
-               ,sort_order
-               ,step_status
-               ,handler_id
-               ,handler_name
-               ,process_action
-               ,process_comment
-               ,start_time
-               ,process_time
+               , adjust_log_id
+               , adjust_batch_no
+               , flow_node_id
+               , node_code
+               , node_label
+               , node_type
+               , approval_strategy
+               , sort_order
+               , step_status
+               , handler_id
+               , handler_name
+               , process_action
+               , process_comment
+               , start_time
+               , process_time
         FROM ip_adjust_step
         <where>
             <choose>
@@ -1385,21 +1268,21 @@
     <!-- 根据 ID 查询流程步骤 -->
     <select id="queryAdjustStepById" resultType="com.znty.rrs.entity.bo.IpAdjustStepBo">
         SELECT id
-               ,adjust_log_id
-               ,adjust_batch_no
-               ,flow_node_id
-               ,node_code
-               ,node_label
-               ,node_type
-               ,approval_strategy
-               ,sort_order
-               ,step_status
-               ,handler_id
-               ,handler_name
-               ,process_action
-               ,process_comment
-               ,start_time
-               ,process_time
+               , adjust_log_id
+               , adjust_batch_no
+               , flow_node_id
+               , node_code
+               , node_label
+               , node_type
+               , approval_strategy
+               , sort_order
+               , step_status
+               , handler_id
+               , handler_name
+               , process_action
+               , process_comment
+               , start_time
+               , process_time
         FROM ip_adjust_step
         WHERE id = #{id}
     </select>
@@ -1407,21 +1290,21 @@
     <!-- 按处理人查询同批次同节点待处理步骤 -->
     <select id="queryPendingStepByHandler" resultType="com.znty.rrs.entity.bo.IpAdjustStepBo">
         SELECT id
-               ,adjust_log_id
-               ,adjust_batch_no
-               ,flow_node_id
-               ,node_code
-               ,node_label
-               ,node_type
-               ,approval_strategy
-               ,sort_order
-               ,step_status
-               ,handler_id
-               ,handler_name
-               ,process_action
-               ,process_comment
-               ,start_time
-               ,process_time
+               , adjust_log_id
+               , adjust_batch_no
+               , flow_node_id
+               , node_code
+               , node_label
+               , node_type
+               , approval_strategy
+               , sort_order
+               , step_status
+               , handler_id
+               , handler_name
+               , process_action
+               , process_comment
+               , start_time
+               , process_time
         FROM ip_adjust_step
         WHERE flow_node_id = #{flowNodeId}
           AND handler_id = #{handlerId}
@@ -1442,10 +1325,10 @@
     <update id="editAdjustStepProcess">
         UPDATE ip_adjust_step
         SET step_status = #{stepStatus}
-           ,process_action = #{processAction}
-           ,process_comment = #{processComment}
-           ,process_time = NOW()
-           ,updt_time = NOW()
+           , process_action = #{processAction}
+           , process_comment = #{processComment}
+           , process_time = NOW()
+           , updt_time = NOW()
         WHERE id = #{id}
           AND step_status = 'pending'
     </update>
@@ -1454,10 +1337,10 @@
     <update id="editOtherPendingStepSkipped">
         UPDATE ip_adjust_step
         SET step_status = #{stepStatus}
-           ,process_action = 'skipped'
-           ,process_comment = NULL
-           ,process_time = NOW()
-           ,updt_time = NOW()
+           , process_action = 'skipped'
+           , process_comment = NULL
+           , process_time = NOW()
+           , updt_time = NOW()
         WHERE id != #{id}
           AND flow_node_id = #{flowNodeId}
           AND step_status = 'pending'
@@ -1490,26 +1373,26 @@
     <!-- 查询指定批次或调库记录的调库日志列表 -->
     <select id="queryAdjustLogListForAudit" resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
         SELECT id
-               ,security_code
-               ,security_short_name
-               ,security_type
-               ,adjust_type
-               ,adjust_mode
-               ,adjust_batch_no
-               ,target_pool_id
-               ,target_pool_name
-               ,pool_type
-               ,flow_id
-               ,flow_key
-               ,flow_type
-               ,audit_status
-               ,adjuster_id
-               ,adjuster_name
-               ,adjust_reason
-               ,adjust_advice
-               ,submit_time
-               ,audit_time
-               ,entry_time
+               , security_code
+               , security_short_name
+               , security_type
+               , adjust_type
+               , adjust_mode
+               , adjust_batch_no
+               , target_pool_id
+               , target_pool_name
+               , pool_type
+               , flow_id
+               , flow_key
+               , flow_type
+               , audit_status
+               , adjuster_id
+               , adjuster_name
+               , adjust_reason
+               , adjust_advice
+               , submit_time
+               , audit_time
+               , entry_time
         FROM ip_adjust_log
         <where>
             is_deleted = 0
@@ -1530,10 +1413,10 @@
         UPDATE ip_adjust_log
         SET updt_time = NOW()
         <if test="adjustReason != null">
-           ,adjust_reason = #{adjustReason}
+           , adjust_reason = #{adjustReason}
         </if>
         <if test="adjustAdvice != null">
-           ,adjust_advice = #{adjustAdvice}
+           , adjust_advice = #{adjustAdvice}
         </if>
         <where>
             is_deleted = 0
@@ -1553,8 +1436,8 @@
     <update id="editAdjustLogAuditStatus">
         UPDATE ip_adjust_log
         SET audit_status = #{auditStatus}
-           ,audit_time = NOW()
-           ,updt_time = NOW()
+           , audit_time = NOW()
+           , updt_time = NOW()
         WHERE is_deleted = 0
           <choose>
               <when test="adjustBatchNo != null and adjustBatchNo != ''">
@@ -1570,8 +1453,8 @@
     <update id="editActiveAdjustLogAuditStatus">
         UPDATE ip_adjust_log
         SET audit_status = #{auditStatus}
-           ,audit_time = NOW()
-           ,updt_time = NOW()
+           , audit_time = NOW()
+           , updt_time = NOW()
         WHERE audit_status IN ('00', '11')
           <choose>
               <when test="adjustBatchNo != null and adjustBatchNo != ''">
@@ -1587,8 +1470,8 @@
     <update id="editAdjustLogTargetPool">
         UPDATE ip_adjust_log
         SET target_pool_id = #{targetPoolId}
-           ,target_pool_name = #{targetPoolName}
-           ,updt_time = NOW()
+           , target_pool_name = #{targetPoolName}
+           , updt_time = NOW()
         WHERE is_deleted = 0
           AND id = #{adjustLogId}
           AND adjust_mode = '调入'
@@ -1599,8 +1482,8 @@
     <!-- 查询全量投资池关系配置（不限关系类型） -->
     <select id="queryAllPoolRelationList" resultType="com.znty.rrs.entity.bo.PoolRelationBo">
         SELECT pool_id
-               ,relation_type
-               ,relation_pool_id
+               , relation_type
+               , relation_pool_id
         FROM ip_pool_relation
         WHERE is_deleted = 0
     </select>
@@ -1620,126 +1503,34 @@
         FROM ip_pool_open_day
         WHERE pool_id = #{poolId}
           AND begin_date &lt;= #{today}
-          AND end_date &gt;= #{today}
+          AND end_date >= #{today}
           AND is_deleted = 0
     </select>
 
     <!-- 新增调库证券信息快照 -->
     <insert id="addAdjustSecuritySnapshot" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO ip_adjust_security_snapshot (
-            adjust_log_id
-           ,submitter_id
-           ,submit_time
-           ,wind_code
-           ,full_name
-           ,short_name
-           ,issuer
-           ,issuer_code
-           ,issue_amountplan
-           ,coupon_rate
-           ,date_inright_exists
-           ,carry_date
-           ,maturity_date
-           ,info_pledge_ratio
-           ,rating_bond_agency
-           ,rating_bond
-           ,rating_bondissuer
-           ,rating_outlook
-           ,guarantor
-           ,guarantor_id
-           ,agency_name
-           ,inner_issuer_rating
-           ,security_type
-           ,sec_typename
-           ,date_call_exists
-           ,inner_guarantor_rating
-           ,date_exists
-           ,date_exists_str
-           ,fund_use
-           ,prompt_reason
-           ,analysis
-           ,term_year
-           ,term_day
-           ,maturityembedded_desc
-           ,comp_type
-           ,issue_amountact
-           ,date_repurchase_exists
-           ,abs_flag
-           ,guarant_flag
-           ,guarant_type
-           ,rating_bondissuer_agency
-           ,agency_nameid
-           ,bond_biz_type
-           ,abs_originator_name
-           ,abs_share_ratio
-           ,expected_maturity_date
-           ,legal_maturity_date
-           ,abs_report_org
-           ,abs_custodian
-           ,company_selector
-           ,extra_ind_1
-           ,extra_ind_2
-           ,extra_ind_3
-           ,is_deleted
-           ,crte_time
-           ,updt_time
+            adjust_log_id, submitter_id, submit_time, wind_code, full_name, short_name
+            , issuer, issuer_code, issue_amountplan, coupon_rate, date_inright_exists, carry_date
+            , maturity_date, info_pledge_ratio, rating_bond_agency, rating_bond, rating_bondissuer, rating_outlook
+            , guarantor, guarantor_id, agency_name, inner_issuer_rating, security_type, sec_typename
+            , date_call_exists, inner_guarantor_rating, date_exists, date_exists_str, fund_use, prompt_reason
+            , analysis, term_year, term_day, maturityembedded_desc, comp_type, issue_amountact
+            , date_repurchase_exists, abs_flag, guarant_flag, guarant_type, rating_bondissuer_agency, agency_nameid
+            , bond_biz_type, abs_originator_name, abs_share_ratio, expected_maturity_date, legal_maturity_date, abs_report_org
+            , abs_custodian, company_selector, extra_ind_1, extra_ind_2, extra_ind_3, is_deleted
+            , crte_time, updt_time
         ) VALUES (
-            #{adjustLogId}
-           ,#{submitterId}
-           ,#{submitTime}
-           ,#{windCode}
-           ,#{fullName}
-           ,#{shortName}
-           ,#{issuer}
-           ,#{issuerCode}
-           ,#{issueAmountplan}
-           ,#{couponRate}
-           ,#{dateInrightExists}
-           ,#{carryDate}
-           ,#{maturityDate}
-           ,#{infoPledgeRatio}
-           ,#{ratingBondAgency}
-           ,#{ratingBond}
-           ,#{ratingBondissuer}
-           ,#{ratingOutlook}
-           ,#{guarantor}
-           ,#{guarantorId}
-           ,#{agencyName}
-           ,#{innerIssuerRating}
-           ,#{securityType}
-           ,#{secTypename}
-           ,#{dateCallExists}
-           ,#{innerGuarantorRating}
-           ,#{dateExists}
-           ,#{dateExistsStr}
-           ,#{fundUse}
-           ,#{promptReason}
-           ,#{analysis}
-           ,#{termYear}
-           ,#{termDay}
-           ,#{maturityembeddedDesc}
-           ,#{compType}
-           ,#{issueAmountact}
-           ,#{dateRepurchaseExists}
-           ,#{absFlag}
-           ,#{guarantFlag}
-           ,#{guarantType}
-           ,#{ratingBondissuerAgency}
-           ,#{agencyNameid}
-           ,#{bondBizType}
-           ,#{absOriginatorName}
-           ,#{absShareRatio}
-           ,#{expectedMaturityDate}
-           ,#{legalMaturityDate}
-           ,#{absReportOrg}
-           ,#{absCustodian}
-           ,#{companySelector}
-           ,#{extraInd1}
-           ,#{extraInd2}
-           ,#{extraInd3}
-           ,#{isDeleted}
-           ,#{crteTime}
-           ,#{updtTime}
+            #{adjustLogId}, #{submitterId}, #{submitTime}, #{windCode}, #{fullName}, #{shortName}
+            , #{issuer}, #{issuerCode}, #{issueAmountplan}, #{couponRate}, #{dateInrightExists}, #{carryDate}
+            , #{maturityDate}, #{infoPledgeRatio}, #{ratingBondAgency}, #{ratingBond}, #{ratingBondissuer}, #{ratingOutlook}
+            , #{guarantor}, #{guarantorId}, #{agencyName}, #{innerIssuerRating}, #{securityType}, #{secTypename}
+            , #{dateCallExists}, #{innerGuarantorRating}, #{dateExists}, #{dateExistsStr}, #{fundUse}, #{promptReason}
+            , #{analysis}, #{termYear}, #{termDay}, #{maturityembeddedDesc}, #{compType}, #{issueAmountact}
+            , #{dateRepurchaseExists}, #{absFlag}, #{guarantFlag}, #{guarantType}, #{ratingBondissuerAgency}, #{agencyNameid}
+            , #{bondBizType}, #{absOriginatorName}, #{absShareRatio}, #{expectedMaturityDate}, #{legalMaturityDate}, #{absReportOrg}
+            , #{absCustodian}, #{companySelector}, #{extraInd1}, #{extraInd2}, #{extraInd3}, #{isDeleted}
+            , #{crteTime}, #{updtTime}
         )
     </insert>
 
@@ -1747,47 +1538,47 @@
     <select id="querySecuritySnapshotDetailByAdjustLogId"
             resultType="com.znty.rrs.entity.securitypooladjust.SecurityInfoDetailDto">
         SELECT snap.wind_code
-               ,snap.full_name
-               ,snap.short_name
-               ,snap.issuer
-               ,snap.issuer_code
-               ,snap.issue_amountplan
-               ,snap.coupon_rate
-               ,snap.date_inright_exists
-               ,snap.carry_date
-               ,snap.maturity_date
-               ,snap.info_pledge_ratio
-               ,snap.rating_bond_agency
-               ,snap.rating_bond
-               ,snap.rating_bondissuer
-               ,snap.rating_outlook
-               ,snap.guarantor
-               ,snap.guarantor_id
-               ,snap.agency_name
-               ,snap.inner_issuer_rating
-               ,snap.security_type
-               ,snap.sec_typename
-               ,snap.date_call_exists
-               ,snap.inner_guarantor_rating
-               ,snap.date_exists
-               ,snap.date_exists_str
-               ,snap.fund_use
-               ,snap.prompt_reason
-               ,snap.analysis
-               ,snap.term_year
-               ,snap.term_day
-               ,snap.maturityembedded_desc
-               ,snap.comp_type
-               ,snap.issue_amountact
-               ,snap.date_repurchase_exists
-               ,snap.abs_flag
-               ,snap.guarant_flag
-               ,snap.guarant_type
-               ,snap.rating_bondissuer_agency
-               ,snap.agency_nameid
-               ,snap.abs_originator_name
-               ,snap.company_selector
-               ,dst.security_type_name
+               , snap.full_name
+               , snap.short_name
+               , snap.issuer
+               , snap.issuer_code
+               , snap.issue_amountplan
+               , snap.coupon_rate
+               , snap.date_inright_exists
+               , snap.carry_date
+               , snap.maturity_date
+               , snap.info_pledge_ratio
+               , snap.rating_bond_agency
+               , snap.rating_bond
+               , snap.rating_bondissuer
+               , snap.rating_outlook
+               , snap.guarantor
+               , snap.guarantor_id
+               , snap.agency_name
+               , snap.inner_issuer_rating
+               , snap.security_type
+               , snap.sec_typename
+               , snap.date_call_exists
+               , snap.inner_guarantor_rating
+               , snap.date_exists
+               , snap.date_exists_str
+               , snap.fund_use
+               , snap.prompt_reason
+               , snap.analysis
+               , snap.term_year
+               , snap.term_day
+               , snap.maturityembedded_desc
+               , snap.comp_type
+               , snap.issue_amountact
+               , snap.date_repurchase_exists
+               , snap.abs_flag
+               , snap.guarant_flag
+               , snap.guarant_type
+               , snap.rating_bondissuer_agency
+               , snap.agency_nameid
+               , snap.abs_originator_name
+               , snap.company_selector
+               , dst.security_type_name
         FROM ip_adjust_security_snapshot snap
         LEFT JOIN dict_security_type dst ON dst.security_type = snap.security_type AND dst.is_deleted = 0
         WHERE snap.adjust_log_id = #{adjustLogId}
@@ -1801,53 +1592,53 @@
     <select id="queryLatestSecuritySnapshotDetailByWindCode"
             resultType="com.znty.rrs.entity.securitypooladjust.SecurityInfoDetailDto">
         SELECT snap.wind_code
-               ,snap.full_name
-               ,snap.short_name
-               ,snap.issuer
-               ,snap.issuer_code
-               ,snap.issue_amountplan
-               ,snap.coupon_rate
-               ,snap.date_inright_exists
-               ,snap.carry_date
-               ,snap.maturity_date
-               ,snap.info_pledge_ratio
-               ,snap.rating_bond_agency
-               ,snap.rating_bond
-               ,snap.rating_bondissuer
-               ,snap.rating_outlook
-               ,snap.guarantor
-               ,snap.guarantor_id
-               ,snap.agency_name
-               ,snap.inner_issuer_rating
-               ,snap.security_type
-               ,snap.sec_typename
-               ,snap.date_call_exists
-               ,snap.inner_guarantor_rating
-               ,snap.date_exists
-               ,snap.date_exists_str
-               ,snap.fund_use
-               ,snap.prompt_reason
-               ,snap.analysis
-               ,snap.term_year
-               ,snap.term_day
-               ,snap.maturityembedded_desc
-               ,snap.comp_type
-               ,snap.issue_amountact
-               ,snap.date_repurchase_exists
-               ,snap.abs_flag
-               ,snap.guarant_flag
-               ,snap.guarant_type
-               ,snap.rating_bondissuer_agency
-               ,snap.agency_nameid
-               ,snap.abs_originator_name
-               ,snap.company_selector
-               ,dst.security_type_name
+               , snap.full_name
+               , snap.short_name
+               , snap.issuer
+               , snap.issuer_code
+               , snap.issue_amountplan
+               , snap.coupon_rate
+               , snap.date_inright_exists
+               , snap.carry_date
+               , snap.maturity_date
+               , snap.info_pledge_ratio
+               , snap.rating_bond_agency
+               , snap.rating_bond
+               , snap.rating_bondissuer
+               , snap.rating_outlook
+               , snap.guarantor
+               , snap.guarantor_id
+               , snap.agency_name
+               , snap.inner_issuer_rating
+               , snap.security_type
+               , snap.sec_typename
+               , snap.date_call_exists
+               , snap.inner_guarantor_rating
+               , snap.date_exists
+               , snap.date_exists_str
+               , snap.fund_use
+               , snap.prompt_reason
+               , snap.analysis
+               , snap.term_year
+               , snap.term_day
+               , snap.maturityembedded_desc
+               , snap.comp_type
+               , snap.issue_amountact
+               , snap.date_repurchase_exists
+               , snap.abs_flag
+               , snap.guarant_flag
+               , snap.guarant_type
+               , snap.rating_bondissuer_agency
+               , snap.agency_nameid
+               , snap.abs_originator_name
+               , snap.company_selector
+               , dst.security_type_name
         FROM ip_adjust_security_snapshot snap
         LEFT JOIN dict_security_type dst ON dst.security_type = snap.security_type AND dst.is_deleted = 0
         WHERE snap.wind_code = #{windCode}
           AND IFNULL(snap.is_deleted, 0) = 0
         ORDER BY snap.submit_time DESC
-                 ,snap.id DESC
+                 , snap.id DESC
         LIMIT 1
     </select>
 
@@ -1861,21 +1652,21 @@
     <!-- ABS 主档未通过审核时，按后端核验的本次主体读取财报 -->
     <select id="queryFinancialListByIssuer"
             resultType="com.znty.rrs.entity.securitypooladjust.IssuerFinancialDto">
-        SELECT f.REPORTDATE AS report_date
-               ,f.TOT_ASSETS
-               ,f.SHAREHOLDER_EQUITY
-               ,f.DEBT_ASSETS_RATIO
-               ,f.TOT_REV
-               ,f.NET_PROFIT
-               ,f.NET_CASH_OPER
-               ,f.NET_CASH_INV
-               ,f.GRP
-               ,f.GENERAL_BUDGET_REV
-               ,f.GENERAL_BUDGET_EXP
-               ,f.ROE
-               ,f.EXP_TO_EBITDA
-               ,f.EBITDA
-               ,f.DEBT_TO_EBITDA
+        SELECT f.REPORTDATE
+               , f.TOT_ASSETS
+               , f.SHAREHOLDER_EQUITY
+               , f.DEBT_ASSETS_RATIO
+               , f.TOT_REV
+               , f.NET_PROFIT
+               , f.NET_CASH_OPER
+               , f.NET_CASH_INV
+               , f.GRP
+               , f.GENERAL_BUDGET_REV
+               , f.GENERAL_BUDGET_EXP
+               , f.ROE
+               , f.EXP_TO_EBITDA
+               , f.EBITDA
+               , f.DEBT_TO_EBITDA
         FROM ais_inv_ods.wind_companyfinancial f
         WHERE f.COMPANYCODE = #{issuerCode}
           AND f.REPORTDATE IN
@@ -1888,21 +1679,21 @@
     <!-- ABS 主档未通过审核时，按后端核验的本次主体读取财报 -->
     <select id="queryFinancialByIssuerAndDate"
             resultType="com.znty.rrs.entity.securitypooladjust.IssuerFinancialDto">
-        SELECT f.REPORTDATE AS report_date
-               ,f.TOT_ASSETS
-               ,f.SHAREHOLDER_EQUITY
-               ,f.DEBT_ASSETS_RATIO
-               ,f.TOT_REV
-               ,f.NET_PROFIT
-               ,f.NET_CASH_OPER
-               ,f.NET_CASH_INV
-               ,f.GRP
-               ,f.GENERAL_BUDGET_REV
-               ,f.GENERAL_BUDGET_EXP
-               ,f.ROE
-               ,f.EXP_TO_EBITDA
-               ,f.EBITDA
-               ,f.DEBT_TO_EBITDA
+        SELECT f.REPORTDATE
+               , f.TOT_ASSETS
+               , f.SHAREHOLDER_EQUITY
+               , f.DEBT_ASSETS_RATIO
+               , f.TOT_REV
+               , f.NET_PROFIT
+               , f.NET_CASH_OPER
+               , f.NET_CASH_INV
+               , f.GRP
+               , f.GENERAL_BUDGET_REV
+               , f.GENERAL_BUDGET_EXP
+               , f.ROE
+               , f.EXP_TO_EBITDA
+               , f.EBITDA
+               , f.DEBT_TO_EBITDA
         FROM ais_inv_ods.wind_companyfinancial f
         WHERE f.COMPANYCODE = #{issuerCode}
           AND f.REPORTDATE = #{reportDate}

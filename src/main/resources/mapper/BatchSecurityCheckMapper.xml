@@ -1,6 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.rrs.mapper.BatchSecurityCheckMapper">
+    <!--
+        证券批量调库校验 Mapper
+        读取证券主档、同券关联、评级主体、ABS 身份和有效池状态
+        查询池关系、开放日、在途流程、CRMW 来源及报告依据，供手工批量和定时任务校验
+    -->
+
     <!-- 对任务主券和关联码使用同一候选范围 -->
     <select id="queryPoolRelations" resultType="com.znty.rrs.entity.bo.PoolRelationBo">
         SELECT pool_id
@@ -10,6 +16,7 @@
         WHERE is_deleted = 0
     </select>
 
+    <!-- 按池统计已审批通过的在池证券数 -->
     <select id="queryPoolCounts" resultType="com.znty.rrs.entity.securitypooladjust.PoolDto">
         SELECT target_pool_id AS id
                , COUNT(DISTINCT security_code) AS current_count
@@ -23,6 +30,7 @@
         GROUP BY target_pool_id
     </select>
 
+    <!-- 按公司代码精确查询 ABS 自选权益人及当前内外评 -->
     <select id="querySelfSelectedCompanies"
             resultType="com.znty.rrs.entity.securitypooladjust.SelfSelectedRightsHolderDto">
         <!-- 按提交编码从投资分析主体表精确读取有效主体 -->
@@ -89,7 +97,9 @@
                                                    AND outer_rating.row_num = 1
     </select>
 
+    <!-- 读取候选 ABS 主档、在池状态及普通和 CRMW 在途快照中的主体确认情况 -->
     <select id="queryAbsIdentities" resultType="com.znty.rrs.entity.securitypooladjust.BatchSecurityCheckData$Row">
+        <!-- 从证券主档按传入代码读取待核对的证券和主体代码 -->
         WITH requested_security AS (
             SELECT wind_code
                    , issuer_code
@@ -99,6 +109,7 @@
                 #{code}
             </foreach>
         )
+        <!-- 合并主档已确认主体、在池未确认记录和普通及 CRMW 在途快照，标记主体是否未确认 -->
         SELECT si.wind_code AS security_code
                , si.issuer_code AS company_code
                , 0 AS unconfirmed_identity
@@ -223,25 +234,26 @@
           AND related.S_INFO_WINDCODE != current_code.S_INFO_WINDCODE
           AND related.S_INFO_WINDCODE IS NOT NULL
           AND TRIM(related.S_INFO_WINDCODE) != ''
-        ORDER BY security_code, related_code
+        ORDER BY security_code
+                 , related_code
     </select>
 
     <!-- 按现有候选排序批量读取关联评级主体 -->
     <select id="queryRatingCompanies"
             resultType="com.znty.rrs.entity.securitypooladjust.RelatedRatingCompanyDto">
-        <!-- 从 Wind 债券发行主体关系表读取当前证券的四类候选；同一主体兼多类关系时按类型分别返回。 -->
+        <!-- 从 Wind 债券发行主体关系表读取当前证券的四类候选；同一主体兼多类关系时按类型分别返回 -->
         WITH source_company AS (
             SELECT issuer.s_info_windcode AS security_code
-                   ,issuer.s_info_compcode AS company_code
-                   ,issuer.s_info_compname AS company_name
-                   ,issuer.s_info_typecode AS relation_type_code
-                   ,CASE issuer.s_info_typecode
+                   , issuer.s_info_compcode AS company_code
+                   , issuer.s_info_compname AS company_name
+                   , issuer.s_info_typecode AS relation_type_code
+                   , CASE issuer.s_info_typecode
                         WHEN 115004000 THEN 1
                         WHEN 115203000 THEN 2
                         WHEN 115200000 THEN 3
                         WHEN 115201000 THEN 4
                     END AS relation_sort_no
-                   ,ROW_NUMBER() OVER (
+                   , ROW_NUMBER() OVER (
                        PARTITION BY issuer.s_info_windcode, issuer.s_info_compcode, issuer.s_info_typecode
                        ORDER BY issuer.opdate DESC
                    ) AS row_num
@@ -254,23 +266,23 @@
               AND issuer.s_info_compcode != ''
               AND issuer.s_info_typecode IN (115004000, 115203000, 115200000, 115201000)
         )
-        <!-- 同证券、同主体、同类型仅保留一条；兼多类关系的主体按类型各保留一行。 -->
-        ,eligible_company AS (
+        <!-- 同证券、同主体、同类型仅保留一条；兼多类关系的主体按类型各保留一行 -->
+        , eligible_company AS (
             SELECT security_code
-                   ,company_code
-                   ,company_name
-                   ,relation_type_code
-                   ,relation_sort_no
+                   , company_code
+                   , company_name
+                   , relation_type_code
+                   , relation_sort_no
             FROM source_company
             WHERE row_num = 1
         )
-        <!-- 从投资分析评级视图读取候选主体内评，并按更新时间倒序编号。 -->
-        ,ranked_grade AS (
+        <!-- 从投资分析评级视图读取候选主体内评，并按更新时间倒序编号 -->
+        , ranked_grade AS (
             SELECT grade.windcode
-                   ,grade.windname
-                   ,grade.total_score
-                   ,grade.ts
-                   ,ROW_NUMBER() OVER (
+                   , grade.windname
+                   , grade.total_score
+                   , grade.ts
+                   , ROW_NUMBER() OVER (
                        PARTITION BY grade.windcode
                        ORDER BY grade.ts DESC
                    ) AS row_num
@@ -282,7 +294,7 @@
             )
         )
         <!-- 按评级日期取认可机构最新外评，评级与机构来自同一行 -->
-        ,ranked_outer_rating AS (
+        , ranked_outer_rating AS (
             SELECT rating.s_info_compcode
                    , rating.b_info_creditrating
                    , rating.b_info_creditratingagency
@@ -303,13 +315,13 @@
                   WHERE candidate.company_code = rating.s_info_compcode
               )
         )
-        <!-- 返回当前证券关系主体；无内评时评分字段为空。 -->
+        <!-- 返回当前证券关系主体；无内评时评分字段为空 -->
         SELECT eligible.security_code
-               ,eligible.company_code
-               ,COALESCE(grade.windname, eligible.company_name) AS company_name
-               ,eligible.relation_type_code
-               ,grade.total_score AS inner_rating
-               ,grade.ts AS rating_time
+               , eligible.company_code
+               , COALESCE(grade.windname, eligible.company_name) AS company_name
+               , eligible.relation_type_code
+               , grade.total_score AS inner_rating
+               , grade.ts AS rating_time
                , outer_rating.b_info_creditrating AS rating_bondissuer
                , outer_rating.b_info_creditratingagency AS rating_bondissuer_agency
         FROM eligible_company eligible
@@ -319,8 +331,8 @@
                                                    AND outer_rating.row_num = 1
         ORDER BY eligible.security_code ASC
                  , eligible.relation_sort_no ASC
-                 ,grade.ts DESC
-                 ,eligible.company_code ASC
+                 , grade.ts DESC
+                 , eligible.company_code ASC
     </select>
 
     <!-- 读取证券和主体生效所在池及互斥调出使用的入池时间 -->
@@ -367,7 +379,10 @@
             SELECT al.security_code
                    , s.node_label
                    , ROW_NUMBER() OVER (PARTITION BY al.security_code
-                       ORDER BY s.sort_order, s.id, al.submit_time DESC, al.id DESC) AS seq
+                       ORDER BY s.sort_order
+                                , s.id
+                                , al.submit_time DESC
+                                , al.id DESC) AS seq
             FROM ip_adjust_log al
             INNER JOIN ip_adjust_step s ON s.adjust_batch_no = al.adjust_batch_no
             WHERE al.is_deleted = 0
@@ -423,7 +438,7 @@
             #{code}
         </foreach>
             <choose>
-                <when test="agencyCodes != null and agencyCodes.size() &gt; 0">
+                <when test="agencyCodes != null and agencyCodes.size() > 0">
                   AND r.b_info_creditratingagency IN
                   <foreach collection="agencyCodes" item="agencyCode" open="(" separator="," close=")">
                       #{agencyCode}
@@ -436,10 +451,10 @@
               AND r.ann_dt >= DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 YEAR), '%Y%m%d')
               AND REGEXP_SUBSTR(TRIM(r.b_info_creditrating), '^(A+|B+|C+|D)[+-]?', 1, 1, 'c') IN (
                   'AA-', 'A+', 'A', 'A-'
-                  ,'BBB+', 'BBB', 'BBB-'
-                  ,'BB+', 'BB', 'BB-'
-                  ,'B+', 'B', 'B-'
-                  ,'CCC', 'CC', 'C', 'D'
+                  , 'BBB+', 'BBB', 'BBB-'
+                  , 'BB+', 'BB', 'BB-'
+                  , 'B+', 'B', 'B-'
+                  , 'CCC', 'CC', 'C', 'D'
               )
     </select>
 
@@ -488,7 +503,7 @@
           AND ips.flow_type != ''
           AND ips.flow_type != 'simpleInbound'
           AND ips.audit_status = '20'
-          AND ips.entry_time &gt;= DATE_SUB(NOW(), INTERVAL #{days} DAY)
+          AND ips.entry_time >= DATE_SUB(NOW(), INTERVAL #{days} DAY)
           AND ips.entry_time &lt;= NOW()
     </select>
 
@@ -545,7 +560,7 @@
           AND TRIM(snap.analysis) != ''
     </select>
 
-    <!-- 读取满足近六个自然月同发行人报告豁免的主体 -->
+    <!-- 查询满足同发行人信评报告豁免条件的主体，按调入日志创建时间筛选，起点为从当前时刻往前推六个月（近六个自然月） -->
     <select id="queryReportExemptIssuers" resultType="java.lang.String">
         SELECT DISTINCT si.issuer_code
         FROM ip_adjust_log l
@@ -553,7 +568,7 @@
         WHERE l.audit_status = '20'
           AND l.adjust_mode = '调入'
           AND l.is_deleted = 0
-          AND l.crte_time &gt;= DATE_SUB(NOW(), INTERVAL 6 MONTH)
+          AND l.crte_time >= DATE_SUB(NOW(), INTERVAL 6 MONTH)
           AND si.issuer_code IN
         <foreach collection="companyCodes" item="code" open="(" separator="," close=")">
             #{code}

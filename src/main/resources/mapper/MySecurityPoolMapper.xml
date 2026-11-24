@@ -1,33 +1,28 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.rrs.mapper.MySecurityPoolMapper">
-    <!-- 我的证券池 mapper，对应表：my_security_pool（用户自选证券），提供证券收藏的添加、软删除及查询功能 -->
+    <!--
+        个人自选证券 Mapper
+        维护个人自选记录（my_security_pool），支持添加和软删除
+        按用户查询自选记录，并批量判断指定证券是否已收藏
+    -->
 
     <!-- 添加证券到我的证券池 -->
     <insert id="addSecurityToMyPool" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO my_security_pool (security_code
-                                     ,security_type
-                                     ,market
-                                     ,user_id
-                                     ,status
-                                     ,remark
-                                     ,create_time
-                                     ,update_time)
-        VALUES (#{securityCode}
-               ,#{securityType}
-               ,#{market}
-               ,#{userId}
-               ,'use'
-               ,#{remark}
-               ,NOW()
-               ,NOW())
+        INSERT INTO my_security_pool (
+            security_code, security_type, market, user_id, status, remark
+            , create_time, update_time
+        ) VALUES (
+            #{securityCode}, #{securityType}, #{market}, #{userId}, 'use', #{remark}
+            , NOW(), NOW()
+        )
     </insert>
 
     <!-- 从我的证券池移除（软删除） -->
     <update id="deleteSecurityFromMyPool">
         UPDATE my_security_pool
         SET status = 'del'
-            ,update_time = NOW()
+            , update_time = NOW()
         WHERE user_id = #{userId}
           AND security_code = #{securityCode}
           AND status = 'use'
@@ -36,14 +31,14 @@
     <!-- 查询用户某证券的有效收藏记录 -->
     <select id="queryByUserAndCode" resultType="com.znty.rrs.entity.bo.MySecurityPoolBo">
         SELECT id
-               ,security_code
-               ,security_type
-               ,market
-               ,user_id
-               ,status
-               ,remark
-               ,create_time
-               ,update_time
+               , security_code
+               , security_type
+               , market
+               , user_id
+               , status
+               , remark
+               , create_time
+               , update_time
         FROM my_security_pool
         WHERE user_id = #{userId}
           AND security_code = #{securityCode}

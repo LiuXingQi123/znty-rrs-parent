@@ -3289,7 +3289,7 @@ public class CrmwPoolAdjustService {
      *
      * 执行顺序：
      * 1. 复核 ABS 主体身份，日志为空时结束处理
-     * 2. 识别 Excel 主项批次，加载池配置并按 ID 顺序锁池，准备池关系和容量增量
+     * 2. 识别 Excel 主项批次，加载池配置并按 ID 查询目标池，准备池关系和容量增量
      * 3. 逐条检查目标池及标的存在性，必要时恢复申请中的 ABS 主体选择
      * 4. Excel 检查真实凭证后沿用业务提示放行口径，同批配套项继承主项来源
      * 5. 普通入口重新检查组合在池状态、限制池、容量及冻结期，失败时抛出含组合定位的异常
@@ -3303,7 +3303,7 @@ public class CrmwPoolAdjustService {
         if (logList == null || logList.isEmpty()) {
             return;
         }
-        // 2. 识别 Excel 来源，加载并锁定目标池，准备池关系和容量增量
+        // 2. 识别 Excel 来源，加载池配置并查询目标池，准备池关系和容量增量
         Set<String> excelBatches = collectExcelImportBatches(logList);
         Set<String> checkedCertificates = new HashSet<>();
         Map<Long, InvestmentPoolBo> poolMap = investmentPoolMapper.queryPoolList().stream()
@@ -3311,8 +3311,8 @@ public class CrmwPoolAdjustService {
         List<Long> poolIds = logList.stream().map(IpAdjustLogBo::getTargetPoolId)
                 .filter(Objects::nonNull).distinct().sorted().collect(Collectors.toList());
         if (!poolIds.isEmpty()) {
-            // 按 ID 顺序锁定目标池，串行完成容量和池状态复核
-            investmentPoolMapper.lockPoolByIdsList(poolIds);
+            // 按 ID 查询本次调整涉及的目标池
+            investmentPoolMapper.queryExistingPoolIdList(poolIds);
         }
         // 构建全量投资池关系 Map
         Map<Long, Map<String, List<Long>>> relationMap = buildPoolRelationMap(
@@ -3408,7 +3408,7 @@ public class CrmwPoolAdjustService {
         if (logList == null || logList.isEmpty()) {
             return;
         }
-        // 按最终审批口径锁池并复核动态业务状态
+        // 按最终审批口径复核动态业务状态
         recheckBeforeFinalApproval(logList);
         // 2. 将复核通过的直通日志应用到当前池状态
         applyPoolStatusChanges(logList);

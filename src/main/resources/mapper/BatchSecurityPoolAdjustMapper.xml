@@ -2,23 +2,27 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.rrs.mapper.BatchSecurityPoolAdjustMapper">
-    <!-- 证券池批量调整 mapper，提供可调整投资池及候选证券查询 -->
+    <!--
+        证券池批量调整查询 Mapper
+        读取支持债券的信用债叶子池配置及当前在池数量
+        结合证券主档（rrs_securityinfo）和池状态（ip_pool_status）查询候选券及 ABS 自选权益人
+    -->
 
     <!-- 分页查询投资品种包含债券的启用信用债叶子池 -->
     <select id="queryPoolPage" resultType="com.znty.rrs.entity.batchsecuritypooladjust.BatchSecurityPoolDto">
         SELECT p.id
-               ,p.pool_name
-               ,p.pool_type
-               ,p.market_codes
-               ,p.variety_codes
-               ,p.description
-               ,p.max_capacity
-               ,p.batch_in_flow_id
-               ,p.batch_in_flow_key
-               ,p.batch_in_flow_name
-               ,p.batch_out_flow_id
-               ,p.batch_out_flow_key
-               ,p.batch_out_flow_name
+               , p.pool_name
+               , p.pool_type
+               , p.market_codes
+               , p.variety_codes
+               , p.description
+               , p.max_capacity
+               , p.batch_in_flow_id
+               , p.batch_in_flow_key
+               , p.batch_in_flow_name
+               , p.batch_out_flow_id
+               , p.batch_out_flow_key
+               , p.batch_out_flow_name
         FROM ip_investment_pool p
         WHERE p.status = 'enabled'
           AND p.is_deleted = 0
@@ -38,25 +42,25 @@
                 AND child.is_deleted = 0
           )
         ORDER BY p.outer_sort ASC
-                 ,p.inner_sort ASC
-                 ,p.id ASC
+                 , p.inner_sort ASC
+                 , p.id ASC
     </select>
 
     <!--
       查询指定投资池当前有效在池数量（按类型分项，批量页「现有数量」多行展示）。
       分类取 ip_pool_status.security_type：crmw / company 单独计；其余按字典 category_type。
-      包含池内全部类型，用于「现有数量」展示；候选证券由下方列表查询单独筛选。
+      包含池内全部类型，用于「现有数量」展示；候选证券由下方列表查询单独筛选
     -->
     <select id="queryPoolCurrentCountByTypeList"
             resultType="com.znty.rrs.entity.batchsecuritypooladjust.BatchPoolTypeCountDto">
         SELECT ips.target_pool_id AS poolId
-               ,CASE
+               , CASE
                     WHEN ips.security_type = 'crmw' THEN 'crmw'
                     WHEN ips.security_type = 'company' THEN 'company'
                     WHEN dst.category_type IS NOT NULL AND dst.category_type != '' THEN dst.category_type
                     ELSE 'unknown'
                 END AS typeCode
-               ,COUNT(DISTINCT ips.security_code) AS count
+               , COUNT(DISTINCT ips.security_code) AS count
         FROM ip_pool_status ips
         LEFT JOIN dict_security_type dst ON dst.security_type = ips.security_type
                                         AND dst.is_deleted = 0
@@ -67,7 +71,7 @@
                 #{poolId}
             </foreach>
         GROUP BY ips.target_pool_id
-                 ,CASE
+                 , CASE
                       WHEN ips.security_type = 'crmw' THEN 'crmw'
                       WHEN ips.security_type = 'company' THEN 'company'
                       WHEN dst.category_type IS NOT NULL AND dst.category_type != '' THEN dst.category_type
@@ -78,27 +82,27 @@
     <!-- 分页查询目标池批量调整候选证券 -->
     <select id="querySecurityPage" resultType="com.znty.rrs.entity.batchsecuritypooladjust.BatchSecurityCandidateDto">
         SELECT si.wind_code AS securityCode
-               ,si.short_name AS securityShortName
-               ,si.security_type
-               ,si.issuer
+               , si.short_name AS securityShortName
+               , si.security_type
+               , si.issuer
                , si.issuer_code
                , si.full_name
-               ,si.rating_bond
-               ,si.rating_bondissuer
-               ,si.inner_issuer_rating
-               ,si.abs_flag
-               ,si.guarant_flag
-               ,si.yx_flag
-               ,si.cj_flag
-               ,si.issue_type
-               ,si.inner_class
-               ,si.inright_flag
-               ,si.std_credit_flag
-               ,si.maturity_date
-               ,si.date_exists
-               ,si.date_exists_str
-               ,si.guarantor
-               ,si.guarantor_id
+               , si.rating_bond
+               , si.rating_bondissuer
+               , si.inner_issuer_rating
+               , si.abs_flag
+               , si.guarant_flag
+               , si.yx_flag
+               , si.cj_flag
+               , si.issue_type
+               , si.inner_class
+               , si.inright_flag
+               , si.std_credit_flag
+               , si.maturity_date
+               , si.date_exists
+               , si.date_exists_str
+               , si.guarantor
+               , si.guarantor_id
                , si.inner_guarantor_rating
         FROM rrs_securityinfo si
         <where>
@@ -203,9 +207,11 @@
                 AND child.is_deleted = 0
           )
     </select>
+
+    <!-- 分页查询可作为 ABS 自选权益人的评级主体 -->
     <select id="querySelfSelectedRightsHolderPage"
             resultType="com.znty.rrs.entity.securitypooladjust.SelfSelectedRightsHolderDto">
-        <!-- 从投资分析主体表按编码汇总可选择主体，并应用页面查询条件。 -->
+        <!-- 从投资分析主体表按编码汇总可选择主体，并应用页面查询条件 -->
         WITH source_company AS (
             SELECT company.wind_code AS company_code
                    , MAX(COALESCE(NULLIF(company.full_name, ''), NULLIF(company.short_names, ''))) AS company_name
@@ -224,13 +230,13 @@
             </where>
             GROUP BY company.wind_code
         )
-        <!-- 从投资分析评级视图读取候选主体内评，并按更新时间倒序编号。 -->
+        <!-- 从投资分析评级视图读取候选主体内评，并按更新时间倒序编号 -->
         , ranked_grade AS (
             SELECT grade.windcode
-                   ,grade.windname
-                   ,grade.total_score
-                   ,grade.ts
-                   ,ROW_NUMBER() OVER (
+                   , grade.windname
+                   , grade.total_score
+                   , grade.ts
+                   , ROW_NUMBER() OVER (
                        PARTITION BY grade.windcode
                        ORDER BY grade.ts DESC
                    ) AS row_num
@@ -242,7 +248,7 @@
             )
         )
         <!-- 按评级日期取认可机构最新外评，评级与机构来自同一行 -->
-        ,ranked_outer_rating AS (
+        , ranked_outer_rating AS (
             SELECT rating.s_info_compcode
                    , rating.b_info_creditrating
                    , rating.b_info_creditratingagency
@@ -263,11 +269,11 @@
                   WHERE candidate.company_code = rating.s_info_compcode
               )
         )
-        <!-- 返回主体及其最新内评；无内评主体仍可作为自选权益人展示。 -->
+        <!-- 返回主体及其最新内评；无内评主体仍可作为自选权益人展示 -->
         SELECT company.company_code
-               ,COALESCE(grade.windname, company.company_name) AS company_name
-               ,grade.total_score AS inner_rating
-               ,grade.ts AS rating_time
+               , COALESCE(grade.windname, company.company_name) AS company_name
+               , grade.total_score AS inner_rating
+               , grade.ts AS rating_time
                , outer_rating.b_info_creditrating AS rating_bondissuer
                , outer_rating.b_info_creditratingagency AS rating_bondissuer_agency
         FROM source_company company

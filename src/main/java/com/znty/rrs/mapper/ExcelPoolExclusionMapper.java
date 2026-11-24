@@ -8,7 +8,9 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 
-/** 批量读取主体和证券的 Excel 排除依据 */
+/**
+ * 批量读取主体和证券的 Excel 排除依据
+ */
 @Mapper
 public interface ExcelPoolExclusionMapper {
 

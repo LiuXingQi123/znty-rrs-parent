@@ -12,6 +12,11 @@ import java.util.List;
 @Mapper
 public interface CrmwPoolQueryMapper {
 
-    /** 分页查询CRMW池列表 */
+    /**
+     * 分页查询CRMW池列表
+     *
+     * @param req CRMW 组合在池记录查询条件
+     * @return 符合条件的CRMW 组合在池记录列表
+     */
     List<CrmwPoolQueryDto> queryCrmwPoolPage(CrmwPoolQueryReq req);
 }

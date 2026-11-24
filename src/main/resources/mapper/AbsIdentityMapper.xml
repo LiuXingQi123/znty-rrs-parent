@@ -1,6 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.rrs.mapper.AbsIdentityMapper">
+    <!--
+        ABS 主体身份确认与联动提醒 Mapper
+        读取证券主档（rrs_securityinfo）、普通和 CRMW 调库快照及在池状态
+        保存主体确认结果
+        维护联动提醒（ip_grade_rule_alert）和待确认入池日志（ip_adjust_log）
+    -->
 
     <!-- 只返回已确认或在途申请中的非空主体，自动联动入池的未确认身份不占用主体代码 -->
     <select id="queryOccupiedIdentityCodes" resultType="java.lang.String">
@@ -159,14 +165,14 @@
             SELECT issuer_code FROM rrs_securityinfo
             WHERE wind_code = #{securityCode} AND issuer_code IS NOT NULL AND issuer_code != ''
         )
-        <!-- 每个主体只返回一行，即使该主体在关系源中兼有多个角色 -->
-        SELECT CONCAT(c.company_code, ':',
-                      CASE WHEN EXISTS (
+        <!-- 按主体返回指定池的在池状态和跨池最新生效日志 ID，无日志时填 0 -->
+        SELECT CONCAT(c.company_code, ':'
+                      , CASE WHEN EXISTS (
                           SELECT 1 FROM ip_pool_status ps
                           WHERE ps.security_code = c.company_code AND ps.security_type = 'company'
                             AND ps.target_pool_id = #{poolId} AND ps.audit_status = '20' AND ps.is_deleted = 0
-                      ) THEN 'in' ELSE 'out' END, ':',
-                      COALESCE((SELECT MAX(log.id) FROM ip_adjust_log log
+                      ) THEN 'in' ELSE 'out' END, ':'
+                      , COALESCE((SELECT MAX(log.id) FROM ip_adjust_log log
                                 WHERE log.security_code = c.company_code AND log.security_type = 'company'
                                   AND log.audit_status = '20'
                                   AND log.is_deleted = 0), 0)) AS context_value
@@ -251,37 +257,13 @@
     <!-- 沿用我的事宜规则提醒入口，目标池不限定为信用债分级库 -->
     <insert id="addSyncAlert" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO ip_grade_rule_alert (
-            security_code
-            , security_short_name
-            , issuer_code
-            , issuer_name
-            , current_pool_id
-            , current_pool_name
-            , fail_reason
-            , special_type_desc
-            , rule_type
-            , context_key
-            , alert_status
-            , last_scan_time
-            , is_deleted
-            , crte_time
-            , updt_time
+            security_code, security_short_name, issuer_code, issuer_name, current_pool_id, current_pool_name
+            , fail_reason, special_type_desc, rule_type, context_key, alert_status, last_scan_time
+            , is_deleted, crte_time, updt_time
         ) VALUES (
-            #{securityCode}
-            , #{securityShortName}
-            , #{issuerCode}
-            , #{issuerName}
-            , #{currentPoolId}
-            , #{currentPoolName}
-            , #{failReason}
-            , 'ABS主体联动'
-            , 'absCompanySync'
-            , #{contextKey}
-            , '00'
-            , NOW()
-            , 0
-            , NOW()
-            , NOW()
+            #{securityCode}, #{securityShortName}, #{issuerCode}, #{issuerName}, #{currentPoolId}, #{currentPoolName}
+            , #{failReason}, 'ABS主体联动', 'absCompanySync', #{contextKey}, '00', NOW()
+            , 0, NOW(), NOW()
         )
     </insert>
 
@@ -337,26 +319,26 @@
     <select id="queryPendingScheduledInboundLog"
             resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
         SELECT id
-               ,security_code
-               ,security_short_name
-               ,security_type
-               ,adjust_type
-               ,adjust_mode
-               ,adjust_batch_no
-               ,target_pool_id
-               ,target_pool_name
-               ,pool_type
-               ,flow_id
-               ,flow_key
-               ,flow_type
-               ,audit_status
-               ,adjuster_id
-               ,adjuster_name
-               ,adjust_reason
-               ,adjust_advice
-               ,submit_time
-               ,audit_time
-               ,entry_time
+               , security_code
+               , security_short_name
+               , security_type
+               , adjust_type
+               , adjust_mode
+               , adjust_batch_no
+               , target_pool_id
+               , target_pool_name
+               , pool_type
+               , flow_id
+               , flow_key
+               , flow_type
+               , audit_status
+               , adjuster_id
+               , adjuster_name
+               , adjust_reason
+               , adjust_advice
+               , submit_time
+               , audit_time
+               , entry_time
         FROM ip_adjust_log
         WHERE security_code = #{securityCode}
           AND target_pool_id = #{poolId}
@@ -403,9 +385,9 @@
     <update id="editPendingScheduledInboundApproved">
         UPDATE ip_adjust_log
         SET adjust_reason = #{adjustReason}
-            ,audit_status = '20'
-            ,audit_time = NOW()
-            ,updt_time = NOW()
+            , audit_status = '20'
+            , audit_time = NOW()
+            , updt_time = NOW()
         WHERE id = #{id}
           AND adjust_type = '自动调整'
           AND adjust_mode = '调入'
@@ -418,8 +400,8 @@
     <update id="editPendingScheduledInboundInvalid">
         UPDATE ip_adjust_log
         SET audit_status = '-1'
-            ,audit_time = NOW()
-            ,updt_time = NOW()
+            , audit_time = NOW()
+            , updt_time = NOW()
         WHERE id = #{id}
           AND adjust_type = '自动调整'
           AND adjust_mode = '调入'
@@ -432,7 +414,7 @@
     <update id="editPendingScheduledInboundSecurityShortName">
         UPDATE ip_adjust_log
         SET security_short_name = #{securityShortName}
-            ,updt_time = NOW()
+            , updt_time = NOW()
         WHERE id = #{id}
           AND adjust_type = '自动调整'
           AND adjust_mode = '调入'

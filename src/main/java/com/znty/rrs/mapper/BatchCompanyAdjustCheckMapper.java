@@ -8,7 +8,9 @@ import org.apache.ibatis.annotations.Param;
 import java.util.List;
 import java.util.Set;
 
-/** 主体 Excel 批量校验取数 */
+/**
+ * 主体 Excel 批量校验取数
+ */
 @Mapper
 public interface BatchCompanyAdjustCheckMapper {
 

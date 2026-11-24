@@ -1,31 +1,35 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.rrs.mapper.ForbiddenPoolHistoryMapper">
-    <!-- 禁投池历史查询 mapper，对应表：ip_adjust_log（调库记录），仅查询债券禁止库 -->
+    <!--
+        禁投池调整历史 Mapper
+        从调库日志（ip_adjust_log）查询债券禁止库的历史调整记录
+        联查主体简介和证券主档，返回主体或证券的调整历史及信用代码
+    -->
 
     <!--
       分页查询禁投池调整历史。
-      公司简介按 COMP_ID 关联主体，主体名称统一展示 COMP_NAME 全称。
+      公司简介按 COMP_ID 关联主体，主体名称统一展示 COMP_NAME 全称
     -->
     <select id="queryForbiddenPoolHistoryPage" resultType="com.znty.rrs.entity.forbiddenpoolhistory.ForbiddenPoolHistoryDto">
         SELECT al.id
-               ,al.id AS adjustLogId
-               ,al.adjuster_name
-               ,al.submit_time
-               ,al.security_short_name
-               ,al.security_code
-               ,al.adjust_batch_no
-               ,dst.category_type
-               ,COALESCE(wci.COMP_NAME, bi.issuer, al.security_short_name) AS issuer
+               , al.id AS adjustLogId
+               , al.adjuster_name
+               , al.submit_time
+               , al.security_short_name
+               , al.security_code
+               , al.adjust_batch_no
+               , dst.category_type
+               , COALESCE(wci.COMP_NAME, bi.issuer, al.security_short_name) AS issuer
                <!-- 主体记录取自身信用代码，债券记录取发行主体信用代码 -->
-               ,COALESCE(wci.REGISTERNUMBER,
-                         (SELECT rc.REGISTERNUMBER FROM ais_inv_ods.wind_compintroduction rc
+               , COALESCE(wci.REGISTERNUMBER
+                         , (SELECT rc.REGISTERNUMBER FROM ais_inv_ods.wind_compintroduction rc
                           WHERE rc.COMP_ID = bi.issuer_code LIMIT 1)) AS registerNumber
-               ,al.adjust_type
-               ,al.adjust_mode
-               ,al.target_pool_id
-               ,COALESCE(al.target_pool_name, p.pool_name) AS target_pool_name
-               ,al.audit_status
+               , al.adjust_type
+               , al.adjust_mode
+               , al.target_pool_id
+               , COALESCE(al.target_pool_name, p.pool_name) AS target_pool_name
+               , al.audit_status
         FROM ip_adjust_log al
         INNER JOIN ip_investment_pool p ON p.id = al.target_pool_id
                                        AND p.pool_type = 'forbidden'
@@ -65,7 +69,7 @@
                 AND dst.category_type = 'bond'
             </if>
             <if test="adjustTimeStart != null and adjustTimeStart != ''">
-                AND al.submit_time &gt;= #{adjustTimeStart}
+                AND al.submit_time >= #{adjustTimeStart}
             </if>
             <if test="adjustTimeEnd != null and adjustTimeEnd != ''">
                 AND al.submit_time &lt;= CONCAT(#{adjustTimeEnd}, ' 23:59:59')
@@ -89,8 +93,8 @@
         </where>
         <!-- 提交时间优先（最新在前）；同秒内按批次号聚拢同组手工/联动/互斥；id 稳定次序 -->
         ORDER BY al.submit_time DESC
-                 ,al.adjust_batch_no DESC
-                 ,al.id DESC
+                 , al.adjust_batch_no DESC
+                 , al.id DESC
     </select>
 
 </mapper>

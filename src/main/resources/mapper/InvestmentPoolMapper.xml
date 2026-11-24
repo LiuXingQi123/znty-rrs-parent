@@ -2,7 +2,12 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.rrs.mapper.InvestmentPoolMapper">
-    <!-- 投资池维护 mapper，对应表：ip_investment_pool（投资池）、ip_pool_relation（投资池关系）、ip_pool_auto_rule（自动规则）、ip_pool_permission（权限），提供投资池配置、关系、规则、权限的 CRUD 及事件记录操作 -->
+    <!--
+        投资池配置维护 Mapper
+        维护投资池（ip_investment_pool）的层级、配置和顺序
+        维护池关系（ip_pool_relation）、自动规则（ip_pool_auto_rule）和权限（ip_pool_permission）
+        记录配置变更，并查询审批流程、用户与角色选项
+    -->
 
     <!-- 查询投资池数量 -->
     <select id="queryPoolTotalCount" resultType="int">
@@ -14,130 +19,132 @@
     <!-- 查询投资池列表 -->
     <select id="queryPoolList" resultType="com.znty.rrs.entity.bo.InvestmentPoolBo">
         SELECT id
-               ,parent_id
-               ,pool_code
-               ,pool_name
-               ,pool_type
-               ,pool_level
-               ,market_codes
-               ,variety_codes
-               ,hs_pool_name
-               ,in_flow_id
-               ,in_flow_key
-               ,in_flow_name
-               ,out_flow_id
-               ,out_flow_key
-               ,out_flow_name
-               ,simple_in_flow_id
-               ,simple_in_flow_key
-               ,simple_in_flow_name
-               ,simple_out_flow_id
-               ,simple_out_flow_key
-               ,simple_out_flow_name
-               ,batch_in_flow_id
-               ,batch_in_flow_key
-               ,batch_in_flow_name
-               ,batch_out_flow_id
-               ,batch_out_flow_key
-               ,batch_out_flow_name
-               ,in_report_restriction
-               ,out_report_restriction
-               ,max_capacity
-               ,lock_flag
-               ,frozen_period_in
-               ,grade_astrict
-               ,industry_code
-               ,industry_exponent
-               ,fund_rate_limit
-               ,open_day_adjust
-               ,outer_sort
-               ,inner_sort
-               ,description
-               ,status
-               ,is_deleted
-               ,crte_time
-               ,updt_time
+               , parent_id
+               , pool_code
+               , pool_name
+               , pool_type
+               , pool_level
+               , market_codes
+               , variety_codes
+               , hs_pool_name
+               , in_flow_id
+               , in_flow_key
+               , in_flow_name
+               , out_flow_id
+               , out_flow_key
+               , out_flow_name
+               , simple_in_flow_id
+               , simple_in_flow_key
+               , simple_in_flow_name
+               , simple_out_flow_id
+               , simple_out_flow_key
+               , simple_out_flow_name
+               , batch_in_flow_id
+               , batch_in_flow_key
+               , batch_in_flow_name
+               , batch_out_flow_id
+               , batch_out_flow_key
+               , batch_out_flow_name
+               , in_report_restriction
+               , out_report_restriction
+               , max_capacity
+               , lock_flag
+               , frozen_period_in
+               , grade_astrict
+               , industry_code
+               , industry_exponent
+               , fund_rate_limit
+               , open_day_adjust
+               , outer_sort
+               , inner_sort
+               , description
+               , status
+               , is_deleted
+               , crte_time
+               , updt_time
         FROM ip_investment_pool
         WHERE is_deleted = 0
         ORDER BY outer_sort ASC
-                 ,parent_id ASC
-                 ,inner_sort ASC
-                 ,id ASC
+                 , parent_id ASC
+                 , inner_sort ASC
+                 , id ASC
     </select>
 
     <!-- 查询投资池全路径名称列表 -->
     <select id="queryPoolFullNameList" resultType="com.znty.rrs.entity.investmentpool.InvestmentPoolDto">
+        <!-- 从未删除的顶层池逐级查找未删除的子池，并拼接投资池全路径名称 -->
         WITH RECURSIVE pool_tree AS (
             SELECT id
-                   ,pool_name
-                   ,parent_id
-                   ,CAST(pool_name AS CHAR(2000)) AS pool_full_name
+                   , pool_name
+                   , parent_id
+                   , CAST(pool_name AS CHAR(2000)) AS pool_full_name
             FROM ip_investment_pool
             WHERE is_deleted = 0
               AND parent_id IS NULL
             UNION ALL
             SELECT child.id
-                   ,child.pool_name
-                   ,child.parent_id
-                   ,CONCAT(parent.pool_full_name, '/', child.pool_name) AS pool_full_name
+                   , child.pool_name
+                   , child.parent_id
+                   , CONCAT(parent.pool_full_name, '/', child.pool_name) AS pool_full_name
             FROM ip_investment_pool child
             INNER JOIN pool_tree parent ON parent.id = child.parent_id
             WHERE child.is_deleted = 0
         )
+        <!-- 返回各层级投资池的名称和全路径，按全路径及池 ID 排序 -->
         SELECT id
-               ,pool_name
-               ,pool_full_name
+               , pool_name
+               , pool_full_name
         FROM pool_tree
         ORDER BY pool_full_name ASC
-                 ,id ASC
+                 , id ASC
     </select>
 
     <!-- 根据 ID 查询投资池 -->
     <select id="queryPoolById" resultType="com.znty.rrs.entity.bo.InvestmentPoolBo">
         SELECT id
-               ,parent_id
-               ,pool_code
-               ,pool_name
-               ,pool_type
-               ,pool_level
-               ,market_codes
-               ,variety_codes
-               ,hs_pool_name
-               ,in_flow_id
-               ,in_flow_key
-               ,in_flow_name
-               ,out_flow_id
-               ,out_flow_key
-               ,out_flow_name
-               ,simple_in_flow_id
-               ,simple_in_flow_key
-               ,simple_in_flow_name
-               ,simple_out_flow_id
-               ,simple_out_flow_key
-               ,simple_out_flow_name
-               ,batch_in_flow_id
-               ,batch_in_flow_key
-               ,batch_in_flow_name
-               ,batch_out_flow_id
-               ,batch_out_flow_key
-               ,batch_out_flow_name
-               ,in_report_restriction
-               ,out_report_restriction
-               ,max_capacity
-               ,lock_flag
-               ,frozen_period_in
-               ,grade_astrict
-               ,industry_code
-               ,industry_exponent
-               ,fund_rate_limit
-               ,open_day_adjust
-               ,outer_sort
-               ,inner_sort
-               ,description
-               ,status
-               ,is_deleted
-               ,crte_time
-               ,updt_time
+               , parent_id
+               , pool_code
+               , pool_name
+               , pool_type
+               , pool_level
+               , market_codes
+               , variety_codes
+               , hs_pool_name
+               , in_flow_id
+               , in_flow_key
+               , in_flow_name
+               , out_flow_id
+               , out_flow_key
+               , out_flow_name
+               , simple_in_flow_id
+               , simple_in_flow_key
+               , simple_in_flow_name
+               , simple_out_flow_id
+               , simple_out_flow_key
+               , simple_out_flow_name
+               , batch_in_flow_id
+               , batch_in_flow_key
+               , batch_in_flow_name
+               , batch_out_flow_id
+               , batch_out_flow_key
+               , batch_out_flow_name
+               , in_report_restriction
+               , out_report_restriction
+               , max_capacity
+               , lock_flag
+               , frozen_period_in
+               , grade_astrict
+               , industry_code
+               , industry_exponent
+               , fund_rate_limit
+               , open_day_adjust
+               , outer_sort
+               , inner_sort
+               , description
+               , status
+               , is_deleted
+               , crte_time
+               , updt_time
         FROM ip_investment_pool
         WHERE id = #{id}
           AND is_deleted = 0
@@ -146,18 +153,18 @@
     <!-- 按投资池编码查询未删除记录 -->
     <select id="queryPoolByCode" resultType="com.znty.rrs.entity.bo.InvestmentPoolBo">
         SELECT id
-               ,parent_id
-               ,pool_code
-               ,pool_name
-               ,pool_type
-               ,pool_level
-               ,market_codes
-               ,variety_codes
-               ,hs_pool_name
-               ,status
-               ,is_deleted
-               ,crte_time
-               ,updt_time
+               , parent_id
+               , pool_code
+               , pool_name
+               , pool_type
+               , pool_level
+               , market_codes
+               , variety_codes
+               , hs_pool_name
+               , status
+               , is_deleted
+               , crte_time
+               , updt_time
         FROM ip_investment_pool
         WHERE is_deleted = 0
           AND pool_code = #{poolCode}
@@ -167,49 +174,49 @@
     <!-- 查询指定 ID 的投资池列表（含上限等选池展示字段，供禁投/ABS 等按 ID 列表加载可调池） -->
     <select id="queryPoolByIdsList" resultType="com.znty.rrs.entity.bo.InvestmentPoolBo">
         SELECT id
-               ,parent_id
-               ,pool_code
-               ,pool_name
-               ,pool_type
-               ,pool_level
-               ,market_codes
-               ,variety_codes
-               ,hs_pool_name
-               ,in_flow_id
-               ,in_flow_key
-               ,in_flow_name
-               ,out_flow_id
-               ,out_flow_key
-               ,out_flow_name
-               ,simple_in_flow_id
-               ,simple_in_flow_key
-               ,simple_in_flow_name
-               ,simple_out_flow_id
-               ,simple_out_flow_key
-               ,simple_out_flow_name
-               ,batch_in_flow_id
-               ,batch_in_flow_key
-               ,batch_in_flow_name
-               ,batch_out_flow_id
-               ,batch_out_flow_key
-               ,batch_out_flow_name
-               ,in_report_restriction
-               ,out_report_restriction
-               ,max_capacity
-               ,lock_flag
-               ,frozen_period_in
-               ,grade_astrict
-               ,industry_code
-               ,industry_exponent
-               ,fund_rate_limit
-               ,open_day_adjust
-               ,outer_sort
-               ,inner_sort
-               ,description
-               ,status
-               ,is_deleted
-               ,crte_time
-               ,updt_time
+               , parent_id
+               , pool_code
+               , pool_name
+               , pool_type
+               , pool_level
+               , market_codes
+               , variety_codes
+               , hs_pool_name
+               , in_flow_id
+               , in_flow_key
+               , in_flow_name
+               , out_flow_id
+               , out_flow_key
+               , out_flow_name
+               , simple_in_flow_id
+               , simple_in_flow_key
+               , simple_in_flow_name
+               , simple_out_flow_id
+               , simple_out_flow_key
+               , simple_out_flow_name
+               , batch_in_flow_id
+               , batch_in_flow_key
+               , batch_in_flow_name
+               , batch_out_flow_id
+               , batch_out_flow_key
+               , batch_out_flow_name
+               , in_report_restriction
+               , out_report_restriction
+               , max_capacity
+               , lock_flag
+               , frozen_period_in
+               , grade_astrict
+               , industry_code
+               , industry_exponent
+               , fund_rate_limit
+               , open_day_adjust
+               , outer_sort
+               , inner_sort
+               , description
+               , status
+               , is_deleted
+               , crte_time
+               , updt_time
         FROM ip_investment_pool
         WHERE is_deleted = 0
           AND id IN
@@ -218,8 +225,8 @@
         </foreach>
     </select>
 
-    <!-- 按 ID 升序锁定投资池记录 -->
-    <select id="lockPoolByIdsList" resultType="java.lang.Long">
+    <!-- 按 ID 升序返回存在的投资池 ID -->
+    <select id="queryExistingPoolIdList" resultType="java.lang.Long">
         SELECT id
         FROM ip_investment_pool
         WHERE id IN
@@ -227,89 +234,26 @@
             #{id}
         </foreach>
         ORDER BY id ASC
-        FOR UPDATE
     </select>
 
     <!-- 新增投资池 -->
     <insert id="addPool" parameterType="com.znty.rrs.entity.bo.InvestmentPoolBo" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO ip_investment_pool (
-            parent_id
-            ,pool_code
-            ,pool_name
-            ,pool_type
-            ,pool_level
-            ,market_codes
-            ,variety_codes
-            ,hs_pool_name
-            ,in_flow_id
-            ,in_flow_key
-            ,in_flow_name
-            ,out_flow_id
-            ,out_flow_key
-            ,out_flow_name
-            ,simple_in_flow_id
-            ,simple_in_flow_key
-            ,simple_in_flow_name
-            ,simple_out_flow_id
-            ,simple_out_flow_key
-            ,simple_out_flow_name
-            ,batch_in_flow_id
-            ,batch_in_flow_key
-            ,batch_in_flow_name
-            ,batch_out_flow_id
-            ,batch_out_flow_key
-            ,batch_out_flow_name
-            ,in_report_restriction
-            ,out_report_restriction
-            ,max_capacity
-            ,lock_flag
-            ,frozen_period_in
-            ,outer_sort
-            ,inner_sort
-            ,description
-            ,status
-            ,is_deleted
-            ,crte_time
-            ,updt_time
+            parent_id, pool_code, pool_name, pool_type, pool_level, market_codes
+            , variety_codes, hs_pool_name, in_flow_id, in_flow_key, in_flow_name, out_flow_id
+            , out_flow_key, out_flow_name, simple_in_flow_id, simple_in_flow_key, simple_in_flow_name, simple_out_flow_id
+            , simple_out_flow_key, simple_out_flow_name, batch_in_flow_id, batch_in_flow_key, batch_in_flow_name, batch_out_flow_id
+            , batch_out_flow_key, batch_out_flow_name, in_report_restriction, out_report_restriction, max_capacity, lock_flag
+            , frozen_period_in, outer_sort, inner_sort, description, status, is_deleted
+            , crte_time, updt_time
         ) VALUES (
-            #{parentId}
-            ,#{poolCode}
-            ,#{poolName}
-            ,#{poolType}
-            ,#{poolLevel}
-            ,#{marketCodes}
-            ,#{varietyCodes}
-            ,#{hsPoolName}
-            ,#{inFlowId}
-            ,#{inFlowKey}
-            ,#{inFlowName}
-            ,#{outFlowId}
-            ,#{outFlowKey}
-            ,#{outFlowName}
-            ,#{simpleInFlowId}
-            ,#{simpleInFlowKey}
-            ,#{simpleInFlowName}
-            ,#{simpleOutFlowId}
-            ,#{simpleOutFlowKey}
-            ,#{simpleOutFlowName}
-            ,#{batchInFlowId}
-            ,#{batchInFlowKey}
-            ,#{batchInFlowName}
-            ,#{batchOutFlowId}
-            ,#{batchOutFlowKey}
-            ,#{batchOutFlowName}
-            ,#{inReportRestriction}
-            ,#{outReportRestriction}
-            ,#{maxCapacity}
-            ,#{lockFlag}
-            ,#{frozenPeriodIn}
-            ,#{outerSort}
-            ,#{innerSort}
-            ,#{description}
-            ,#{status}
-            ,#{isDeleted}
-            ,#{crteTime}
-            ,#{updtTime}
+            #{parentId}, #{poolCode}, #{poolName}, #{poolType}, #{poolLevel}, #{marketCodes}
+            , #{varietyCodes}, #{hsPoolName}, #{inFlowId}, #{inFlowKey}, #{inFlowName}, #{outFlowId}
+            , #{outFlowKey}, #{outFlowName}, #{simpleInFlowId}, #{simpleInFlowKey}, #{simpleInFlowName}, #{simpleOutFlowId}
+            , #{simpleOutFlowKey}, #{simpleOutFlowName}, #{batchInFlowId}, #{batchInFlowKey}, #{batchInFlowName}, #{batchOutFlowId}
+            , #{batchOutFlowKey}, #{batchOutFlowName}, #{inReportRestriction}, #{outReportRestriction}, #{maxCapacity}, #{lockFlag}
+            , #{frozenPeriodIn}, #{outerSort}, #{innerSort}, #{description}, #{status}, #{isDeleted}
+            , #{crteTime}, #{updtTime}
         )
     </insert>
 
@@ -332,57 +276,57 @@
     <!-- 查询子投资池列表 -->
     <select id="queryChildPoolList" resultType="com.znty.rrs.entity.bo.InvestmentPoolBo">
         SELECT id
-               ,parent_id
-               ,pool_code
-               ,pool_name
-               ,pool_type
-               ,pool_level
-               ,outer_sort
-               ,inner_sort
+               , parent_id
+               , pool_code
+               , pool_name
+               , pool_type
+               , pool_level
+               , outer_sort
+               , inner_sort
         FROM ip_investment_pool
         WHERE parent_id = #{parentId}
           AND is_deleted = 0
         ORDER BY outer_sort ASC
-                 ,inner_sort ASC
-                 ,id ASC
+                 , inner_sort ASC
+                 , id ASC
     </select>
 
     <!-- 修改投资池配置 -->
     <update id="editPoolConfig" parameterType="com.znty.rrs.entity.bo.InvestmentPoolBo">
         UPDATE ip_investment_pool
         SET pool_name = #{poolName}
-            ,pool_code = #{poolCode}
-            ,pool_type = #{poolType}
-            ,market_codes = #{marketCodes}
-            ,variety_codes = #{varietyCodes}
-            ,hs_pool_name = #{hsPoolName}
-            ,in_flow_id = #{inFlowId}
-            ,in_flow_key = #{inFlowKey}
-            ,in_flow_name = #{inFlowName}
-            ,out_flow_id = #{outFlowId}
-            ,out_flow_key = #{outFlowKey}
-            ,out_flow_name = #{outFlowName}
-            ,simple_in_flow_id = #{simpleInFlowId}
-            ,simple_in_flow_key = #{simpleInFlowKey}
-            ,simple_in_flow_name = #{simpleInFlowName}
-            ,simple_out_flow_id = #{simpleOutFlowId}
-            ,simple_out_flow_key = #{simpleOutFlowKey}
-            ,simple_out_flow_name = #{simpleOutFlowName}
-            ,batch_in_flow_id = #{batchInFlowId}
-            ,batch_in_flow_key = #{batchInFlowKey}
-            ,batch_in_flow_name = #{batchInFlowName}
-            ,batch_out_flow_id = #{batchOutFlowId}
-            ,batch_out_flow_key = #{batchOutFlowKey}
-            ,batch_out_flow_name = #{batchOutFlowName}
-            ,in_report_restriction = #{inReportRestriction}
-            ,out_report_restriction = #{outReportRestriction}
-            ,max_capacity = #{maxCapacity}
-            ,lock_flag = #{lockFlag}
-            ,frozen_period_in = #{frozenPeriodIn}
-            ,outer_sort = #{outerSort}
-            ,inner_sort = #{innerSort}
-            ,description = #{description}
-            ,updt_time = #{updtTime}
+            , pool_code = #{poolCode}
+            , pool_type = #{poolType}
+            , market_codes = #{marketCodes}
+            , variety_codes = #{varietyCodes}
+            , hs_pool_name = #{hsPoolName}
+            , in_flow_id = #{inFlowId}
+            , in_flow_key = #{inFlowKey}
+            , in_flow_name = #{inFlowName}
+            , out_flow_id = #{outFlowId}
+            , out_flow_key = #{outFlowKey}
+            , out_flow_name = #{outFlowName}
+            , simple_in_flow_id = #{simpleInFlowId}
+            , simple_in_flow_key = #{simpleInFlowKey}
+            , simple_in_flow_name = #{simpleInFlowName}
+            , simple_out_flow_id = #{simpleOutFlowId}
+            , simple_out_flow_key = #{simpleOutFlowKey}
+            , simple_out_flow_name = #{simpleOutFlowName}
+            , batch_in_flow_id = #{batchInFlowId}
+            , batch_in_flow_key = #{batchInFlowKey}
+            , batch_in_flow_name = #{batchInFlowName}
+            , batch_out_flow_id = #{batchOutFlowId}
+            , batch_out_flow_key = #{batchOutFlowKey}
+            , batch_out_flow_name = #{batchOutFlowName}
+            , in_report_restriction = #{inReportRestriction}
+            , out_report_restriction = #{outReportRestriction}
+            , max_capacity = #{maxCapacity}
+            , lock_flag = #{lockFlag}
+            , frozen_period_in = #{frozenPeriodIn}
+            , outer_sort = #{outerSort}
+            , inner_sort = #{innerSort}
+            , description = #{description}
+            , updt_time = #{updtTime}
         WHERE id = #{id}
           AND is_deleted = 0
     </update>
@@ -390,101 +334,62 @@
     <!-- 写入投资池事件 -->
     <insert id="addPoolEvent">
         INSERT INTO ip_investment_pool_evt (
-            id
-            ,parent_id
-            ,pool_code
-            ,pool_name
-            ,pool_type
-            ,pool_level
-            ,market_codes
-            ,variety_codes
-            ,hs_pool_name
-            ,in_flow_id
-            ,in_flow_key
-            ,in_flow_name
-            ,out_flow_id
-            ,out_flow_key
-            ,out_flow_name
-            ,simple_in_flow_id
-            ,simple_in_flow_key
-            ,simple_in_flow_name
-            ,simple_out_flow_id
-            ,simple_out_flow_key
-            ,simple_out_flow_name
-            ,batch_in_flow_id
-            ,batch_in_flow_key
-            ,batch_in_flow_name
-            ,batch_out_flow_id
-            ,batch_out_flow_key
-            ,batch_out_flow_name
-            ,in_report_restriction
-            ,out_report_restriction
-            ,max_capacity
-            ,lock_flag
-            ,frozen_period_in
-            ,grade_astrict
-            ,industry_code
-            ,industry_exponent
-            ,fund_rate_limit
-            ,open_day_adjust
-            ,outer_sort
-            ,inner_sort
-            ,description
-            ,status
-            ,is_deleted
-            ,crte_time
-            ,updt_time
-            ,opter_id
-            ,opt_time
-            ,oprt_type
+            id, parent_id, pool_code, pool_name, pool_type, pool_level
+            , market_codes, variety_codes, hs_pool_name, in_flow_id, in_flow_key, in_flow_name
+            , out_flow_id, out_flow_key, out_flow_name, simple_in_flow_id, simple_in_flow_key, simple_in_flow_name
+            , simple_out_flow_id, simple_out_flow_key, simple_out_flow_name, batch_in_flow_id, batch_in_flow_key, batch_in_flow_name
+            , batch_out_flow_id, batch_out_flow_key, batch_out_flow_name, in_report_restriction, out_report_restriction, max_capacity
+            , lock_flag, frozen_period_in, grade_astrict, industry_code, industry_exponent, fund_rate_limit
+            , open_day_adjust, outer_sort, inner_sort, description, status, is_deleted
+            , crte_time, updt_time, opter_id, opt_time, oprt_type
         )
         SELECT id
-               ,parent_id
-               ,pool_code
-               ,pool_name
-               ,pool_type
-               ,pool_level
-               ,market_codes
-               ,variety_codes
-               ,hs_pool_name
-               ,in_flow_id
-               ,in_flow_key
-               ,in_flow_name
-               ,out_flow_id
-               ,out_flow_key
-               ,out_flow_name
-               ,simple_in_flow_id
-               ,simple_in_flow_key
-               ,simple_in_flow_name
-               ,simple_out_flow_id
-               ,simple_out_flow_key
-               ,simple_out_flow_name
-               ,batch_in_flow_id
-               ,batch_in_flow_key
-               ,batch_in_flow_name
-               ,batch_out_flow_id
-               ,batch_out_flow_key
-               ,batch_out_flow_name
-               ,in_report_restriction
-               ,out_report_restriction
-               ,max_capacity
-               ,lock_flag
-               ,frozen_period_in
-               ,grade_astrict
-               ,industry_code
-               ,industry_exponent
-               ,fund_rate_limit
-               ,open_day_adjust
-               ,outer_sort
-               ,inner_sort
-               ,description
-               ,status
-               ,is_deleted
-               ,crte_time
-               ,updt_time
-               ,#{operatorId}
-               ,NOW()
-               ,#{oprtType}
+               , parent_id
+               , pool_code
+               , pool_name
+               , pool_type
+               , pool_level
+               , market_codes
+               , variety_codes
+               , hs_pool_name
+               , in_flow_id
+               , in_flow_key
+               , in_flow_name
+               , out_flow_id
+               , out_flow_key
+               , out_flow_name
+               , simple_in_flow_id
+               , simple_in_flow_key
+               , simple_in_flow_name
+               , simple_out_flow_id
+               , simple_out_flow_key
+               , simple_out_flow_name
+               , batch_in_flow_id
+               , batch_in_flow_key
+               , batch_in_flow_name
+               , batch_out_flow_id
+               , batch_out_flow_key
+               , batch_out_flow_name
+               , in_report_restriction
+               , out_report_restriction
+               , max_capacity
+               , lock_flag
+               , frozen_period_in
+               , grade_astrict
+               , industry_code
+               , industry_exponent
+               , fund_rate_limit
+               , open_day_adjust
+               , outer_sort
+               , inner_sort
+               , description
+               , status
+               , is_deleted
+               , crte_time
+               , updt_time
+               , #{operatorId}
+               , NOW()
+               , #{oprtType}
         FROM ip_investment_pool
         WHERE id = #{id}
     </insert>
@@ -492,101 +397,62 @@
     <!-- 批量写入投资池事件 -->
     <insert id="addPoolEventByIds">
         INSERT INTO ip_investment_pool_evt (
-            id
-            ,parent_id
-            ,pool_code
-            ,pool_name
-            ,pool_type
-            ,pool_level
-            ,market_codes
-            ,variety_codes
-            ,hs_pool_name
-            ,in_flow_id
-            ,in_flow_key
-            ,in_flow_name
-            ,out_flow_id
-            ,out_flow_key
-            ,out_flow_name
-            ,simple_in_flow_id
-            ,simple_in_flow_key
-            ,simple_in_flow_name
-            ,simple_out_flow_id
-            ,simple_out_flow_key
-            ,simple_out_flow_name
-            ,batch_in_flow_id
-            ,batch_in_flow_key
-            ,batch_in_flow_name
-            ,batch_out_flow_id
-            ,batch_out_flow_key
-            ,batch_out_flow_name
-            ,in_report_restriction
-            ,out_report_restriction
-            ,max_capacity
-            ,lock_flag
-            ,frozen_period_in
-            ,grade_astrict
-            ,industry_code
-            ,industry_exponent
-            ,fund_rate_limit
-            ,open_day_adjust
-            ,outer_sort
-            ,inner_sort
-            ,description
-            ,status
-            ,is_deleted
-            ,crte_time
-            ,updt_time
-            ,opter_id
-            ,opt_time
-            ,oprt_type
+            id, parent_id, pool_code, pool_name, pool_type, pool_level
+            , market_codes, variety_codes, hs_pool_name, in_flow_id, in_flow_key, in_flow_name
+            , out_flow_id, out_flow_key, out_flow_name, simple_in_flow_id, simple_in_flow_key, simple_in_flow_name
+            , simple_out_flow_id, simple_out_flow_key, simple_out_flow_name, batch_in_flow_id, batch_in_flow_key, batch_in_flow_name
+            , batch_out_flow_id, batch_out_flow_key, batch_out_flow_name, in_report_restriction, out_report_restriction, max_capacity
+            , lock_flag, frozen_period_in, grade_astrict, industry_code, industry_exponent, fund_rate_limit
+            , open_day_adjust, outer_sort, inner_sort, description, status, is_deleted
+            , crte_time, updt_time, opter_id, opt_time, oprt_type
         )
         SELECT id
-               ,parent_id
-               ,pool_code
-               ,pool_name
-               ,pool_type
-               ,pool_level
-               ,market_codes
-               ,variety_codes
-               ,hs_pool_name
-               ,in_flow_id
-               ,in_flow_key
-               ,in_flow_name
-               ,out_flow_id
-               ,out_flow_key
-               ,out_flow_name
-               ,simple_in_flow_id
-               ,simple_in_flow_key
-               ,simple_in_flow_name
-               ,simple_out_flow_id
-               ,simple_out_flow_key
-               ,simple_out_flow_name
-               ,batch_in_flow_id
-               ,batch_in_flow_key
-               ,batch_in_flow_name
-               ,batch_out_flow_id
-               ,batch_out_flow_key
-               ,batch_out_flow_name
-               ,in_report_restriction
-               ,out_report_restriction
-               ,max_capacity
-               ,lock_flag
-               ,frozen_period_in
-               ,grade_astrict
-               ,industry_code
-               ,industry_exponent
-               ,fund_rate_limit
-               ,open_day_adjust
-               ,outer_sort
-               ,inner_sort
-               ,description
-               ,status
-               ,is_deleted
-               ,crte_time
-               ,updt_time
-               ,#{operatorId}
-               ,NOW()
-               ,#{oprtType}
+               , parent_id
+               , pool_code
+               , pool_name
+               , pool_type
+               , pool_level
+               , market_codes
+               , variety_codes
+               , hs_pool_name
+               , in_flow_id
+               , in_flow_key
+               , in_flow_name
+               , out_flow_id
+               , out_flow_key
+               , out_flow_name
+               , simple_in_flow_id
+               , simple_in_flow_key
+               , simple_in_flow_name
+               , simple_out_flow_id
+               , simple_out_flow_key
+               , simple_out_flow_name
+               , batch_in_flow_id
+               , batch_in_flow_key
+               , batch_in_flow_name
+               , batch_out_flow_id
+               , batch_out_flow_key
+               , batch_out_flow_name
+               , in_report_restriction
+               , out_report_restriction
+               , max_capacity
+               , lock_flag
+               , frozen_period_in
+               , grade_astrict
+               , industry_code
+               , industry_exponent
+               , fund_rate_limit
+               , open_day_adjust
+               , outer_sort
+               , inner_sort
+               , description
+               , status
+               , is_deleted
+               , crte_time
+               , updt_time
+               , #{operatorId}
+               , NOW()
+               , #{oprtType}
         FROM ip_investment_pool
         WHERE id IN
         <foreach collection="ids" item="id" open="(" separator="," close=")">
@@ -598,7 +464,7 @@
     <update id="deletePoolByIds">
         UPDATE ip_investment_pool
         SET is_deleted = 1
-            ,updt_time = NOW()
+            , updt_time = NOW()
         WHERE is_deleted = 0
           AND id IN
         <foreach collection="ids" item="id" open="(" separator="," close=")">
@@ -609,78 +475,54 @@
     <!-- 查询投资池关系列表 -->
     <select id="queryRelationList" resultType="com.znty.rrs.entity.bo.PoolRelationBo">
         SELECT id
-               ,pool_id
-               ,relation_type
-               ,relation_pool_id
-               ,relation_pool_name
-               ,sort_order
-               ,remark
-               ,is_deleted
-               ,crte_time
-               ,updt_time
+               , pool_id
+               , relation_type
+               , relation_pool_id
+               , relation_pool_name
+               , sort_order
+               , remark
+               , is_deleted
+               , crte_time
+               , updt_time
         FROM ip_pool_relation
         WHERE pool_id = #{poolId}
           AND is_deleted = 0
         ORDER BY relation_type ASC
-                 ,sort_order ASC
-                 ,id ASC
+                 , sort_order ASC
+                 , id ASC
     </select>
 
     <!-- 新增投资池关系 -->
     <insert id="addRelation" parameterType="com.znty.rrs.entity.bo.PoolRelationBo" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO ip_pool_relation (
-            pool_id
-            ,relation_type
-            ,relation_pool_id
-            ,relation_pool_name
-            ,sort_order
-            ,remark
-            ,is_deleted
-            ,crte_time
-            ,updt_time
+            pool_id, relation_type, relation_pool_id, relation_pool_name, sort_order, remark
+            , is_deleted, crte_time, updt_time
         ) VALUES (
-            #{poolId}
-            ,#{relationType}
-            ,#{relationPoolId}
-            ,#{relationPoolName}
-            ,#{sortOrder}
-            ,#{remark}
-            ,#{isDeleted}
-            ,#{crteTime}
-            ,#{updtTime}
+            #{poolId}, #{relationType}, #{relationPoolId}, #{relationPoolName}, #{sortOrder}, #{remark}
+            , #{isDeleted}, #{crteTime}, #{updtTime}
         )
     </insert>
 
     <!-- 写入投资池关系事件 -->
     <insert id="addRelationEvent">
         INSERT INTO ip_pool_relation_evt (
-            id
-            ,pool_id
-            ,relation_type
-            ,relation_pool_id
-            ,relation_pool_name
-            ,sort_order
-            ,remark
-            ,is_deleted
-            ,crte_time
-            ,updt_time
-            ,opter_id
-            ,opt_time
-            ,oprt_type
+            id, pool_id, relation_type, relation_pool_id, relation_pool_name, sort_order
+            , remark, is_deleted, crte_time, updt_time, opter_id
+            , opt_time, oprt_type
         )
         SELECT id
-               ,pool_id
-               ,relation_type
-               ,relation_pool_id
-               ,relation_pool_name
-               ,sort_order
-               ,remark
-               ,is_deleted
-               ,crte_time
-               ,updt_time
-               ,#{operatorId}
-               ,NOW()
-               ,#{oprtType}
+               , pool_id
+               , relation_type
+               , relation_pool_id
+               , relation_pool_name
+               , sort_order
+               , remark
+               , is_deleted
+               , crte_time
+               , updt_time
+               , #{operatorId}
+               , NOW()
+               , #{oprtType}
         FROM ip_pool_relation
         WHERE id = #{id}
     </insert>
@@ -688,33 +530,23 @@
     <!-- 按投资池写入关系事件 -->
     <insert id="addRelationEventByPoolId">
         INSERT INTO ip_pool_relation_evt (
-            id
-            ,pool_id
-            ,relation_type
-            ,relation_pool_id
-            ,relation_pool_name
-            ,sort_order
-            ,remark
-            ,is_deleted
-            ,crte_time
-            ,updt_time
-            ,opter_id
-            ,opt_time
-            ,oprt_type
+            id, pool_id, relation_type, relation_pool_id, relation_pool_name, sort_order
+            , remark, is_deleted, crte_time, updt_time, opter_id
+            , opt_time, oprt_type
         )
         SELECT id
-               ,pool_id
-               ,relation_type
-               ,relation_pool_id
-               ,relation_pool_name
-               ,sort_order
-               ,remark
-               ,is_deleted
-               ,crte_time
-               ,updt_time
-               ,#{operatorId}
-               ,NOW()
-               ,#{oprtType}
+               , pool_id
+               , relation_type
+               , relation_pool_id
+               , relation_pool_name
+               , sort_order
+               , remark
+               , is_deleted
+               , crte_time
+               , updt_time
+               , #{operatorId}
+               , NOW()
+               , #{oprtType}
         FROM ip_pool_relation
         WHERE pool_id = #{poolId}
           AND is_deleted = 0
@@ -723,33 +555,23 @@
     <!-- 按投资池列表写入关系事件 -->
     <insert id="addRelationEventByPoolIds">
         INSERT INTO ip_pool_relation_evt (
-            id
-            ,pool_id
-            ,relation_type
-            ,relation_pool_id
-            ,relation_pool_name
-            ,sort_order
-            ,remark
-            ,is_deleted
-            ,crte_time
-            ,updt_time
-            ,opter_id
-            ,opt_time
-            ,oprt_type
+            id, pool_id, relation_type, relation_pool_id, relation_pool_name, sort_order
+            , remark, is_deleted, crte_time, updt_time, opter_id
+            , opt_time, oprt_type
         )
         SELECT id
-               ,pool_id
-               ,relation_type
-               ,relation_pool_id
-               ,relation_pool_name
-               ,sort_order
-               ,remark
-               ,is_deleted
-               ,crte_time
-               ,updt_time
-               ,#{operatorId}
-               ,NOW()
-               ,#{oprtType}
+               , pool_id
+               , relation_type
+               , relation_pool_id
+               , relation_pool_name
+               , sort_order
+               , remark
+               , is_deleted
+               , crte_time
+               , updt_time
+               , #{operatorId}
+               , NOW()
+               , #{oprtType}
         FROM ip_pool_relation
         WHERE is_deleted = 0
           AND pool_id IN
@@ -761,33 +583,23 @@
     <!-- 按关联投资池列表写入关系事件 -->
     <insert id="addRelationEventByRelationPoolIds">
         INSERT INTO ip_pool_relation_evt (
-            id
-            ,pool_id
-            ,relation_type
-            ,relation_pool_id
-            ,relation_pool_name
-            ,sort_order
-            ,remark
-            ,is_deleted
-            ,crte_time
-            ,updt_time
-            ,opter_id
-            ,opt_time
-            ,oprt_type
+            id, pool_id, relation_type, relation_pool_id, relation_pool_name, sort_order
+            , remark, is_deleted, crte_time, updt_time, opter_id
+            , opt_time, oprt_type
         )
         SELECT id
-               ,pool_id
-               ,relation_type
-               ,relation_pool_id
-               ,relation_pool_name
-               ,sort_order
-               ,remark
-               ,is_deleted
-               ,crte_time
-               ,updt_time
-               ,#{operatorId}
-               ,NOW()
-               ,#{oprtType}
+               , pool_id
+               , relation_type
+               , relation_pool_id
+               , relation_pool_name
+               , sort_order
+               , remark
+               , is_deleted
+               , crte_time
+               , updt_time
+               , #{operatorId}
+               , NOW()
+               , #{oprtType}
         FROM ip_pool_relation
         WHERE is_deleted = 0
           AND relation_pool_id IN
@@ -800,7 +612,7 @@
     <update id="deleteRelationByPoolId">
         UPDATE ip_pool_relation
         SET is_deleted = 1
-            ,updt_time = NOW()
+            , updt_time = NOW()
         WHERE pool_id = #{poolId}
           AND is_deleted = 0
     </update>
@@ -809,7 +621,7 @@
     <update id="deleteRelationByPoolIds">
         UPDATE ip_pool_relation
         SET is_deleted = 1
-            ,updt_time = NOW()
+            , updt_time = NOW()
         WHERE is_deleted = 0
           AND pool_id IN
         <foreach collection="poolIds" item="poolId" open="(" separator="," close=")">
@@ -821,7 +633,7 @@
     <update id="deleteRelationByRelationPoolIds">
         UPDATE ip_pool_relation
         SET is_deleted = 1
-            ,updt_time = NOW()
+            , updt_time = NOW()
         WHERE is_deleted = 0
           AND relation_pool_id IN
         <foreach collection="relationPoolIds" item="relationPoolId" open="(" separator="," close=")">
@@ -832,72 +644,50 @@
     <!-- 查询自动规则列表 -->
     <select id="queryAutoRuleList" resultType="com.znty.rrs.entity.bo.PoolAutoRuleBo">
         SELECT id
-               ,pool_id
-               ,rule_type
-               ,rule_id
-               ,task_code
-               ,rule_desc
-               ,is_deleted
-               ,crte_time
-               ,updt_time
+               , pool_id
+               , rule_type
+               , rule_id
+               , task_code
+               , rule_desc
+               , is_deleted
+               , crte_time
+               , updt_time
         FROM ip_pool_auto_rule
         WHERE pool_id = #{poolId}
           AND is_deleted = 0
         ORDER BY rule_type ASC
-                 ,id ASC
+                 , id ASC
     </select>
 
     <!-- 新增自动规则 -->
     <insert id="addAutoRule" parameterType="com.znty.rrs.entity.bo.PoolAutoRuleBo" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO ip_pool_auto_rule (
-            pool_id
-            ,rule_type
-            ,rule_id
-            ,task_code
-            ,rule_desc
-            ,is_deleted
-            ,crte_time
-            ,updt_time
+            pool_id, rule_type, rule_id, task_code, rule_desc, is_deleted
+            , crte_time, updt_time
         ) VALUES (
-            #{poolId}
-            ,#{ruleType}
-            ,#{ruleId}
-            ,#{taskCode}
-            ,#{ruleDesc}
-            ,#{isDeleted}
-            ,#{crteTime}
-            ,#{updtTime}
+            #{poolId}, #{ruleType}, #{ruleId}, #{taskCode}, #{ruleDesc}, #{isDeleted}
+            , #{crteTime}, #{updtTime}
         )
     </insert>
 
     <!-- 写入自动规则事件 -->
     <insert id="addAutoRuleEvent">
         INSERT INTO ip_pool_auto_rule_evt (
-            id
-            ,pool_id
-            ,rule_type
-            ,rule_id
-            ,task_code
-            ,rule_desc
-            ,is_deleted
-            ,crte_time
-            ,updt_time
-            ,opter_id
-            ,opt_time
-            ,oprt_type
+            id, pool_id, rule_type, rule_id, task_code, rule_desc
+            , is_deleted, crte_time, updt_time, opter_id, opt_time, oprt_type
         )
         SELECT id
-               ,pool_id
-               ,rule_type
-               ,rule_id
-               ,task_code
-               ,rule_desc
-               ,is_deleted
-               ,crte_time
-               ,updt_time
-               ,#{operatorId}
-               ,NOW()
-               ,#{oprtType}
+               , pool_id
+               , rule_type
+               , rule_id
+               , task_code
+               , rule_desc
+               , is_deleted
+               , crte_time
+               , updt_time
+               , #{operatorId}
+               , NOW()
+               , #{oprtType}
         FROM ip_pool_auto_rule
         WHERE id = #{id}
     </insert>
@@ -905,31 +695,21 @@
     <!-- 按投资池写入自动规则事件 -->
     <insert id="addAutoRuleEventByPoolId">
         INSERT INTO ip_pool_auto_rule_evt (
-            id
-            ,pool_id
-            ,rule_type
-            ,rule_id
-            ,task_code
-            ,rule_desc
-            ,is_deleted
-            ,crte_time
-            ,updt_time
-            ,opter_id
-            ,opt_time
-            ,oprt_type
+            id, pool_id, rule_type, rule_id, task_code, rule_desc
+            , is_deleted, crte_time, updt_time, opter_id, opt_time, oprt_type
         )
         SELECT id
-               ,pool_id
-               ,rule_type
-               ,rule_id
-               ,task_code
-               ,rule_desc
-               ,is_deleted
-               ,crte_time
-               ,updt_time
-               ,#{operatorId}
-               ,NOW()
-               ,#{oprtType}
+               , pool_id
+               , rule_type
+               , rule_id
+               , task_code
+               , rule_desc
+               , is_deleted
+               , crte_time
+               , updt_time
+               , #{operatorId}
+               , NOW()
+               , #{oprtType}
         FROM ip_pool_auto_rule
         WHERE pool_id = #{poolId}
           AND is_deleted = 0
@@ -938,31 +718,21 @@
     <!-- 按投资池列表写入自动规则事件 -->
     <insert id="addAutoRuleEventByPoolIds">
         INSERT INTO ip_pool_auto_rule_evt (
-            id
-            ,pool_id
-            ,rule_type
-            ,rule_id
-            ,task_code
-            ,rule_desc
-            ,is_deleted
-            ,crte_time
-            ,updt_time
-            ,opter_id
-            ,opt_time
-            ,oprt_type
+            id, pool_id, rule_type, rule_id, task_code, rule_desc
+            , is_deleted, crte_time, updt_time, opter_id, opt_time, oprt_type
         )
         SELECT id
-               ,pool_id
-               ,rule_type
-               ,rule_id
-               ,task_code
-               ,rule_desc
-               ,is_deleted
-               ,crte_time
-               ,updt_time
-               ,#{operatorId}
-               ,NOW()
-               ,#{oprtType}
+               , pool_id
+               , rule_type
+               , rule_id
+               , task_code
+               , rule_desc
+               , is_deleted
+               , crte_time
+               , updt_time
+               , #{operatorId}
+               , NOW()
+               , #{oprtType}
         FROM ip_pool_auto_rule
         WHERE is_deleted = 0
           AND pool_id IN
@@ -975,7 +745,7 @@
     <update id="deleteAutoRuleByPoolId">
         UPDATE ip_pool_auto_rule
         SET is_deleted = 1
-            ,updt_time = NOW()
+            , updt_time = NOW()
         WHERE pool_id = #{poolId}
           AND is_deleted = 0
     </update>
@@ -984,7 +754,7 @@
     <update id="deleteAutoRuleByPoolIds">
         UPDATE ip_pool_auto_rule
         SET is_deleted = 1
-            ,updt_time = NOW()
+            , updt_time = NOW()
         WHERE is_deleted = 0
           AND pool_id IN
         <foreach collection="poolIds" item="poolId" open="(" separator="," close=")">
@@ -995,22 +765,22 @@
     <!-- 查询所有互斥关系（调入互斥 + 调出互斥） -->
     <select id="queryMutexRelationList" resultType="com.znty.rrs.entity.bo.PoolRelationBo">
         SELECT pool_id
-               ,relation_type
-               ,relation_pool_id
-               ,relation_pool_name
+               , relation_type
+               , relation_pool_id
+               , relation_pool_name
         FROM ip_pool_relation
         WHERE relation_type IN ('in_mutex', 'out_mutex')
           AND is_deleted = 0
         ORDER BY pool_id ASC
-                 ,relation_type ASC
-                 ,sort_order ASC
+                 , relation_type ASC
+                 , sort_order ASC
     </select>
 
     <!-- 查询流程下拉选项 -->
     <select id="queryFlowOptionList" resultType="com.znty.rrs.entity.flow.FlowOptionDto">
         SELECT id AS flowId
-               ,flow_key
-               ,name AS flowName
+               , flow_key
+               , name AS flowName
         FROM wf_flow_definition
         WHERE status = 'active'
           AND is_deleted = 0
@@ -1020,12 +790,12 @@
     <!-- 查询所有角色 -->
     <select id="queryRoleList" resultType="com.znty.rrs.entity.bo.RoleBo">
         SELECT id
-               ,name
-               ,parent_id
-               ,NULL AS sort_order
-               ,enable
-               ,ts AS crte_time
-               ,ts AS updt_time
+               , name
+               , parent_id
+               , NULL AS sort_order
+               , enable
+               , ts AS crte_time
+               , ts AS updt_time
         FROM ais_inv_analysis.t_sys_role
         WHERE enable = 1
         ORDER BY id ASC
@@ -1034,12 +804,12 @@
     <!-- 查询用户列表 -->
     <select id="queryUserList" resultType="com.znty.rrs.entity.bo.UserBo">
         SELECT u.id
-               ,u.name
-               ,u.user_name
-               ,u.dr
-               ,u.ts AS crte_time
-               ,u.ts AS updt_time
-               ,GROUP_CONCAT(DISTINCT r.name ORDER BY r.id ASC SEPARATOR '、') AS roleName
+               , u.name
+               , u.user_name
+               , u.dr
+               , u.ts AS crte_time
+               , u.ts AS updt_time
+               , GROUP_CONCAT(DISTINCT r.name ORDER BY r.id ASC SEPARATOR '、') AS roleName
         FROM ais_inv_analysis.t_sys_user u
         LEFT JOIN ais_inv_analysis.t_sys_user_role ur ON ur.user_id = u.id
         LEFT JOIN ais_inv_analysis.t_sys_role r ON r.id = ur.role_id AND r.enable = 1
@@ -1058,49 +828,49 @@
             AND (u.name LIKE CONCAT('%', #{keyword}, '%') OR u.user_name LIKE CONCAT('%', #{keyword}, '%'))
         </if>
         GROUP BY u.id
-                 ,u.name
-                 ,u.user_name
-                 ,u.dr
-                 ,u.ts
+                 , u.name
+                 , u.user_name
+                 , u.dr
+                 , u.ts
         ORDER BY u.id ASC
     </select>
 
     <!-- 查询投资池权限列表 -->
     <select id="queryPermissionList" resultType="com.znty.rrs.entity.bo.PoolPermissionBo">
         SELECT id
-               ,pool_id
-               ,permission_type
-               ,handler_type
-               ,handler_id
-               ,handler_name
-               ,is_deleted
-               ,crte_time
-               ,updt_time
+               , pool_id
+               , permission_type
+               , handler_type
+               , handler_id
+               , handler_name
+               , is_deleted
+               , crte_time
+               , updt_time
         FROM ip_pool_permission
         WHERE pool_id = #{poolId}
           AND is_deleted = 0
         ORDER BY permission_type ASC
-                 ,handler_type ASC
-                 ,id ASC
+                 , handler_type ASC
+                 , id ASC
     </select>
 
     <!-- 按权限类型查询投资池权限列表 -->
     <select id="queryPermissionListByType" resultType="com.znty.rrs.entity.bo.PoolPermissionBo">
         SELECT id
-               ,pool_id
-               ,permission_type
-               ,handler_type
-               ,handler_id
-               ,handler_name
-               ,is_deleted
-               ,crte_time
-               ,updt_time
+               , pool_id
+               , permission_type
+               , handler_type
+               , handler_id
+               , handler_name
+               , is_deleted
+               , crte_time
+               , updt_time
         FROM ip_pool_permission
         WHERE permission_type = #{permissionType}
           AND is_deleted = 0
         ORDER BY pool_id ASC
-                 ,handler_type ASC
-                 ,id ASC
+                 , handler_type ASC
+                 , id ASC
     </select>
 
     <!-- 查询用户所属启用角色 ID 列表 -->
@@ -1114,54 +884,32 @@
     <!-- 新增投资池权限 -->
     <insert id="addPermission" parameterType="com.znty.rrs.entity.bo.PoolPermissionBo" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO ip_pool_permission (
-            pool_id
-            ,permission_type
-            ,handler_type
-            ,handler_id
-            ,handler_name
-            ,is_deleted
-            ,crte_time
-            ,updt_time
+            pool_id, permission_type, handler_type, handler_id, handler_name, is_deleted
+            , crte_time, updt_time
         ) VALUES (
-            #{poolId}
-            ,#{permissionType}
-            ,#{handlerType}
-            ,#{handlerId}
-            ,#{handlerName}
-            ,#{isDeleted}
-            ,#{crteTime}
-            ,#{updtTime}
+            #{poolId}, #{permissionType}, #{handlerType}, #{handlerId}, #{handlerName}, #{isDeleted}
+            , #{crteTime}, #{updtTime}
         )
     </insert>
 
     <!-- 写入权限事件 -->
     <insert id="addPermissionEvent">
         INSERT INTO ip_pool_permission_evt (
-            id
-            ,pool_id
-            ,permission_type
-            ,handler_type
-            ,handler_id
-            ,handler_name
-            ,is_deleted
-            ,crte_time
-            ,updt_time
-            ,opter_id
-            ,opt_time
-            ,oprt_type
+            id, pool_id, permission_type, handler_type, handler_id, handler_name
+            , is_deleted, crte_time, updt_time, opter_id, opt_time, oprt_type
         )
         SELECT id
-               ,pool_id
-               ,permission_type
-               ,handler_type
-               ,handler_id
-               ,handler_name
-               ,is_deleted
-               ,crte_time
-               ,updt_time
-               ,#{operatorId}
-               ,NOW()
-               ,#{oprtType}
+               , pool_id
+               , permission_type
+               , handler_type
+               , handler_id
+               , handler_name
+               , is_deleted
+               , crte_time
+               , updt_time
+               , #{operatorId}
+               , NOW()
+               , #{oprtType}
         FROM ip_pool_permission
         WHERE id = #{id}
     </insert>
@@ -1169,31 +917,21 @@
     <!-- 按投资池写入权限事件 -->
     <insert id="addPermissionEventByPoolId">
         INSERT INTO ip_pool_permission_evt (
-            id
-            ,pool_id
-            ,permission_type
-            ,handler_type
-            ,handler_id
-            ,handler_name
-            ,is_deleted
-            ,crte_time
-            ,updt_time
-            ,opter_id
-            ,opt_time
-            ,oprt_type
+            id, pool_id, permission_type, handler_type, handler_id, handler_name
+            , is_deleted, crte_time, updt_time, opter_id, opt_time, oprt_type
         )
         SELECT id
-               ,pool_id
-               ,permission_type
-               ,handler_type
-               ,handler_id
-               ,handler_name
-               ,is_deleted
-               ,crte_time
-               ,updt_time
-               ,#{operatorId}
-               ,NOW()
-               ,#{oprtType}
+               , pool_id
+               , permission_type
+               , handler_type
+               , handler_id
+               , handler_name
+               , is_deleted
+               , crte_time
+               , updt_time
+               , #{operatorId}
+               , NOW()
+               , #{oprtType}
         FROM ip_pool_permission
         WHERE pool_id = #{poolId}
           AND is_deleted = 0
@@ -1202,31 +940,21 @@
     <!-- 按投资池列表写入权限事件 -->
     <insert id="addPermissionEventByPoolIds">
         INSERT INTO ip_pool_permission_evt (
-            id
-            ,pool_id
-            ,permission_type
-            ,handler_type
-            ,handler_id
-            ,handler_name
-            ,is_deleted
-            ,crte_time
-            ,updt_time
-            ,opter_id
-            ,opt_time
-            ,oprt_type
+            id, pool_id, permission_type, handler_type, handler_id, handler_name
+            , is_deleted, crte_time, updt_time, opter_id, opt_time, oprt_type
         )
         SELECT id
-               ,pool_id
-               ,permission_type
-               ,handler_type
-               ,handler_id
-               ,handler_name
-               ,is_deleted
-               ,crte_time
-               ,updt_time
-               ,#{operatorId}
-               ,NOW()
-               ,#{oprtType}
+               , pool_id
+               , permission_type
+               , handler_type
+               , handler_id
+               , handler_name
+               , is_deleted
+               , crte_time
+               , updt_time
+               , #{operatorId}
+               , NOW()
+               , #{oprtType}
         FROM ip_pool_permission
         WHERE is_deleted = 0
           AND pool_id IN
@@ -1239,7 +967,7 @@
     <update id="deletePermissionByPoolId">
         UPDATE ip_pool_permission
         SET is_deleted = 1
-            ,updt_time = NOW()
+            , updt_time = NOW()
         WHERE pool_id = #{poolId}
           AND is_deleted = 0
     </update>
@@ -1248,7 +976,7 @@
     <update id="deletePermissionByPoolIds">
         UPDATE ip_pool_permission
         SET is_deleted = 1
-            ,updt_time = NOW()
+            , updt_time = NOW()
         WHERE is_deleted = 0
           AND pool_id IN
         <foreach collection="poolIds" item="poolId" open="(" separator="," close=")">

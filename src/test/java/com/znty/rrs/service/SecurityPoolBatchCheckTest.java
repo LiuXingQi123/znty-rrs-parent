@@ -315,7 +315,7 @@ public class SecurityPoolBatchCheckTest {
                 .isEqualTo(page.get(0).getItems().get(0).getFailReasons());
         assertThat(task.get(1).getItems().get(0).isCanAdjust()).isTrue();
         assertThat(task.get(2).getItems().get(0).getFailReasons()).contains("目标投资池已达持仓上限（1）");
-        verify(fixture.pools, never()).lockPoolByIdsList(anyList());
+        verify(fixture.pools, never()).queryExistingPoolIdList(anyList());
         verify(fixture.batch).queryScheduledSecurities(anyList());
     }
 
@@ -396,7 +396,7 @@ public class SecurityPoolBatchCheckTest {
 
         assertThat(result.getItems()).hasSize(2);
         assertThat(result.getItems().get(1).getFailReasons()).contains("目标池要求研究报告且本次没有可用的报告豁免");
-        verify(fixture.pools, never()).lockPoolByIdsList(anyList());
+        verify(fixture.pools, never()).queryExistingPoolIdList(anyList());
     }
 
     /** 同券跨市场只补联动池里仍缺少的代码 */

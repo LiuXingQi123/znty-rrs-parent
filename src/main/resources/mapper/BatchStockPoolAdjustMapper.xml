@@ -1,16 +1,22 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.rrs.mapper.BatchStockPoolAdjustMapper">
+    <!--
+        股票池批量调整查询 Mapper
+        查询支持股票的启用叶子池及当前股票在池数量
+        结合股票主档（rrs_stockinfo）和股票池状态（ip_pool_status_stock）筛选调库候选
+    -->
+
     <!-- 分页查询支持股票的启用叶子池，数量仅统计股票独立池状态 -->
     <select id="queryPoolPage" resultType="com.znty.rrs.entity.batchstockpooladjust.BatchStockPoolDto">
         SELECT p.id
-               ,p.pool_name
-               ,p.pool_type
-               ,p.market_codes
-               ,p.variety_codes
-               ,p.description
-               ,p.max_capacity
-               ,(SELECT COUNT(DISTINCT ps.stock_code)
+               , p.pool_name
+               , p.pool_type
+               , p.market_codes
+               , p.variety_codes
+               , p.description
+               , p.max_capacity
+               , (SELECT COUNT(DISTINCT ps.stock_code)
                  FROM ip_pool_status_stock ps
                  WHERE ps.target_pool_id = p.id
                    AND ps.audit_status = '20'
@@ -35,27 +41,27 @@
             </if>
         </where>
         ORDER BY p.outer_sort ASC
-                 ,p.inner_sort ASC
-                 ,p.id ASC
+                 , p.inner_sort ASC
+                 , p.id ASC
     </select>
 
     <!-- 股票候选使用单笔主档与评级口径，方向按独立有效池成员过滤 -->
     <select id="queryStockPage" resultType="com.znty.rrs.entity.stockpooladjust.StockInfoDto">
         SELECT si.*
-               ,dst.security_type_name
-               ,(SELECT sr.rating_code
+               , dst.security_type_name
+               , (SELECT sr.rating_code
                  FROM rrs_stock_rating sr
                  WHERE sr.stock_code = si.stock_code
                    AND sr.is_deleted = 0
                  ORDER BY sr.rating_date DESC
-                          ,sr.id DESC
+                          , sr.id DESC
                  LIMIT 1) AS latest_rating
-               ,(SELECT sr.rating_code
+               , (SELECT sr.rating_code
                  FROM rrs_stock_rating sr
                  WHERE sr.stock_code = si.stock_code
                    AND sr.is_deleted = 0
                  ORDER BY sr.rating_date DESC
-                          ,sr.id DESC
+                          , sr.id DESC
                  LIMIT 1 OFFSET 1) AS previous_rating
         FROM rrs_stockinfo si
         INNER JOIN dict_security_type dst ON dst.security_type = si.security_type
@@ -65,7 +71,7 @@
             AND si.is_deleted = 0
             AND si.security_status = 'L'
             AND si.market_code IN ('SSE', 'SZSE', 'HKEX')
-            AND (si.delist_date IS NULL OR si.delist_date &gt; NOW())
+            AND (si.delist_date IS NULL OR si.delist_date > NOW())
             <if test="direction == 'in'">
                 AND NOT EXISTS (
                     SELECT 1 FROM ip_pool_status_stock ps

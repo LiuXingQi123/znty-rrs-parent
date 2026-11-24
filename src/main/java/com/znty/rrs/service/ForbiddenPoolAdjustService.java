@@ -50,8 +50,6 @@ import com.znty.rrs.entity.bo.FlowNodeBo;
 import com.znty.rrs.entity.flow.FlowOptionParam;
 import com.znty.rrs.entity.bo.FlowVersionBo;
 import com.znty.rrs.entity.bo.SecurityInfoBo;
-import com.znty.rrs.entity.securitypooladjust.SecurityInfoDetailDto;
-import com.znty.rrs.entity.securitypooladjust.SecurityInfoDto;
 import com.znty.rrs.entity.securitypooladjust.SecurityPoolAdjustReq;
 import com.znty.rrs.entity.securitypooladjust.SecurityPoolAdjustSubmitReq;
 import com.znty.rrs.entity.securitypooladjust.SecurityPoolStatusDto;
@@ -694,41 +692,6 @@ public class ForbiddenPoolAdjustService {
         target.setCurrentUserId(req.getCurrentUserId());
         target.setAdjustDirection(req.getAdjustDirection());
         return target;
-    }
-
-    /**
-     * 分页查询证券列表
-     *
-     * @param req 查询条件（证券代码、简称、发行人，均为模糊匹配）
-     */
-    public PageResult<SecurityInfoDto> querySecurityPage(SecurityPoolAdjustReq req) {
-        PageHelper.startPage(req.getPageIndex(), req.getPageSize());
-        List<SecurityInfoDto> records = forbiddenPoolAdjustMapper.querySecurityPage(
-                req.getSecurityCode(), req.getSecurityShortName(), req.getIssuer());
-        PageInfo<SecurityInfoDto> pageInfo = new PageInfo<>(records);
-
-        return new PageResult<>(records, pageInfo.getTotal(), req.getPageIndex(), req.getPageSize());
-    }
-
-    /**
-     * 查询证券详情（调库页面顶部基础信息展示）
-     *
-     * @param req 需携带 securityCode
-     */
-    public SecurityInfoDetailDto querySecurityDetail(SecurityPoolAdjustReq req) {
-        if (req.getSecurityCode() == null || req.getSecurityCode().isEmpty()) {
-            throw new BizException("证券代码不能为空");
-        }
-        SecurityInfoDetailDto dto = forbiddenPoolAdjustMapper.querySecurityDetail(req.getSecurityCode());
-        if (dto == null) {
-            throw new BizException(404, "证券不存在");
-        }
-        // 关联市场实时读取 Wind，历史快照仍保留其余业务字段
-        if (!"company".equals(dto.getSecurityType())) {
-            dto.setMarketCode(securityMarketService.queryMarketCode(dto.getWindCode()));
-            dto.setRelatedMarketCodes(securityMarketService.queryRelatedMarketCodes(dto.getWindCode()));
-        }
-        return dto;
     }
 
     /**
@@ -2859,12 +2822,12 @@ public class ForbiddenPoolAdjustService {
 
     /** 最终审批通过前按当前业务状态复核主体调库项。 */
     public void recheckBeforeFinalApproval(List<IpAdjustLogBo> logList) {
-        // 人工终审沿用原目标池锁定规则
+        // 人工终审查询目标池并复核调库条件
         recheckBeforeFinalApproval(logList, true);
     }
 
     /** 使用当前池配置复核主体调库项 */
-    private void recheckBeforeFinalApproval(List<IpAdjustLogBo> logList, boolean lockPools) {
+    private void recheckBeforeFinalApproval(List<IpAdjustLogBo> logList, boolean queryTargetPools) {
         if (logList == null || logList.isEmpty()) {
             return;
         }
@@ -2872,9 +2835,9 @@ public class ForbiddenPoolAdjustService {
                 .collect(Collectors.toMap(InvestmentPoolBo::getId, p -> p));
         List<Long> poolIds = logList.stream().map(IpAdjustLogBo::getTargetPoolId)
                 .filter(Objects::nonNull).distinct().sorted().collect(Collectors.toList());
-        if (lockPools && !poolIds.isEmpty()) {
-            // 按 ID 顺序锁定目标池，串行完成容量和池状态复核
-            investmentPoolMapper.lockPoolByIdsList(poolIds);
+        if (queryTargetPools && !poolIds.isEmpty()) {
+            // 按 ID 查询本次调整涉及的目标池
+            investmentPoolMapper.queryExistingPoolIdList(poolIds);
         }
         Map<Long, Map<String, List<Long>>> relationMap = buildPoolRelationMap(
                 forbiddenPoolAdjustMapper.queryAllPoolRelationList());

@@ -1,6 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.rrs.mapper.CrmwRuleAlertMapper">
+    <!--
+        CRMW 规则提醒人工处理 Mapper
+        查询 CRMW 提醒列表和详情（ip_crmw_rule_alert）
+        保存人工处理结果，并记录提醒处理事件（ip_crmw_rule_alert_evt）
+    -->
+
     <!-- 按凭证、标的及状态分页查询独立提醒 -->
     <select id="queryAlertPage" resultType="com.znty.rrs.entity.crmwrulealert.CrmwRuleAlertDto">
         SELECT * FROM ip_crmw_rule_alert
@@ -27,7 +33,8 @@
 
     <!-- 人工标记已处理，摘要保持不变 -->
     <update id="editAlertProcessed">
-        UPDATE ip_crmw_rule_alert SET alert_status = '20'
+        UPDATE ip_crmw_rule_alert
+        SET alert_status = '20'
             , deal_user_id = #{dealUserId}
             , deal_user_name = #{dealUserName}
             , deal_time = #{dealTime}
@@ -38,30 +45,10 @@
     <!-- 保存每次变更后的完整提醒快照与操作人 -->
     <insert id="addAlertEvent">
         INSERT INTO ip_crmw_rule_alert_evt (
-            id
-            , crmw_scode
-            , crmw_name
-            , security_code
-            , security_short_name
-            , issuer_code
-            , issuer_name
-            , inner_issuer_rating
-            , current_pool_id
-            , current_pool_name
-            , adjust_log_id
-            , fail_reason
-            , context_key
-            , alert_status
-            , last_scan_time
-            , deal_user_id
-            , deal_user_name
-            , deal_time
-            , is_deleted
-            , crte_time
-            , updt_time
-            , opter_id
-            , opt_time
-            , oprt_type
+            id, crmw_scode, crmw_name, security_code, security_short_name, issuer_code
+            , issuer_name, inner_issuer_rating, current_pool_id, current_pool_name, adjust_log_id, fail_reason
+            , context_key, alert_status, last_scan_time, deal_user_id, deal_user_name, deal_time
+            , is_deleted, crte_time, updt_time, opter_id, opt_time, oprt_type
         )
         SELECT id
             , crmw_scode

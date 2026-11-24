@@ -21,6 +21,8 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.sql.Connection;
+import java.sql.Statement;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.regex.Matcher;
@@ -124,9 +126,11 @@ public class StockPoolIntegrationTest {
                 "CREATE TABLE ais_inv_analysis.t_sys_user_role(user_id BIGINT,role_id BIGINT)",
                 "CREATE TABLE ais_inv_analysis.t_sys_role(id BIGINT,enable INT)",
                 "CREATE TABLE wf_flow_definition(id BIGINT PRIMARY KEY,flow_key VARCHAR(40),name VARCHAR(40),description VARCHAR(40),is_deleted INT)",
-                "CREATE TABLE wf_flow_node(id BIGINT PRIMARY KEY,flow_id BIGINT)",
+                "CREATE TABLE wf_flow_node(id BIGINT PRIMARY KEY,flow_id BIGINT,version_id BIGINT,node_type VARCHAR(20))",
+                "CREATE TABLE wf_flow_edge(id BIGINT PRIMARY KEY,version_id BIGINT,from_node_id BIGINT,route_action VARCHAR(20))",
+                "CREATE TABLE wf_node_approval_config(node_id BIGINT,approval_strategy VARCHAR(20))",
                 "INSERT INTO wf_flow_definition VALUES(10,'stock_normal','股票一般','股票',0),(20,'stock_fast','股票快速','股票',0)",
-                "INSERT INTO wf_flow_node VALUES(101,10),(102,10),(103,10),(104,10),(105,10),(201,20),(202,20),(205,20)");
+                "INSERT INTO wf_flow_node(id,flow_id) VALUES(101,10),(102,10),(103,10),(104,10),(105,10),(201,20),(202,20),(205,20)");
         stock("600001.SH"); stock("600002.SH"); stock("600003.SH");
         for (int id=1; id<=3; id++) {
             jdbc.update("INSERT INTO ip_investment_pool(id,pool_name,pool_code,pool_type,market_codes,variety_codes,status,is_deleted,in_flow_id,in_flow_key,out_flow_id,out_flow_key,simple_in_flow_id,simple_in_flow_key,simple_out_flow_id,simple_out_flow_key,in_report_restriction,out_report_restriction) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
@@ -304,39 +308,40 @@ public class StockPoolIntegrationTest {
         assertThatThrownBy(() -> audit.submitAdjustAudit(auditReq(submitted,"5","approve"))).isInstanceOf(BizException.class).hasMessageContaining("配置不合法");
     }
 
-    /** 不同股票同时争抢最后一个名额，池锁确保只落一个，失败审核事务回滚。 */
-    @Test public void finalCapacityLockShouldPreventConcurrentOverflow() throws Exception {
+    /** 顺序终审复核当前容量，池满时保留第二笔待审批记录 */
+    @Test
+    public void finalApprovalShouldRejectWhenPoolIsFull() {
         sql("UPDATE ip_investment_pool SET max_capacity=1 WHERE id=1");
-        StockAdjustSubmitDto a=apply.addAdjustLog(request("600001.SH",false,1L));
-        StockAdjustSubmitDto b=apply.addAdjustLog(request("600002.SH",false,1L));
-        StockPoolAdjustAuditReq ar=auditReq(a,"5","approve"),br=auditReq(b,"5","approve");
-        ExecutorService workers=Executors.newFixedThreadPool(2); CountDownLatch ready=new CountDownLatch(2),start=new CountDownLatch(1);
-        try {
-            List<Future<Boolean>> results=new ArrayList<>();
-            for (StockPoolAdjustAuditReq req : Arrays.asList(ar,br)) {
-                results.add(workers.submit(() -> {
-                    ready.countDown();
-                    start.await();
-                    try {
-                        audit.submitAdjustAudit(req);
-                        return true;
-                    } catch (BizException ex) {
-                        assertThat(ex.getMessage()).contains("容量已满");
-                        return false;
-                    }
-                }));
+        StockAdjustSubmitDto first = apply.addAdjustLog(request("600001.SH", false, 1L));
+        StockAdjustSubmitDto second = apply.addAdjustLog(request("600002.SH", false, 1L));
+
+        audit.submitAdjustAudit(auditReq(first, "5", "approve"));
+
+        assertThatThrownBy(() -> audit.submitAdjustAudit(auditReq(second, "5", "approve")))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("容量已满");
+        assertThat(count("ip_pool_status_stock")).isEqualTo(1);
+        assertThat(status(second)).isEqualTo("00");
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ip_adjust_step_stock WHERE step_status='pending'", Integer.class))
+                .isEqualTo(1);
+    }
+
+    /** 目标池使用普通查询，仍按 ID 升序返回存在的目标池 */
+    @Test
+    public void existingPoolQueryShouldReadWhileAnotherTransactionHoldsPoolRowLock() throws Exception {
+        ExecutorService worker = Executors.newSingleThreadExecutor();
+        try (Connection connection = transactions.getDataSource().getConnection()) {
+            connection.setAutoCommit(false);
+            try (Statement lock = connection.createStatement()) {
+                lock.executeQuery("SELECT id FROM ip_investment_pool WHERE id=1 FOR UPDATE").close();
+                Future<List<Long>> result = worker.submit(() -> session.getMapper(InvestmentPoolMapper.class)
+                        .queryExistingPoolIdList(Arrays.asList(3L, 1L, 99L)));
+                assertThat(result.get(5, TimeUnit.SECONDS)).containsExactly(1L, 3L);
+            } finally {
+                connection.rollback();
             }
-            assertThat(ready.await(10,TimeUnit.SECONDS)).isTrue(); start.countDown();
-            int completed = 0;
-            for (Future<Boolean> result : results) {
-                if (result.get(15,TimeUnit.SECONDS)) {
-                    completed++;
-                }
-            }
-            assertThat(completed).isEqualTo(1); assertThat(count("ip_pool_status_stock")).isEqualTo(1);
-            assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ip_adjust_step_stock WHERE step_status='pending'",Integer.class)).isEqualTo(1);
         } finally {
-            workers.shutdownNow();
+            worker.shutdownNow();
         }
     }
 

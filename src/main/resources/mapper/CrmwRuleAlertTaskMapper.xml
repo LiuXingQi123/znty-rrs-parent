@@ -1,10 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.rrs.mapper.CrmwRuleAlertTaskMapper">
-    <!-- 业务示例：
-         1. 标的债券：A 公司发行的债券，是接受信用保护的对象
-         2. CRMW 凭证：由 B 机构创设／提供信用保护
-         3. 凭证主档的 issuer_code 对应 B 机构，本任务读取 B 机构的主体内评和名单，不使用标的债发行人 A 的内评
+    <!--
+        CRMW 规则提醒定时扫描 Mapper
+        读取生效的 CRMW 在池组合、凭证发行主体的内评和名单状态
+        新增或刷新规则提醒（ip_crmw_rule_alert），关闭失效提醒并记录事件
+    -->
+
+    <!--
+        业务示例：
+        1. 标的债券：A 公司发行的债券，是接受信用保护的对象
+        2. CRMW 凭证：由 B 机构创设／提供信用保护
+        3. 凭证主档的 issuer_code 对应 B 机构，本任务读取 B 机构的主体内评和名单，不使用标的债发行人 A 的内评
     -->
     <!-- 1. 仅扫描有效CRMW在池组合，不关联证券主档，不对任务候选排序 -->
     <select id="queryCrmwInPoolList" resultType="com.znty.rrs.entity.schedule.CrmwRuleAlertScanDto">
@@ -98,47 +105,15 @@
     <!-- 新增待处理提醒并返回主键 -->
     <insert id="addAlert" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO ip_crmw_rule_alert (
-            crmw_scode
-            , crmw_name
-            , security_code
-            , security_short_name
-            , issuer_code
-            , issuer_name
-            , inner_issuer_rating
-            , current_pool_id
-            , current_pool_name
-            , adjust_log_id
-            , fail_reason
-            , context_key
-            , alert_status
-            , last_scan_time
-            , deal_user_id
-            , deal_user_name
-            , deal_time
-            , is_deleted
-            , crte_time
-            , updt_time
+            crmw_scode, crmw_name, security_code, security_short_name, issuer_code, issuer_name
+            , inner_issuer_rating, current_pool_id, current_pool_name, adjust_log_id, fail_reason, context_key
+            , alert_status, last_scan_time, deal_user_id, deal_user_name, deal_time, is_deleted
+            , crte_time, updt_time
         ) VALUES (
-            #{crmwScode}
-            , #{crmwName}
-            , #{securityCode}
-            , #{securityShortName}
-            , #{issuerCode}
-            , #{issuerName}
-            , #{innerIssuerRating}
-            , #{currentPoolId}
-            , #{currentPoolName}
-            , #{adjustLogId}
-            , #{failReason}
-            , #{contextKey}
-            , #{alertStatus}
-            , #{lastScanTime}
-            , #{dealUserId}
-            , #{dealUserName}
-            , #{dealTime}
-            , #{isDeleted}
-            , #{crteTime}
-            , #{updtTime}
+            #{crmwScode}, #{crmwName}, #{securityCode}, #{securityShortName}, #{issuerCode}, #{issuerName}
+            , #{innerIssuerRating}, #{currentPoolId}, #{currentPoolName}, #{adjustLogId}, #{failReason}, #{contextKey}
+            , #{alertStatus}, #{lastScanTime}, #{dealUserId}, #{dealUserName}, #{dealTime}, #{isDeleted}
+            , #{crteTime}, #{updtTime}
         )
     </insert>
 
@@ -168,7 +143,8 @@
 
     <!-- 失效旧提醒，仅修改提醒表 -->
     <update id="editAlertInvalid">
-        UPDATE ip_crmw_rule_alert SET alert_status = '99'
+        UPDATE ip_crmw_rule_alert
+        SET alert_status = '99'
             , updt_time = #{updtTime}
         WHERE id = #{id} AND is_deleted = 0 AND alert_status = '00'
     </update>
@@ -181,30 +157,10 @@
     <!-- 保存每次变更后的完整提醒快照与操作人 -->
     <insert id="addAlertEvent">
         INSERT INTO ip_crmw_rule_alert_evt (
-            id
-            , crmw_scode
-            , crmw_name
-            , security_code
-            , security_short_name
-            , issuer_code
-            , issuer_name
-            , inner_issuer_rating
-            , current_pool_id
-            , current_pool_name
-            , adjust_log_id
-            , fail_reason
-            , context_key
-            , alert_status
-            , last_scan_time
-            , deal_user_id
-            , deal_user_name
-            , deal_time
-            , is_deleted
-            , crte_time
-            , updt_time
-            , opter_id
-            , opt_time
-            , oprt_type
+            id, crmw_scode, crmw_name, security_code, security_short_name, issuer_code
+            , issuer_name, inner_issuer_rating, current_pool_id, current_pool_name, adjust_log_id, fail_reason
+            , context_key, alert_status, last_scan_time, deal_user_id, deal_user_name, deal_time
+            , is_deleted, crte_time, updt_time, opter_id, opt_time, oprt_type
         )
         SELECT id
             , crmw_scode

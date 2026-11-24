@@ -1,6 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.rrs.mapper.BatchCompanyAdjustCheckMapper">
+    <!--
+        主体 Excel 批量调库校验 Mapper
+        读取公司简介、主体生效池状态及在途调库步骤
+        查询目标池容量、开放日和主体低外评，供批量校验和清池使用
+    -->
+
+    <!-- 读取清空候选的主体主档并保留查询代码 -->
     <select id="queryCompanyDetails" resultType="com.znty.rrs.entity.securitypoolexcelimport.CompanyImportMatchDto">
         SELECT lookup.company_code AS lookup_value
              , c.COMP_ID AS company_code
@@ -14,6 +21,7 @@
         INNER JOIN ais_inv_ods.wind_compintroduction c ON c.COMP_ID = lookup.company_code
     </select>
 
+    <!-- 查询各主体的有效在池及可用入池时间 -->
     <select id="queryCurrentPools" resultType="com.znty.rrs.entity.forbiddenpooladjust.BatchCompanyAdjustCheckData$Row">
         SELECT lookup.security_code
              , ips.target_pool_id
@@ -42,6 +50,7 @@
         </if>
     </select>
 
+    <!-- 查询各主体按原优先级排在首位的待处理节点 -->
     <select id="queryPendingLabels" resultType="com.znty.rrs.entity.forbiddenpooladjust.BatchCompanyAdjustCheckData$Row">
         SELECT ranked.security_code
              , ranked.node_label
@@ -49,7 +58,10 @@
             SELECT lookup.security_code
                  , s.node_label
                  , ROW_NUMBER() OVER (PARTITION BY lookup.input_order
-                      ORDER BY s.sort_order ASC, s.id ASC, al.submit_time DESC, al.id DESC) AS seq
+                      ORDER BY s.sort_order ASC
+                               , s.id ASC
+                               , al.submit_time DESC
+                               , al.id DESC) AS seq
             FROM (
                 <foreach collection="codes" item="code" index="idx" separator=" UNION ALL ">
                     SELECT CAST(#{idx} AS DECIMAL(10, 0)) AS input_order, CONCAT(#{code}, '') AS security_code
@@ -64,6 +76,7 @@
         WHERE ranked.seq = 1
     </select>
 
+    <!-- 查询主体手工调整在途批次占用的目标池 -->
     <select id="queryPendingPools" resultType="com.znty.rrs.entity.forbiddenpooladjust.BatchCompanyAdjustCheckData$Row">
         SELECT DISTINCT lookup.input_order
              , lookup.security_code
@@ -87,6 +100,7 @@
           )
     </select>
 
+    <!-- 查询各目标池有效在池对象数量 -->
     <select id="queryPoolCounts" resultType="com.znty.rrs.entity.forbiddenpooladjust.BatchCompanyAdjustCheckData$Row">
         SELECT target_pool_id
              , COUNT(DISTINCT security_code) AS current_count
@@ -100,6 +114,7 @@
         GROUP BY target_pool_id
     </select>
 
+    <!-- 查询当天处于开放期的池 -->
     <select id="queryOpenPools" resultType="java.lang.Long">
         SELECT DISTINCT pool_id
         FROM ip_pool_open_day
@@ -112,6 +127,7 @@
           AND is_deleted = 0
     </select>
 
+    <!-- 查询近一年出现过符合黑名单条件外评的主体 -->
     <select id="queryLowRatedCompanies" resultType="java.lang.String">
         SELECT lookup.security_code
         FROM (

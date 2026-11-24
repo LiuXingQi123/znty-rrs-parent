@@ -2,20 +2,25 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.rrs.mapper.BondReminderMapper">
+    <!--
+        债券定时提醒 Mapper
+        按时间窗口从调库日志（ip_adjust_log）查询质押黑名单库新增的债券及主体记录
+        读取证券主档和池状态，查找发行主体未在指定主体池的债券
+    -->
 
     <!-- 查询质押黑名单库增量调库：审批通过、审核时间落在本次水位窗口、范围限债券和主体 -->
     <select id="queryPledgeBlacklistIncrementList"
             resultType="com.znty.rrs.entity.schedule.BondReminderDto">
         SELECT al.id record_id
-              ,al.security_code
-              ,al.security_short_name
-              ,al.security_type
-              ,si.issuer_code
-              ,si.issuer issuer_name
-              ,al.target_pool_id
-              ,al.target_pool_name
-              ,al.adjust_mode
-              ,al.audit_time
+              , al.security_code
+              , al.security_short_name
+              , al.security_type
+              , si.issuer_code
+              , si.issuer issuer_name
+              , al.target_pool_id
+              , al.target_pool_name
+              , al.adjust_mode
+              , al.audit_time
         FROM ip_adjust_log al
         INNER JOIN dict_security_type dst ON dst.security_type = al.security_type
                                          AND dst.is_deleted = 0
@@ -27,7 +32,7 @@
         <foreach collection="poolIds" item="poolId" open="(" separator="," close=")">
             #{poolId}
         </foreach>
-          AND al.audit_time &gt;= #{windowStart}
+          AND al.audit_time >= #{windowStart}
           AND al.audit_time &lt; #{windowEnd}
           AND (
               dst.category_type = 'company'
@@ -35,22 +40,22 @@
                   AND (si.delist_date IS NULL OR si.delist_date > DATE_FORMAT(CURDATE(), '%Y%m%d')))
           )
         ORDER BY al.audit_time ASC
-                ,al.id ASC
+                , al.id ASC
     </select>
 
     <!-- 查询债券池中发行主体不在对应主体池的债券；对齐老任务排除 CRMW -->
     <select id="queryIssuerNotInCompanyPoolBondList"
             resultType="com.znty.rrs.entity.schedule.BondReminderDto">
         SELECT ips.id record_id
-              ,ips.security_code
-              ,ips.security_short_name
-              ,ips.security_type
-              ,si.issuer_code
-              ,si.issuer issuer_name
-              ,ips.target_pool_id
-              ,ips.target_pool_name
-              ,ips.adjust_mode
-              ,ips.audit_time
+              , ips.security_code
+              , ips.security_short_name
+              , ips.security_type
+              , si.issuer_code
+              , si.issuer issuer_name
+              , ips.target_pool_id
+              , ips.target_pool_name
+              , ips.adjust_mode
+              , ips.audit_time
         FROM ip_pool_status ips
         INNER JOIN dict_security_type dst ON dst.security_type = ips.security_type
                                          AND dst.is_deleted = 0
@@ -73,7 +78,7 @@
                 AND company_status.security_code = si.issuer_code
           )
         ORDER BY ips.security_code ASC
-                ,ips.id ASC
+                , ips.id ASC
     </select>
 
 </mapper>

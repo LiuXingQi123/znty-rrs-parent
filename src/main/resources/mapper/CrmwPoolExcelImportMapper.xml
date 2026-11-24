@@ -2,140 +2,77 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.rrs.mapper.CrmwPoolExcelImportMapper">
+    <!--
+        CRMW 池 Excel 导入 Mapper
+        维护通用导入批次（sys_imp_tmp）和明细（sys_imp_tmp_detl），保存校验和提交结果
+        查询可导入的 CRMW 叶子池及凭证与标的证券主档
+    -->
 
     <!-- 新增导入批次 -->
-    <insert id="insertBatch" useGeneratedKeys="true" keyProperty="id">
+    <insert id="addBatch" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO sys_imp_tmp (
-            imp_id
-            ,biz_type
-            ,template_code
-            ,file_name
-            ,file_size
-            ,file_path
-            ,option_json
-            ,total_count
-            ,pass_count
-            ,fail_count
-            ,chk_rslt
-            ,chk_dscr
-            ,save_rslt
-            ,save_dscr
-            ,imp_time
-            ,opter_id
-            ,opter_name
-            ,result_json
-            ,fld001
-            ,fld002
-            ,fld003
-            ,fld004
-            ,fld005
-            ,fld006
-            ,fld007
-            ,fld008
-            ,fld009
-            ,fld010
-            ,fld011
-            ,fld012
-            ,fld013
-            ,fld014
-            ,fld015
-            ,fld016
-            ,fld017
-            ,fld018
-            ,fld019
-            ,fld020
-            ,is_deleted
-            ,crte_time
-            ,updt_time
+            imp_id, biz_type, template_code, file_name, file_size, file_path
+            , option_json, total_count, pass_count, fail_count, chk_rslt, chk_dscr
+            , save_rslt, save_dscr, imp_time, opter_id, opter_name, result_json
+            , fld001, fld002, fld003, fld004, fld005, fld006
+            , fld007, fld008, fld009, fld010, fld011, fld012
+            , fld013, fld014, fld015, fld016, fld017, fld018
+            , fld019, fld020, is_deleted, crte_time, updt_time
         ) VALUES (
-            #{impId}
-            ,#{bizType}
-            ,#{templateCode}
-            ,#{fileName}
-            ,#{fileSize}
-            ,#{filePath}
-            ,#{optionJson}
-            ,#{totalCount}
-            ,#{passCount}
-            ,#{failCount}
-            ,#{chkRslt}
-            ,#{chkDscr}
-            ,#{saveRslt}
-            ,#{saveDscr}
-            ,#{impTime}
-            ,#{opterId}
-            ,#{opterName}
-            ,#{resultJson}
-            ,#{fld001}
-            ,#{fld002}
-            ,#{fld003}
-            ,#{fld004}
-            ,#{fld005}
-            ,#{fld006}
-            ,#{fld007}
-            ,#{fld008}
-            ,#{fld009}
-            ,#{fld010}
-            ,#{fld011}
-            ,#{fld012}
-            ,#{fld013}
-            ,#{fld014}
-            ,#{fld015}
-            ,#{fld016}
-            ,#{fld017}
-            ,#{fld018}
-            ,#{fld019}
-            ,#{fld020}
-            ,#{isDeleted}
-            ,#{crteTime}
-            ,#{updtTime}
+            #{impId}, #{bizType}, #{templateCode}, #{fileName}, #{fileSize}, #{filePath}
+            , #{optionJson}, #{totalCount}, #{passCount}, #{failCount}, #{chkRslt}, #{chkDscr}
+            , #{saveRslt}, #{saveDscr}, #{impTime}, #{opterId}, #{opterName}, #{resultJson}
+            , #{fld001}, #{fld002}, #{fld003}, #{fld004}, #{fld005}, #{fld006}
+            , #{fld007}, #{fld008}, #{fld009}, #{fld010}, #{fld011}, #{fld012}
+            , #{fld013}, #{fld014}, #{fld015}, #{fld016}, #{fld017}, #{fld018}
+            , #{fld019}, #{fld020}, #{isDeleted}, #{crteTime}, #{updtTime}
         )
     </insert>
 
     <!-- 按业务批次号查询有效批次 -->
     <select id="queryByImpId" resultType="com.znty.rrs.entity.bo.SysImpTmpBo">
         SELECT id
-               ,imp_id
-               ,biz_type
-               ,template_code
-               ,file_name
-               ,file_size
-               ,file_path
-               ,option_json
-               ,total_count
-               ,pass_count
-               ,fail_count
-               ,chk_rslt
-               ,chk_dscr
-               ,save_rslt
-               ,save_dscr
-               ,imp_time
-               ,opter_id
-               ,opter_name
-               ,result_json
-               ,fld001
-               ,fld002
-               ,fld003
-               ,fld004
-               ,fld005
-               ,fld006
-               ,fld007
-               ,fld008
-               ,fld009
-               ,fld010
-               ,fld011
-               ,fld012
-               ,fld013
-               ,fld014
-               ,fld015
-               ,fld016
-               ,fld017
-               ,fld018
-               ,fld019
-               ,fld020
-               ,is_deleted
-               ,crte_time
-               ,updt_time
+               , imp_id
+               , biz_type
+               , template_code
+               , file_name
+               , file_size
+               , file_path
+               , option_json
+               , total_count
+               , pass_count
+               , fail_count
+               , chk_rslt
+               , chk_dscr
+               , save_rslt
+               , save_dscr
+               , imp_time
+               , opter_id
+               , opter_name
+               , result_json
+               , fld001
+               , fld002
+               , fld003
+               , fld004
+               , fld005
+               , fld006
+               , fld007
+               , fld008
+               , fld009
+               , fld010
+               , fld011
+               , fld012
+               , fld013
+               , fld014
+               , fld015
+               , fld016
+               , fld017
+               , fld018
+               , fld019
+               , fld020
+               , is_deleted
+               , crte_time
+               , updt_time
         FROM sys_imp_tmp
         WHERE imp_id = #{impId}
           AND is_deleted = 0
@@ -188,7 +125,7 @@
     </update>
 
     <!-- 更新批次校验结果与计数 -->
-    <update id="updateBatchCheckResult">
+    <update id="editBatchCheckResult">
         UPDATE sys_imp_tmp
         SET pass_count = #{passCount}
           , fail_count = #{failCount}
@@ -201,7 +138,7 @@
     </update>
 
     <!-- 更新批次保存结果 -->
-    <update id="updateBatchSaveResult">
+    <update id="editBatchSaveResult">
         UPDATE sys_imp_tmp
         SET save_rslt = #{saveRslt}
           , save_dscr = #{saveDscr}
@@ -222,147 +159,77 @@
     </update>
 
     <!-- 批量新增导入明细 -->
-    <insert id="insertItemList">
+    <insert id="addItemList">
         INSERT INTO sys_imp_tmp_detl (
-            imp_detl_id
-            ,imp_id
-            ,row_no
-            ,chk_rslt
-            ,chk_dscr
-            ,save_rslt
-            ,save_dscr
-            ,imp_time
-            ,opter_id
-            ,ref_id
-            ,fld001
-            ,fld002
-            ,fld003
-            ,fld004
-            ,fld005
-            ,fld006
-            ,fld007
-            ,fld008
-            ,fld009
-            ,fld010
-            ,fld011
-            ,fld012
-            ,fld013
-            ,fld014
-            ,fld015
-            ,fld016
-            ,fld017
-            ,fld018
-            ,fld019
-            ,fld020
-            ,fld021
-            ,fld022
-            ,fld023
-            ,fld024
-            ,fld025
-            ,fld026
-            ,fld027
-            ,fld028
-            ,fld029
-            ,fld030
-            ,is_deleted
-            ,crte_time
-            ,updt_time
+            imp_detl_id, imp_id, row_no, chk_rslt, chk_dscr, save_rslt
+            , save_dscr, imp_time, opter_id, ref_id, fld001, fld002
+            , fld003, fld004, fld005, fld006, fld007, fld008
+            , fld009, fld010, fld011, fld012, fld013, fld014
+            , fld015, fld016, fld017, fld018, fld019, fld020
+            , fld021, fld022, fld023, fld024, fld025, fld026
+            , fld027, fld028, fld029, fld030, is_deleted
+            , crte_time, updt_time
         ) VALUES
         <foreach collection="list" item="item" separator=",">
             (
-                #{item.impDetlId}
-                ,#{item.impId}
-                ,#{item.rowNo}
-                ,#{item.chkRslt}
-                ,#{item.chkDscr}
-                ,#{item.saveRslt}
-                ,#{item.saveDscr}
-                ,#{item.impTime}
-                ,#{item.opterId}
-                ,#{item.refId}
-                ,#{item.fld001}
-                ,#{item.fld002}
-                ,#{item.fld003}
-                ,#{item.fld004}
-                ,#{item.fld005}
-                ,#{item.fld006}
-                ,#{item.fld007}
-                ,#{item.fld008}
-                ,#{item.fld009}
-                ,#{item.fld010}
-                ,#{item.fld011}
-                ,#{item.fld012}
-                ,#{item.fld013}
-                ,#{item.fld014}
-                ,#{item.fld015}
-                ,#{item.fld016}
-                ,#{item.fld017}
-                ,#{item.fld018}
-                ,#{item.fld019}
-                ,#{item.fld020}
-                ,#{item.fld021}
-                ,#{item.fld022}
-                ,#{item.fld023}
-                ,#{item.fld024}
-                ,#{item.fld025}
-                ,#{item.fld026}
-                ,#{item.fld027}
-                ,#{item.fld028}
-                ,#{item.fld029}
-                ,#{item.fld030}
-                ,#{item.isDeleted}
-                ,#{item.crteTime}
-                ,#{item.updtTime}
+                #{item.impDetlId}, #{item.impId}, #{item.rowNo}, #{item.chkRslt}, #{item.chkDscr}, #{item.saveRslt}
+                , #{item.saveDscr}, #{item.impTime}, #{item.opterId}, #{item.refId}, #{item.fld001}, #{item.fld002}
+                , #{item.fld003}, #{item.fld004}, #{item.fld005}, #{item.fld006}, #{item.fld007}, #{item.fld008}
+                , #{item.fld009}, #{item.fld010}, #{item.fld011}, #{item.fld012}, #{item.fld013}, #{item.fld014}
+                , #{item.fld015}, #{item.fld016}, #{item.fld017}, #{item.fld018}, #{item.fld019}, #{item.fld020}
+                , #{item.fld021}, #{item.fld022}, #{item.fld023}, #{item.fld024}, #{item.fld025}, #{item.fld026}
+                , #{item.fld027}, #{item.fld028}, #{item.fld029}, #{item.fld030}, #{item.isDeleted}
+                , #{item.crteTime}, #{item.updtTime}
             )
         </foreach>
     </insert>
 
-    <!-- 按条件查询明细列表（配合 PageHelper；关键字匹配 CRMW 代码或证券代码） -->
-    <select id="queryItemList" resultType="com.znty.rrs.entity.bo.SysImpTmpDetlBo">
+    <!-- 查询指定批次的有效导入明细，关键字匹配 CRMW 代码或证券代码 -->
+    <select id="queryItemPage" resultType="com.znty.rrs.entity.bo.SysImpTmpDetlBo">
         SELECT id
-               ,imp_detl_id
-               ,imp_id
-               ,row_no
-               ,chk_rslt
-               ,chk_dscr
-               ,save_rslt
-               ,save_dscr
-               ,imp_time
-               ,opter_id
-               ,ref_id
-               ,fld001
-               ,fld002
-               ,fld003
-               ,fld004
-               ,fld005
-               ,fld006
-               ,fld007
-               ,fld008
-               ,fld009
-               ,fld010
-               ,fld011
-               ,fld012
-               ,fld013
-               ,fld014
-               ,fld015
-               ,fld016
-               ,fld017
-               ,fld018
-               ,fld019
-               ,fld020
-               ,fld021
-               ,fld022
-               ,fld023
-               ,fld024
-               ,fld025
-               ,fld026
-               ,fld027
-               ,fld028
-               ,fld029
-               ,fld030
-               ,is_deleted
-               ,crte_time
-               ,updt_time
+               , imp_detl_id
+               , imp_id
+               , row_no
+               , chk_rslt
+               , chk_dscr
+               , save_rslt
+               , save_dscr
+               , imp_time
+               , opter_id
+               , ref_id
+               , fld001
+               , fld002
+               , fld003
+               , fld004
+               , fld005
+               , fld006
+               , fld007
+               , fld008
+               , fld009
+               , fld010
+               , fld011
+               , fld012
+               , fld013
+               , fld014
+               , fld015
+               , fld016
+               , fld017
+               , fld018
+               , fld019
+               , fld020
+               , fld021
+               , fld022
+               , fld023
+               , fld024
+               , fld025
+               , fld026
+               , fld027
+               , fld028
+               , fld029
+               , fld030
+               , is_deleted
+               , crte_time
+               , updt_time
         FROM sys_imp_tmp_detl
         <where>
             imp_id = #{impId}
@@ -376,64 +243,64 @@
             </if>
         </where>
         ORDER BY row_no ASC
-                 ,id ASC
+                 , id ASC
     </select>
 
     <!-- 查询批次下全部有效明细 -->
     <select id="queryAllByImpId" resultType="com.znty.rrs.entity.bo.SysImpTmpDetlBo">
         SELECT id
-               ,imp_detl_id
-               ,imp_id
-               ,row_no
-               ,chk_rslt
-               ,chk_dscr
-               ,save_rslt
-               ,save_dscr
-               ,imp_time
-               ,opter_id
-               ,ref_id
-               ,fld001
-               ,fld002
-               ,fld003
-               ,fld004
-               ,fld005
-               ,fld006
-               ,fld007
-               ,fld008
-               ,fld009
-               ,fld010
-               ,fld011
-               ,fld012
-               ,fld013
-               ,fld014
-               ,fld015
-               ,fld016
-               ,fld017
-               ,fld018
-               ,fld019
-               ,fld020
-               ,fld021
-               ,fld022
-               ,fld023
-               ,fld024
-               ,fld025
-               ,fld026
-               ,fld027
-               ,fld028
-               ,fld029
-               ,fld030
-               ,is_deleted
-               ,crte_time
-               ,updt_time
+               , imp_detl_id
+               , imp_id
+               , row_no
+               , chk_rslt
+               , chk_dscr
+               , save_rslt
+               , save_dscr
+               , imp_time
+               , opter_id
+               , ref_id
+               , fld001
+               , fld002
+               , fld003
+               , fld004
+               , fld005
+               , fld006
+               , fld007
+               , fld008
+               , fld009
+               , fld010
+               , fld011
+               , fld012
+               , fld013
+               , fld014
+               , fld015
+               , fld016
+               , fld017
+               , fld018
+               , fld019
+               , fld020
+               , fld021
+               , fld022
+               , fld023
+               , fld024
+               , fld025
+               , fld026
+               , fld027
+               , fld028
+               , fld029
+               , fld030
+               , is_deleted
+               , crte_time
+               , updt_time
         FROM sys_imp_tmp_detl
         WHERE imp_id = #{impId}
           AND is_deleted = 0
         ORDER BY row_no ASC
-                 ,id ASC
+                 , id ASC
     </select>
 
     <!-- 更新单条明细校验结果及解析字段 -->
-    <update id="updateItemCheckResult">
+    <update id="editItemCheckResult">
         UPDATE sys_imp_tmp_detl
         SET chk_rslt = #{chkRslt}
           , chk_dscr = #{chkDscr}
@@ -452,7 +319,7 @@
     </update>
 
     <!-- 更新单条明细保存结果 -->
-    <update id="updateItemSaveResult">
+    <update id="editItemSaveResult">
         UPDATE sys_imp_tmp_detl
         SET save_rslt = #{saveRslt}
           , save_dscr = #{saveDscr}
@@ -484,8 +351,8 @@
     <select id="queryEnabledLeafCrmwPoolList"
             resultType="com.znty.rrs.entity.crmwpoolexcelimport.CrmwPoolExcelImportPoolDto">
         SELECT p.id
-               ,p.pool_name
-               ,p.pool_type
+               , p.pool_name
+               , p.pool_type
         FROM ip_investment_pool p
         WHERE p.status = 'enabled'
           AND p.is_deleted = 0
@@ -498,44 +365,44 @@
                 AND child.is_deleted = 0
           )
         ORDER BY p.outer_sort ASC
-                 ,p.inner_sort ASC
-                 ,p.id ASC
+                 , p.inner_sort ASC
+                 , p.id ASC
     </select>
 
     <!-- 按 ID 查询启用叶子 CRMW 投资池 -->
     <select id="queryEnabledLeafCrmwPoolById" resultType="com.znty.rrs.entity.bo.InvestmentPoolBo">
         SELECT p.id
-               ,p.parent_id
-               ,p.pool_code
-               ,p.pool_name
-               ,p.pool_type
-               ,p.pool_level
-               ,p.market_codes
-               ,p.variety_codes
-               ,p.hs_pool_name
-               ,p.in_flow_id
-               ,p.in_flow_key
-               ,p.in_flow_name
-               ,p.out_flow_id
-               ,p.out_flow_key
-               ,p.out_flow_name
-               ,p.simple_in_flow_id
-               ,p.simple_in_flow_key
-               ,p.simple_out_flow_id
-               ,p.simple_out_flow_key
-               ,p.batch_in_flow_id
-               ,p.batch_in_flow_key
-               ,p.batch_in_flow_name
-               ,p.batch_out_flow_id
-               ,p.batch_out_flow_key
-               ,p.batch_out_flow_name
-               ,p.max_capacity
-               ,p.lock_flag
-               ,p.open_day_adjust
-               ,p.status
-               ,p.is_deleted
-               ,p.crte_time
-               ,p.updt_time
+               , p.parent_id
+               , p.pool_code
+               , p.pool_name
+               , p.pool_type
+               , p.pool_level
+               , p.market_codes
+               , p.variety_codes
+               , p.hs_pool_name
+               , p.in_flow_id
+               , p.in_flow_key
+               , p.in_flow_name
+               , p.out_flow_id
+               , p.out_flow_key
+               , p.out_flow_name
+               , p.simple_in_flow_id
+               , p.simple_in_flow_key
+               , p.simple_out_flow_id
+               , p.simple_out_flow_key
+               , p.batch_in_flow_id
+               , p.batch_in_flow_key
+               , p.batch_in_flow_name
+               , p.batch_out_flow_id
+               , p.batch_out_flow_key
+               , p.batch_out_flow_name
+               , p.max_capacity
+               , p.lock_flag
+               , p.open_day_adjust
+               , p.status
+               , p.is_deleted
+               , p.crte_time
+               , p.updt_time
         FROM ip_investment_pool p
         WHERE p.id = #{poolId}
           AND p.status = 'enabled'
@@ -555,7 +422,7 @@
     <select id="querySecurityImportInfoByCode"
             resultType="com.znty.rrs.entity.crmwpooladjust.SecurityInfoDetailDto">
         SELECT si.*
-               ,dst.security_type_name
+               , dst.security_type_name
         FROM rrs_securityinfo si
         LEFT JOIN dict_security_type dst ON dst.security_type = si.security_type AND dst.is_deleted = 0
         WHERE si.wind_code = #{securityCode}

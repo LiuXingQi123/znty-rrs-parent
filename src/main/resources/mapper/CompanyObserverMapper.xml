@@ -1,14 +1,20 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.rrs.mapper.CompanyObserverMapper">
+    <!--
+        主体观察名单同步 Mapper
+        从 AIS 观察名单视图（company_observer_view）和主体主档读取有效主体
+        查询目标池中的主体、在池债券的发行主体及观察名单主体池状态
+    -->
+
     <!-- 查询观察名单及主体信息，主体信息不齐全的记录不参与本轮同步 -->
     <select id="queryCompanyObserverList" resultType="com.znty.rrs.entity.schedule.CompanyObserverDto">
         <!-- 1. 观察名单关联主体主数据，排除主体ID、主体编码、Wind代码和全称为空的记录 -->
         SELECT MAX(o.company_id) AS company_id
-               ,o.company_code
-               ,MAX(o.observer_type) AS observer_type
-               ,MAX(c.wind_code) AS master_company_code
-               ,MAX(c.full_name) AS company_name
+               , o.company_code
+               , MAX(o.observer_type) AS observer_type
+               , MAX(c.wind_code) AS master_company_code
+               , MAX(c.full_name) AS company_name
         FROM ais_inv_analysis.company_observer_view o
         <!-- 2. 查询主体编码和名称，供主体信息校验使用 -->
         LEFT JOIN ais_inv_analysis.t_inv_company c ON c.id = o.company_id
@@ -27,8 +33,8 @@
     <select id="queryCurrentCompanyList" resultType="com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto">
         <!-- 1. 查询目标池内已生效的主体，包含已从观察名单移除的主体 -->
         SELECT ips.security_code
-               ,ips.security_short_name
-               ,'company' AS security_type
+               , ips.security_short_name
+               , 'company' AS security_type
         FROM ip_pool_status ips
         WHERE ips.security_type = 'company'
           AND ips.audit_status = '20'

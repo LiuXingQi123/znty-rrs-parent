@@ -7,18 +7,31 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
 /**
- * 债券定时提醒查询接口。
+ * 债券定时提醒查询接口
  */
 @Mapper
 public interface BondReminderMapper {
 
-    /** 查询指定池在时间窗口内审批通过的债券、主体增量调库记录 */
+    /**
+     * 查询指定池在时间窗口内审批通过的债券、主体增量调库记录
+     *
+     * @param poolIds 投资池 ID 列表
+     * @param windowStart 统计时间窗口的起点
+     * @param windowEnd 统计时间窗口的终点
+     * @return 符合条件的债券提醒列表
+     */
     List<BondReminderDto> queryPledgeBlacklistIncrementList(
             @Param("poolIds") List<Long> poolIds,
             @Param("windowStart") Date windowStart,
             @Param("windowEnd") Date windowEnd);
 
-    /** 查询债券池中发行主体不在对应主体池的生效债券 */
+    /**
+     * 查询债券池中发行主体不在对应主体池的生效债券
+     *
+     * @param bondPoolId 债券池 ID
+     * @param companyPoolId 主体池 ID
+     * @return 符合条件的债券提醒列表
+     */
     List<BondReminderDto> queryIssuerNotInCompanyPoolBondList(
             @Param("bondPoolId") Long bondPoolId,
             @Param("companyPoolId") Long companyPoolId);

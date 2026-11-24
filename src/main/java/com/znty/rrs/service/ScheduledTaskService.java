@@ -231,7 +231,7 @@ public class ScheduledTaskService {
         // 开启分页
         PageHelper.startPage(pageIndex, pageSize);
         // 查询列表
-        List<SysScheduledTaskRunLogBo> list = scheduledTaskMapper.queryRunLogList(taskCode);
+        List<SysScheduledTaskRunLogBo> list = scheduledTaskMapper.queryRunLogPage(taskCode);
         PageInfo<SysScheduledTaskRunLogBo> pageInfo = new PageInfo<>(list);
         List<ScheduledTaskRunLogDto> dtoList = new ArrayList<>();
         if (list != null) {

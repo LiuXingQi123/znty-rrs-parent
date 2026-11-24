@@ -303,7 +303,7 @@ public class CrmwPoolExcelImportServiceTest {
         when(crmwPoolAdjustService.checkExcelAdjust(any(AdjustCheckReq.class))).thenReturn(checkDto);
 
         when(importMapper.countByChkRslt(eq("IMP3"), eq("0"))).thenReturn(0);
-        when(importMapper.queryItemList(anyString(), any(), any()))
+        when(importMapper.queryItemPage(anyString(), any(), any()))
                 .thenReturn(Collections.<SysImpTmpDetlBo>emptyList());
 
         CrmwPoolExcelImportReq req = new CrmwPoolExcelImportReq();
@@ -326,8 +326,8 @@ public class CrmwPoolExcelImportServiceTest {
         assertEquals("全部可提交，其中 2 条含调整提示", dto.getChkDscr());
         assertEquals("调整提示：目标投资池容量已满；联动池未开放", item.getChkDscr());
         assertEquals("联动池", dto.getCheckItems().get(1).getTargetPoolName());
-        verify(importMapper).updateItemCheckResult(any(SysImpTmpDetlBo.class));
-        verify(importMapper).updateBatchCheckResult(any(SysImpTmpBo.class));
+        verify(importMapper).editItemCheckResult(any(SysImpTmpDetlBo.class));
+        verify(importMapper).editBatchCheckResult(any(SysImpTmpBo.class));
 
         // 提交重新复核来源行，客户端只提供所选流程
         CrmwPoolExcelImportCheckItemDto submittedItem = dto.getCheckItems().get(0);
@@ -406,7 +406,7 @@ public class CrmwPoolExcelImportServiceTest {
             assertEquals("当前用户无权对该投资池进行 Excel 导入", e.getMessage());
         }
         verify(crmwPoolAdjustService, never()).submitAdjustLog(any(CrmwPoolAdjustSubmitReq.class), any(), any());
-        verify(importMapper, never()).updateBatchSaveResult(any(SysImpTmpBo.class));
+        verify(importMapper, never()).editBatchSaveResult(any(SysImpTmpBo.class));
     }
 
     /** 同一 ABS 在同批选择不同主体时，所有展开项保留原提示并阻断 */

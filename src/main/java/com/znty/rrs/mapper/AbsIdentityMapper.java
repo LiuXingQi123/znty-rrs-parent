@@ -3,6 +3,7 @@ package com.znty.rrs.mapper;
 import com.znty.rrs.entity.bo.IpGradeRuleAlertBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
 import com.znty.rrs.entity.bo.SecurityInfoBo;
+import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
@@ -12,12 +13,13 @@ import java.util.List;
  *
  * 负责读取主档与调库快照、查找主体在池依据，以及保存提醒和确认结果
  */
+@Mapper
 public interface AbsIdentityMapper {
 
     /**
      * 查询 ABS 已确认或被在途申请占用的主体代码
      *
-     * 读取主档及普通、CRMW 在途快照，只返回非空主体代码，同一主体可能来自多条记录
+     * 读取主档及普通、CRMW 在途快照，排除空白主体代码。同一主体可能来自多条记录
      *
      * @param securityCode ABS 证券代码
      * @return 已确认或被在途申请占用的主体代码列表
@@ -25,9 +27,9 @@ public interface AbsIdentityMapper {
     List<String> queryOccupiedIdentityCodes(@Param("securityCode") String securityCode);
 
     /**
-     * 判断 ABS 是否存在主体未确认的在库或在途记录
+     * 判断 ABS 是否存在主体未确认的在池记录或在途申请
      *
-     * 同时检查普通池和 CRMW 池，使用主档判断在库记录，使用申请快照判断在途记录
+     * 普通池和 CRMW 池的在池记录按主档判断。在途申请没有有效快照，或快照中的主体代码为空白时，也视为未确认
      *
      * @param securityCode ABS 证券代码
      * @return 存在未确认主体的生效池状态或未结束申请时为 true
@@ -38,7 +40,7 @@ public interface AbsIdentityMapper {
      * 查询 ABS 主档中已确认的主体代码
      *
      * @param securityCode ABS 证券代码
-     * @return 非空白的主档主体代码，未找到时为 {@code null}
+     * @return 非空白的主档主体代码，未找到时为 null
      */
     String queryConfirmedIdentityCode(@Param("securityCode") String securityCode);
 
@@ -57,18 +59,18 @@ public interface AbsIdentityMapper {
      *
      * @param adjustLogId CRMW 调库日志 ID
      * @param securityCode CRMW 标的 ABS 证券代码
-     * @return 对应的未删除快照，未找到时为 {@code null}
+     * @return 对应的未删除快照，未找到时为 null
      */
     SecurityInfoBo queryCrmwIdentitySnapshot(@Param("adjustLogId") Long adjustLogId,
                                             @Param("securityCode") String securityCode);
 
     /**
-     * 读取 ABS 未结束申请中保存的主体身份信息
+     * 读取 ABS 未结束申请的主体身份，供页面恢复在途选择
      *
-     * 从普通或 CRMW 调库快照取一条记录，供页面恢复在途选择
+     * 普通或 CRMW 调库快照只取一条，有多条时未指定取哪一条
      *
      * @param securityCode ABS 证券代码
-     * @return 含主体五字段的申请快照，未找到时为 {@code null}
+     * @return 含主体五字段的申请快照，未找到时为 null
      */
     SecurityInfoBo queryPendingIdentityDetail(@Param("securityCode") String securityCode);
 
@@ -85,11 +87,11 @@ public interface AbsIdentityMapper {
     /**
      * 查询生成 ABS 联动依据摘要所需的主体池状态
      *
-     * 合并四类关联主体和主档选定主体，每个主体返回指定池内的状态及最近生效调库日志 ID
+     * 合并四类关联主体和主档选定主体，判断其在指定池内的状态。最近生效调库日志跨池查询，没有日志时填 0
      *
      * @param securityCode ABS 证券代码
      * @param poolId 待核对主体在池状态的池 ID
-     * @return 按主体代码排序的依据条目，每条包含主体代码、在池状态和日志 ID
+     * @return 按主体代码排序的依据条目，格式为 主体代码:in/out:日志ID
      */
     List<String> queryCompanyPoolContext(@Param("securityCode") String securityCode,
                                          @Param("poolId") Long poolId);
@@ -100,7 +102,7 @@ public interface AbsIdentityMapper {
      * 同时检查四类关联主体和主档选定主体
      *
      * @param securityCode ABS 证券代码
-     * @param companyCode 本次触发主体代码，为 {@code null} 时不排除主体
+     * @param companyCode 本次触发主体代码，为 null 时不排除主体
      * @param poolId 主体依据池 ID
      * @return 去重后按代码排序的其他在池主体
      */
@@ -139,7 +141,7 @@ public interface AbsIdentityMapper {
      *
      * @param securityCode ABS 证券代码
      * @param poolId 债券目标池 ID
-     * @return 最新提醒，未找到时为 {@code null}
+     * @return 最新提醒，未找到时为 null
      */
     IpGradeRuleAlertBo queryLatestSyncAlert(@Param("securityCode") String securityCode,
                                            @Param("poolId") Long poolId);
@@ -182,7 +184,7 @@ public interface AbsIdentityMapper {
     int editSyncAlertInvalid(@Param("securityCode") String securityCode, @Param("poolId") Long poolId);
 
     /**
-     * 将指定 ABS 主体联动提醒标为已处理
+     * 按 ID 将未删除的 ABS 主体联动提醒标为已处理，原状态不限
      *
      * 记录处理人和当前依据摘要，供同一依据再次出现时复用人工结论
      *
@@ -208,7 +210,7 @@ public interface AbsIdentityMapper {
      *
      * @param securityCode ABS 证券代码
      * @param poolId 债券目标池 ID
-     * @return 最新待确认日志，未找到时为 {@code null}
+     * @return 最新待确认日志，未找到时为 null
      */
     IpAdjustLogBo queryPendingScheduledInboundLog(@Param("securityCode") String securityCode,
                                                   @Param("poolId") Long poolId);
@@ -216,7 +218,7 @@ public interface AbsIdentityMapper {
     /**
      * 批量查询本池内每只候选 ABS 最新的待确认入池日志
      *
-     * 按记录 ID 倒序取每只候选最新的一条未删除记录
+     * 只匹配未删除的自动调入待确认日志，按日志 ID 倒序为每个候选取一条
      *
      * @param securityCodes 本批候选 ABS 代码，不能为空
      * @param poolId 债券目标池 ID
@@ -244,7 +246,7 @@ public interface AbsIdentityMapper {
     int editPendingScheduledInboundInvalid(@Param("id") Long id);
 
     /**
-     * 回填仍待确认的 ABS 入池日志的证券简称
+     * 回填未删除且仍待确认的 ABS 自动入池日志的证券简称
      *
      * @param id 待确认日志 ID
      * @param securityShortName 要写入的证券简称

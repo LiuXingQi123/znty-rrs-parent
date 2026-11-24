@@ -2,24 +2,30 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 
 <mapper namespace="com.znty.rrs.mapper.StockPoolAdjustHistoryMapper">
-    <!-- 直接查询提交时留痕，不用实时行业或名称覆盖历史。 -->
+    <!--
+        股票池调整历史 Mapper
+        从股票调库日志（ip_adjust_log_stock）查询调整历史及提交时留痕
+        联查投资池配置，返回分页历史和行业选项
+    -->
+
+    <!-- 直接查询提交时留痕，不用实时行业或名称覆盖历史 -->
     <select id="queryStockPoolAdjustHistoryPage" resultType="com.znty.rrs.entity.stockpooladjusthistory.StockPoolAdjustHistoryDto">
         SELECT al.id
-            ,al.stock_code
-            ,al.stock_name
-            ,al.stock_short_name
-            ,al.industry_code
-            ,al.industry_name
-            ,al.latest_rating
-            ,al.previous_rating
-            ,al.adjust_type
-            ,al.adjust_mode
-            ,al.target_pool_id
-            ,p.pool_name target_pool_path
-            ,al.adjust_batch_no
-            ,al.audit_status
-            ,al.adjuster_name
-            ,al.submit_time
+            , al.stock_code
+            , al.stock_name
+            , al.stock_short_name
+            , al.industry_code
+            , al.industry_name
+            , al.latest_rating
+            , al.previous_rating
+            , al.adjust_type
+            , al.adjust_mode
+            , al.target_pool_id
+            , p.pool_name target_pool_path
+            , al.adjust_batch_no
+            , al.audit_status
+            , al.adjuster_name
+            , al.submit_time
         FROM ip_adjust_log_stock al
         LEFT JOIN ip_investment_pool p ON p.id = al.target_pool_id AND p.is_deleted = 0
         WHERE al.is_deleted = 0
@@ -33,7 +39,7 @@
             AND al.stock_code LIKE CONCAT(#{stockCode}, '%')
         </if>
         <if test="adjustTimeStart != null and adjustTimeStart != ''">
-            AND al.submit_time &gt;= #{adjustTimeStart}
+            AND al.submit_time >= #{adjustTimeStart}
         </if>
         <if test="adjustTimeEndExclusive != null">
             AND al.submit_time &lt; #{adjustTimeEndExclusive}
@@ -51,18 +57,19 @@
             AND al.audit_status = #{auditStatus}
         </if>
         ORDER BY al.submit_time DESC
-                 ,al.adjust_batch_no DESC
-                 ,al.id DESC
+                 , al.adjust_batch_no DESC
+                 , al.id DESC
     </select>
-    <!-- 行业选项来自全部有效调整历史中的提交时行业。 -->
+
+    <!-- 行业选项来自全部有效调整历史中的提交时行业 -->
     <select id="queryIndustryList" resultType="com.znty.rrs.entity.stockpooladjusthistory.StockIndustryOptionDto">
         SELECT DISTINCT industry_code
-            ,industry_name
+            , industry_name
         FROM ip_adjust_log_stock
         WHERE is_deleted = 0
           AND industry_code IS NOT NULL
           AND industry_code != ''
         ORDER BY industry_code
-                 ,industry_name
+                 , industry_name
     </select>
 </mapper>

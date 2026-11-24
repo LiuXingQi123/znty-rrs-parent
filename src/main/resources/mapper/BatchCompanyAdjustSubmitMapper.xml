@@ -1,7 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.rrs.mapper.BatchCompanyAdjustSubmitMapper">
+    <!--
+        主体 Excel 批量直通提交 Mapper
+        按主体代码读取公司简介，批量写入调库日志（ip_adjust_log）和审批步骤（ip_adjust_step）
+        结束旧的生效状态，并写入本次直通调入的新池状态（ip_pool_status）
+    -->
 
+    <!-- 按主体代码查询用于调库提交的主档 -->
     <select id="queryCompanyList" resultType="com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustDto">
         SELECT c.COMP_ID AS company_code
              , c.COMP_SNAME AS company_short_name
@@ -13,102 +19,43 @@
         </foreach>
     </select>
 
+    <!-- 批量新增调库日志并回填主键 -->
     <insert id="addAdjustLogs" useGeneratedKeys="true" keyProperty="rows.id">
-        INSERT INTO ip_adjust_log (security_code
-                                  , security_short_name
-                                  , security_type
-                                  , crmw_name
-                                  , crmw_scode
-                                  , crmw_mktcode
-                                  , crmw_stype
-                                  , adjust_type
-                                  , adjust_mode
-                                  , adjust_batch_no
-                                  , target_pool_id
-                                  , target_pool_name
-                                  , pool_type
-                                  , flow_id
-                                  , flow_key
-                                  , flow_type
-                                  , audit_status
-                                  , adjuster_id
-                                  , adjuster_name
-                                  , adjust_reason
-                                  , adjust_advice
-                                  , submit_time
-                                  , is_deleted
-                                  , crte_time
-                                  , updt_time)
-        VALUES
+        INSERT INTO ip_adjust_log (
+            security_code, security_short_name, security_type, crmw_name, crmw_scode, crmw_mktcode
+            , crmw_stype, adjust_type, adjust_mode, adjust_batch_no, target_pool_id, target_pool_name
+            , pool_type, flow_id, flow_key, flow_type, audit_status, adjuster_id
+            , adjuster_name, adjust_reason, adjust_advice, submit_time, is_deleted
+            , crte_time, updt_time
+        ) VALUES
         <foreach collection="rows" item="row" separator=",">
-            (#{row.securityCode}
-                   , #{row.securityShortName}
-                   , #{row.securityType}
-                   , #{row.crmwName}
-                   , #{row.crmwScode}
-                   , #{row.crmwMktcode}
-                   , #{row.crmwStype}
-                   , #{row.adjustType}
-                   , #{row.adjustMode}
-                   , #{row.adjustBatchNo}
-                   , #{row.targetPoolId}
-                   , #{row.targetPoolName}
-                   , #{row.poolType}
-                   , #{row.flowId}
-                   , #{row.flowKey}
-                   , #{row.flowType}
-                   , #{row.auditStatus}
-                   , #{row.adjusterId}
-                   , #{row.adjusterName}
-                   , #{row.adjustReason}
-                   , #{row.adjustAdvice}
-                   , COALESCE(#{row.submitTime}, NOW())
-                   , 0
-                   , NOW()
-                   , NOW())
+            (
+                #{row.securityCode}, #{row.securityShortName}, #{row.securityType}, #{row.crmwName}, #{row.crmwScode}, #{row.crmwMktcode}
+                , #{row.crmwStype}, #{row.adjustType}, #{row.adjustMode}, #{row.adjustBatchNo}, #{row.targetPoolId}, #{row.targetPoolName}
+                , #{row.poolType}, #{row.flowId}, #{row.flowKey}, #{row.flowType}, #{row.auditStatus}, #{row.adjusterId}
+                , #{row.adjusterName}, #{row.adjustReason}, #{row.adjustAdvice}, COALESCE(#{row.submitTime}, NOW()), 0
+                , NOW(), NOW()
+            )
         </foreach>
     </insert>
 
+    <!-- 批量新增初始流程步骤 -->
     <insert id="addAdjustSteps">
-        INSERT INTO ip_adjust_step (adjust_log_id
-                                   , adjust_batch_no
-                                   , flow_node_id
-                                   , node_code
-                                   , node_label
-                                   , node_type
-                                   , approval_strategy
-                                   , sort_order
-                                   , step_status
-                                   , handler_id
-                                   , handler_name
-                                   , process_action
-                                   , process_comment
-                                   , start_time
-                                   , process_time
-                                   , crte_time
-                                   , updt_time)
-        VALUES
+        INSERT INTO ip_adjust_step (
+            adjust_log_id, adjust_batch_no, flow_node_id, node_code, node_label, node_type
+            , approval_strategy, sort_order, step_status, handler_id, handler_name, process_action
+            , process_comment, start_time, process_time, crte_time, updt_time
+        ) VALUES
         <foreach collection="rows" item="row" separator=",">
-            (#{row.adjustLogId}
-                   , #{row.adjustBatchNo}
-                   , #{row.flowNodeId}
-                   , #{row.nodeCode}
-                   , #{row.nodeLabel}
-                   , #{row.nodeType}
-                   , #{row.approvalStrategy}
-                   , #{row.sortOrder}
-                   , #{row.stepStatus}
-                   , #{row.handlerId}
-                   , #{row.handlerName}
-                   , #{row.processAction}
-                   , #{row.processComment}
-                   , #{row.startTime}
-                   , #{row.processTime}
-                   , NOW()
-                   , NOW())
+            (
+                #{row.adjustLogId}, #{row.adjustBatchNo}, #{row.flowNodeId}, #{row.nodeCode}, #{row.nodeLabel}, #{row.nodeType}
+                , #{row.approvalStrategy}, #{row.sortOrder}, #{row.stepStatus}, #{row.handlerId}, #{row.handlerName}, #{row.processAction}
+                , #{row.processComment}, #{row.startTime}, #{row.processTime}, NOW(), NOW()
+            )
         </foreach>
     </insert>
 
+    <!-- 按主体和池组合结束已生效的旧在池状态 -->
     <update id="deletePoolStatusesSoft">
         UPDATE ip_pool_status
         SET is_deleted = 1
@@ -121,63 +68,23 @@
         </foreach>
     </update>
 
+    <!-- 批量新增直通调入的在池状态 -->
     <insert id="addPoolStatuses">
-        INSERT INTO ip_pool_status (security_code
-                                  , security_short_name
-                                  , security_type
-                                  , crmw_name
-                                  , crmw_scode
-                                  , crmw_mktcode
-                                  , crmw_stype
-                                  , adjust_type
-                                  , adjust_mode
-                                  , adjust_batch_no
-                                  , adjust_log_id
-                                  , target_pool_id
-                                  , target_pool_name
-                                  , pool_type
-                                  , flow_id
-                                  , flow_key
-                                  , flow_type
-                                  , audit_status
-                                  , adjuster_id
-                                  , adjuster_name
-                                  , adjust_reason
-                                  , adjust_advice
-                                  , submit_time
-                                  , entry_time
-                                  , is_deleted
-                                  , crte_time
-                                  , updt_time)
-        VALUES
+        INSERT INTO ip_pool_status (
+            security_code, security_short_name, security_type, crmw_name, crmw_scode, crmw_mktcode
+            , crmw_stype, adjust_type, adjust_mode, adjust_batch_no, adjust_log_id, target_pool_id
+            , target_pool_name, pool_type, flow_id, flow_key, flow_type, audit_status
+            , adjuster_id, adjuster_name, adjust_reason, adjust_advice, submit_time, entry_time
+            , is_deleted, crte_time, updt_time
+        ) VALUES
         <foreach collection="rows" item="row" separator=",">
-            (#{row.securityCode}
-                   , #{row.securityShortName}
-                   , #{row.securityType}
-                   , #{row.crmwName}
-                   , #{row.crmwScode}
-                   , #{row.crmwMktcode}
-                   , #{row.crmwStype}
-                   , #{row.adjustType}
-                   , #{row.adjustMode}
-                   , #{row.adjustBatchNo}
-                   , #{row.adjustLogId}
-                   , #{row.targetPoolId}
-                   , #{row.targetPoolName}
-                   , #{row.poolType}
-                   , #{row.flowId}
-                   , #{row.flowKey}
-                   , #{row.flowType}
-                   , #{row.auditStatus}
-                   , #{row.adjusterId}
-                   , #{row.adjusterName}
-                   , #{row.adjustReason}
-                   , #{row.adjustAdvice}
-                   , NOW()
-                   , NOW()
-                   , 0
-                   , NOW()
-                   , NOW())
+            (
+                #{row.securityCode}, #{row.securityShortName}, #{row.securityType}, #{row.crmwName}, #{row.crmwScode}, #{row.crmwMktcode}
+                , #{row.crmwStype}, #{row.adjustType}, #{row.adjustMode}, #{row.adjustBatchNo}, #{row.adjustLogId}, #{row.targetPoolId}
+                , #{row.targetPoolName}, #{row.poolType}, #{row.flowId}, #{row.flowKey}, #{row.flowType}, #{row.auditStatus}
+                , #{row.adjusterId}, #{row.adjusterName}, #{row.adjustReason}, #{row.adjustAdvice}, NOW(), NOW()
+                , 0, NOW(), NOW()
+            )
         </foreach>
     </insert>
 

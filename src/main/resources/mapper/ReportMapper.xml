@@ -1,23 +1,33 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.rrs.mapper.ReportMapper">
-    <!-- 报告库 mapper，对应表：rrs_report_in / rrs_report_out，提供内部 / 外部报告分页查询功能 -->
+    <!--
+        内外部报告库 Mapper
+        从内部报告（rrs_report_in）和外部报告（rrs_report_out）分页查询报告及详情
+        读取关联附件（sys_attachment）和证券主档，并新增内部报告
+    -->
 
     <!-- 按来源与主键读取报告；来源由服务层严格校验，表名不使用字符串拼接 -->
     <select id="queryReportDetail" resultType="com.znty.rrs.entity.report.ReportDto">
         SELECT id
-               ,author_name
-               ,report_title
-               ,report_type
-               ,security_code
-               ,company_code
-               ,security_type
-               ,data_source
-               ,crte_time
-               <if test="source == 'external'">,source_org_name</if>
+               , author_name
+               , report_title
+               , report_type
+               , security_code
+               , company_code
+               , security_type
+               , data_source
+               , crte_time
+               <if test="source == 'external'">
+                   , source_org_name
+               </if>
         <choose>
-            <when test="source == 'internal'">FROM rrs_report_in</when>
-            <otherwise>FROM rrs_report_out</otherwise>
+            <when test="source == 'internal'">
+                FROM rrs_report_in
+            </when>
+            <otherwise>
+                FROM rrs_report_out
+            </otherwise>
         </choose>
         WHERE id = #{reportId}
           AND is_deleted = 0
@@ -26,14 +36,14 @@
     <!-- 分页查询内部报告库列表 -->
     <select id="queryInReportPage" resultType="com.znty.rrs.entity.report.ReportDto">
         SELECT id
-               ,author_name
-               ,report_title
-               ,report_type
-               ,security_code
-               ,company_code
-               ,security_type
-               ,data_source
-               ,crte_time
+               , author_name
+               , report_title
+               , report_type
+               , security_code
+               , company_code
+               , security_type
+               , data_source
+               , crte_time
         FROM rrs_report_in
         <where>
             is_deleted = 0
@@ -47,28 +57,28 @@
                 AND report_type = #{reportType}
             </if>
             <if test="crteTimeStart != null and crteTimeStart != ''">
-                AND crte_time &gt;= #{crteTimeStart}
+                AND crte_time >= #{crteTimeStart}
             </if>
             <if test="crteTimeEnd != null and crteTimeEnd != ''">
                 AND crte_time &lt;= CONCAT(#{crteTimeEnd}, ' 23:59:59')
             </if>
         </where>
         ORDER BY crte_time DESC
-                 ,id DESC
+                 , id DESC
     </select>
 
     <!-- 分页查询外部报告库列表 -->
     <select id="queryOutReportPage" resultType="com.znty.rrs.entity.report.ReportDto">
         SELECT id
-               ,author_name
-               ,source_org_name
-               ,report_title
-               ,report_type
-               ,security_code
-               ,company_code
-               ,security_type
-               ,data_source
-               ,crte_time
+               , author_name
+               , source_org_name
+               , report_title
+               , report_type
+               , security_code
+               , company_code
+               , security_type
+               , data_source
+               , crte_time
         FROM rrs_report_out
         <where>
             is_deleted = 0
@@ -82,26 +92,26 @@
                 AND report_type = #{reportType}
             </if>
             <if test="crteTimeStart != null and crteTimeStart != ''">
-                AND crte_time &gt;= #{crteTimeStart}
+                AND crte_time >= #{crteTimeStart}
             </if>
             <if test="crteTimeEnd != null and crteTimeEnd != ''">
                 AND crte_time &lt;= CONCAT(#{crteTimeEnd}, ' 23:59:59')
             </if>
         </where>
         ORDER BY crte_time DESC
-                 ,id DESC
+                 , id DESC
     </select>
 
     <!-- 按内部报告 ID 批量查询报告附件 -->
     <select id="queryInReportAttachmentList" resultType="com.znty.rrs.entity.sysattachment.SysAttachmentDto">
         SELECT id
-               ,main_id
-               ,attachment_category
-               ,original_file_name
-               ,file_type
-               ,file_size
-               ,content_type
-               ,full_url
+               , main_id
+               , attachment_category
+               , original_file_name
+               , file_type
+               , file_size
+               , content_type
+               , full_url
         FROM sys_attachment
         WHERE table_name = 'rrs_report_in'
           AND attachment_category = 'report_in'
@@ -111,19 +121,19 @@
             #{reportId}
         </foreach>
         ORDER BY main_id ASC
-                 ,id ASC
+                 , id ASC
     </select>
 
     <!-- 按外部报告 ID 批量查询报告附件 -->
     <select id="queryOutReportAttachmentList" resultType="com.znty.rrs.entity.sysattachment.SysAttachmentDto">
         SELECT id
-               ,main_id
-               ,attachment_category
-               ,original_file_name
-               ,file_type
-               ,file_size
-               ,content_type
-               ,full_url
+               , main_id
+               , attachment_category
+               , original_file_name
+               , file_type
+               , file_size
+               , content_type
+               , full_url
         FROM sys_attachment
         WHERE table_name = 'rrs_report_out'
           AND attachment_category = 'report_out'
@@ -133,7 +143,7 @@
             #{reportId}
         </foreach>
         ORDER BY main_id ASC
-                 ,id ASC
+                 , id ASC
     </select>
 
     <!-- 查询报告生成所需的证券基础信息 -->
@@ -155,27 +165,11 @@
     <!-- 新增内部报告记录 -->
     <insert id="addInReport" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO rrs_report_in (
-            author_name
-            ,report_title
-            ,report_type
-            ,security_code
-            ,company_code
-            ,security_type
-            ,data_source
-            ,is_deleted
-            ,crte_time
-            ,updt_time
+            author_name, report_title, report_type, security_code, company_code, security_type
+            , data_source, is_deleted, crte_time, updt_time
         ) VALUES (
-            #{authorName}
-            ,#{reportTitle}
-            ,#{reportType}
-            ,#{securityCode}
-            ,#{companyCode}
-            ,#{securityType}
-            ,#{dataSource}
-            ,0
-            ,NOW()
-            ,NOW()
+            #{authorName}, #{reportTitle}, #{reportType}, #{securityCode}, #{companyCode}, #{securityType}
+            , #{dataSource}, 0, NOW(), NOW()
         )
     </insert>
 </mapper>

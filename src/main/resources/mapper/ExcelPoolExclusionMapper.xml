@@ -1,6 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.rrs.mapper.ExcelPoolExclusionMapper">
+    <!--
+        Excel 调库排除依据 Mapper
+        从池状态（ip_pool_status）及调库日志（ip_adjust_log）查找受 Excel 调入保护的生效记录
+        读取主体 Excel 调整操作，供定时任务判断哪些记录需要排除
+    -->
 
     <!-- 批量查询受 Excel 保护的生效在池记录 ID -->
     <select id="queryExcelProtectedPoolStatusIds" resultType="java.lang.Long">

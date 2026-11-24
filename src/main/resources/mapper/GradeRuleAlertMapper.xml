@@ -2,17 +2,22 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.rrs.mapper.GradeRuleAlertMapper">
+    <!--
+        主体债入池评级规则提醒 Mapper
+        从证券池状态与证券主档读取信用债分级池的在池债券
+        查询、生成和刷新评级提醒（ip_grade_rule_alert），保存人工结论及失效状态
+    -->
 
     <!-- 查询已在信用债 1～5 级叶子且生效的债券（对齐老 polidEnum，不含境外债） -->
     <select id="queryGradedBondInPoolList" resultType="com.znty.rrs.entity.graderulealert.GradeRuleAlertScanDto">
         SELECT ips.security_code
               , ips.adjust_log_id
-              ,ips.security_short_name
-              ,si.issuer_code
-              ,si.issuer issuer_name
-              ,ips.target_pool_id current_pool_id
-              ,ips.target_pool_name current_pool_name
-              ,p.inner_sort current_sort
+              , ips.security_short_name
+              , si.issuer_code
+              , si.issuer issuer_name
+              , ips.target_pool_id current_pool_id
+              , ips.target_pool_name current_pool_name
+              , p.inner_sort current_sort
         FROM ip_pool_status ips
         INNER JOIN ip_investment_pool p ON p.id = ips.target_pool_id
                                        AND p.is_deleted = 0
@@ -27,24 +32,24 @@
     <!-- 按条件分页查询待办 -->
     <select id="queryAlertPage" resultType="com.znty.rrs.entity.bo.IpGradeRuleAlertBo">
         SELECT id
-              ,security_code
-              ,security_short_name
-              ,issuer_code
-              ,issuer_name
-              ,current_pool_id
-              ,current_pool_name
-              ,current_sort
-              ,fail_reason
-              ,rule_type
-              ,context_key
-              ,special_type_desc
-              ,alert_status
-              ,last_scan_time
-              ,deal_user_id
-              ,deal_user_name
-              ,deal_time
-              ,crte_time
-              ,updt_time
+              , security_code
+              , security_short_name
+              , issuer_code
+              , issuer_name
+              , current_pool_id
+              , current_pool_name
+              , current_sort
+              , fail_reason
+              , rule_type
+              , context_key
+              , special_type_desc
+              , alert_status
+              , last_scan_time
+              , deal_user_id
+              , deal_user_name
+              , deal_time
+              , crte_time
+              , updt_time
         FROM ip_grade_rule_alert
         <where>
             AND is_deleted = 0
@@ -66,19 +71,19 @@
             </if>
         </where>
         ORDER BY last_scan_time DESC
-                ,CASE WHEN rule_type IS NULL THEN 'grade' ELSE rule_type END ASC
-                ,security_code ASC
-                ,COALESCE(context_key, '') ASC
-                ,current_pool_id ASC
-                ,id DESC
+                , CASE WHEN rule_type IS NULL THEN 'grade' ELSE rule_type END ASC
+                , security_code ASC
+                , COALESCE(context_key, '') ASC
+                , current_pool_id ASC
+                , id DESC
     </select>
 
-    <!-- 查询同一证券+当前池的待处理待办 -->
+    <!-- 查询指定证券在当前池的最新待处理分级提醒 -->
     <select id="queryOpenAlert" resultType="com.znty.rrs.entity.bo.IpGradeRuleAlertBo">
         SELECT id
-              ,security_code
-              ,current_pool_id
-              ,alert_status
+              , security_code
+              , current_pool_id
+              , alert_status
         FROM ip_grade_rule_alert
         WHERE is_deleted = 0
           AND alert_status = '00'
@@ -89,13 +94,13 @@
         LIMIT 1
     </select>
 
-    <!-- 查询同一证券+当前池最近一条分级规则待办，用于沿用人工处理结论 -->
+    <!-- 查询指定证券在当前池的最新分级提醒，用于沿用人工处理结论 -->
     <select id="queryLatestGradeAlert" resultType="com.znty.rrs.entity.bo.IpGradeRuleAlertBo">
         SELECT id
-              ,security_code
-              ,current_pool_id
-              ,alert_status
-              ,context_key
+              , security_code
+              , current_pool_id
+              , alert_status
+              , context_key
         FROM ip_grade_rule_alert
         WHERE is_deleted = 0
           AND (rule_type IS NULL OR rule_type = 'grade')
@@ -105,25 +110,25 @@
         LIMIT 1
     </select>
 
-    <!-- 按主键查询待办 -->
+    <!-- 按提醒 ID 查询未删除的提醒 -->
     <select id="queryAlertById" resultType="com.znty.rrs.entity.bo.IpGradeRuleAlertBo">
         SELECT id
-              ,security_code
-              ,security_short_name
-              ,issuer_code
-              ,issuer_name
-              ,current_pool_id
-              ,current_pool_name
-              ,current_sort
-              ,fail_reason
-              ,rule_type
-              ,context_key
-              ,special_type_desc
-              ,alert_status
-              ,last_scan_time
-              ,deal_user_id
-              ,deal_user_name
-              ,deal_time
+              , security_code
+              , security_short_name
+              , issuer_code
+              , issuer_name
+              , current_pool_id
+              , current_pool_name
+              , current_sort
+              , fail_reason
+              , rule_type
+              , context_key
+              , special_type_desc
+              , alert_status
+              , last_scan_time
+              , deal_user_id
+              , deal_user_name
+              , deal_time
         FROM ip_grade_rule_alert
         WHERE id = #{id}
           AND is_deleted = 0
@@ -140,37 +145,13 @@
     <!-- 新增待办 -->
     <insert id="addAlert" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO ip_grade_rule_alert (
-            security_code
-           ,security_short_name
-           ,issuer_code
-           ,issuer_name
-           ,current_pool_id
-           ,current_pool_name
-           ,current_sort
-           ,fail_reason
-           ,special_type_desc
-           ,context_key
-           ,alert_status
-           ,last_scan_time
-           ,is_deleted
-           ,crte_time
-           ,updt_time
+            security_code, security_short_name, issuer_code, issuer_name, current_pool_id, current_pool_name
+            , current_sort, fail_reason, special_type_desc, context_key, alert_status, last_scan_time
+            , is_deleted, crte_time, updt_time
         ) VALUES (
-            #{securityCode}
-           ,#{securityShortName}
-           ,#{issuerCode}
-           ,#{issuerName}
-           ,#{currentPoolId}
-           ,#{currentPoolName}
-           ,#{currentSort}
-           ,#{failReason}
-           ,#{specialTypeDesc}
-           ,#{contextKey}
-           ,#{alertStatus}
-           ,#{lastScanTime}
-           ,0
-           ,#{crteTime}
-           ,#{updtTime}
+            #{securityCode}, #{securityShortName}, #{issuerCode}, #{issuerName}, #{currentPoolId}, #{currentPoolName}
+            , #{currentSort}, #{failReason}, #{specialTypeDesc}, #{contextKey}, #{alertStatus}, #{lastScanTime}
+            , 0, #{crteTime}, #{updtTime}
         )
     </insert>
 
@@ -178,15 +159,15 @@
     <update id="editAlertScan">
         UPDATE ip_grade_rule_alert
         SET security_short_name = #{securityShortName}
-           ,issuer_code = #{issuerCode}
-           ,issuer_name = #{issuerName}
-           ,current_pool_name = #{currentPoolName}
-           ,current_sort = #{currentSort}
-           ,fail_reason = #{failReason}
-           ,special_type_desc = #{specialTypeDesc}
-           ,context_key = #{contextKey}
-           ,last_scan_time = #{lastScanTime}
-           ,updt_time = #{updtTime}
+           , issuer_code = #{issuerCode}
+           , issuer_name = #{issuerName}
+           , current_pool_name = #{currentPoolName}
+           , current_sort = #{currentSort}
+           , fail_reason = #{failReason}
+           , special_type_desc = #{specialTypeDesc}
+           , context_key = #{contextKey}
+           , last_scan_time = #{lastScanTime}
+           , updt_time = #{updtTime}
         WHERE id = #{id}
     </update>
 
@@ -194,7 +175,7 @@
     <update id="editStaleOpenAlertInvalid">
         UPDATE ip_grade_rule_alert
         SET alert_status = '99'
-           ,updt_time = #{scanTime}
+           , updt_time = #{scanTime}
         WHERE is_deleted = 0
           AND alert_status = '00'
           AND (rule_type IS NULL OR rule_type = 'grade')
@@ -205,11 +186,11 @@
     <update id="editAlertProcessed">
         UPDATE ip_grade_rule_alert
         SET alert_status = '20'
-           ,context_key = #{contextKey}
-           ,deal_user_id = #{dealUserId}
-           ,deal_user_name = #{dealUserName}
-           ,deal_time = #{dealTime}
-           ,updt_time = #{updtTime}
+           , context_key = #{contextKey}
+           , deal_user_id = #{dealUserId}
+           , deal_user_name = #{dealUserName}
+           , deal_time = #{dealTime}
+           , updt_time = #{updtTime}
         WHERE id = #{id}
           AND is_deleted = 0
           AND alert_status = '00'

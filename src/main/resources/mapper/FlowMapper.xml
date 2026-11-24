@@ -1,15 +1,19 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.rrs.mapper.FlowMapper">
-    <!-- 审批流程 mapper，对应表：wf_flow_definition（流程定义）、wf_flow_version（流程版本）、wf_flow_node（流程节点）、wf_flow_edge（流程连线）及各节点配置表，提供流程定义、版本、节点、连线及事件记录的完整 CRUD 操作 -->
+    <!--
+        审批流程定义和版本管理 Mapper
+        维护流程定义（wf_flow_definition）、版本（wf_flow_version）、节点和连线
+        保存节点配置、连线条件和操作审计记录，并读取审批配置所需的角色和用户
+    -->
 
     <!-- ==================== 流程定义 ==================== -->
 
-    <!-- 分页查询流程定义。 -->
+    <!-- 分页查询流程定义 -->
     <select id="queryFlowPage" resultType="com.znty.rrs.entity.bo.FlowDefinitionBo">
         SELECT d.*
-               ,COALESCE((SELECT MAX(v.ver_num) FROM wf_flow_version v WHERE v.flow_id = d.id AND v.status != 'draft'), (SELECT MAX(v.ver_num) FROM wf_flow_version v WHERE v.flow_id = d.id)) AS current_ver
-               ,EXISTS (SELECT 1 FROM wf_flow_version v WHERE v.flow_id = d.id AND v.status = 'active') AS has_published_version
+               , COALESCE((SELECT MAX(v.ver_num) FROM wf_flow_version v WHERE v.flow_id = d.id AND v.status != 'draft'), (SELECT MAX(v.ver_num) FROM wf_flow_version v WHERE v.flow_id = d.id)) AS current_ver
+               , EXISTS (SELECT 1 FROM wf_flow_version v WHERE v.flow_id = d.id AND v.status = 'active') AS has_published_version
         FROM wf_flow_definition d
         WHERE d.is_deleted = 0
         <if test="keyword != null and keyword != ''">
@@ -23,11 +27,11 @@
         </if>
         ORDER BY d.updt_time DESC</select>
 
-    <!-- 列表查询流程定义（不分页，用于下拉选项）。 -->
+    <!-- 列表查询流程定义（不分页，用于下拉选项） -->
     <select id="queryFlowList" resultType="com.znty.rrs.entity.bo.FlowDefinitionBo">
         SELECT d.*
-               ,COALESCE((SELECT MAX(v.ver_num) FROM wf_flow_version v WHERE v.flow_id = d.id AND v.status != 'draft'), (SELECT MAX(v.ver_num) FROM wf_flow_version v WHERE v.flow_id = d.id)) AS current_ver
-               ,EXISTS (SELECT 1 FROM wf_flow_version v WHERE v.flow_id = d.id AND v.status = 'active') AS has_published_version
+               , COALESCE((SELECT MAX(v.ver_num) FROM wf_flow_version v WHERE v.flow_id = d.id AND v.status != 'draft'), (SELECT MAX(v.ver_num) FROM wf_flow_version v WHERE v.flow_id = d.id)) AS current_ver
+               , EXISTS (SELECT 1 FROM wf_flow_version v WHERE v.flow_id = d.id AND v.status = 'active') AS has_published_version
         FROM wf_flow_definition d
         WHERE d.is_deleted = 0
         <if test="keyword != null and keyword != ''">
@@ -41,20 +45,20 @@
         </if>
         ORDER BY d.updt_time DESC</select>
 
-    <!-- 根据 ID 查询流程定义。 -->
+    <!-- 根据 ID 查询流程定义 -->
     <select id="queryFlowById" resultType="com.znty.rrs.entity.bo.FlowDefinitionBo">
         SELECT d.*
-               ,COALESCE((SELECT MAX(v.ver_num) FROM wf_flow_version v WHERE v.flow_id = d.id AND v.status != 'draft'), (SELECT MAX(v.ver_num) FROM wf_flow_version v WHERE v.flow_id = d.id)) AS current_ver
-               ,EXISTS (SELECT 1 FROM wf_flow_version v WHERE v.flow_id = d.id AND v.status = 'active') AS has_published_version
+               , COALESCE((SELECT MAX(v.ver_num) FROM wf_flow_version v WHERE v.flow_id = d.id AND v.status != 'draft'), (SELECT MAX(v.ver_num) FROM wf_flow_version v WHERE v.flow_id = d.id)) AS current_ver
+               , EXISTS (SELECT 1 FROM wf_flow_version v WHERE v.flow_id = d.id AND v.status = 'active') AS has_published_version
         FROM wf_flow_definition d
         WHERE d.id = #{id} AND d.is_deleted = 0
     </select>
 
-    <!-- 根据流程 Key 查询启用流程定义。 -->
+    <!-- 根据流程 Key 查询启用流程定义 -->
     <select id="queryActiveFlowByKey" resultType="com.znty.rrs.entity.bo.FlowDefinitionBo">
         SELECT d.*
-               ,COALESCE((SELECT MAX(v.ver_num) FROM wf_flow_version v WHERE v.flow_id = d.id AND v.status != 'draft'), (SELECT MAX(v.ver_num) FROM wf_flow_version v WHERE v.flow_id = d.id)) AS current_ver
-               ,EXISTS (SELECT 1 FROM wf_flow_version v WHERE v.flow_id = d.id AND v.status = 'active') AS has_published_version
+               , COALESCE((SELECT MAX(v.ver_num) FROM wf_flow_version v WHERE v.flow_id = d.id AND v.status != 'draft'), (SELECT MAX(v.ver_num) FROM wf_flow_version v WHERE v.flow_id = d.id)) AS current_ver
+               , EXISTS (SELECT 1 FROM wf_flow_version v WHERE v.flow_id = d.id AND v.status = 'active') AS has_published_version
         FROM wf_flow_definition d
         WHERE d.flow_key = #{flowKey}
           AND d.status = 'active'
@@ -63,7 +67,7 @@
         LIMIT 1
     </select>
 
-    <!-- 统计指定 flowKey 的非删除记录数（用于唯一性校验）。 -->
+    <!-- 统计指定 flowKey 的非删除记录数（用于唯一性校验） -->
     <select id="countByFlowKey" resultType="int">
         SELECT COUNT(1)
         FROM wf_flow_definition
@@ -74,100 +78,98 @@
         </if>
     </select>
 
-    <!-- 根据 ID 查询流程定义（加行锁）。 -->
+    <!-- 根据 ID 查询流程定义（加行锁） -->
     <select id="queryFlowByIdForUpdate" resultType="com.znty.rrs.entity.bo.FlowDefinitionBo">
         SELECT d.*
-               ,COALESCE((SELECT MAX(v.ver_num) FROM wf_flow_version v WHERE v.flow_id = d.id AND v.status != 'draft'), (SELECT MAX(v.ver_num) FROM wf_flow_version v WHERE v.flow_id = d.id)) AS current_ver
-               ,EXISTS (SELECT 1 FROM wf_flow_version v WHERE v.flow_id = d.id AND v.status = 'active') AS has_published_version
+               , COALESCE((SELECT MAX(v.ver_num) FROM wf_flow_version v WHERE v.flow_id = d.id AND v.status != 'draft'), (SELECT MAX(v.ver_num) FROM wf_flow_version v WHERE v.flow_id = d.id)) AS current_ver
+               , EXISTS (SELECT 1 FROM wf_flow_version v WHERE v.flow_id = d.id AND v.status = 'active') AS has_published_version
         FROM wf_flow_definition d
         WHERE d.id = #{id} AND d.is_deleted = 0
         FOR UPDATE
     </select>
 
-
-    <!-- 新建流程定义。 -->
+    <!-- 新建流程定义 -->
     <insert id="addFlowDefinition" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO wf_flow_definition (name
-        ,flow_key
-        ,category
-        ,description
-        ,remark
-        ,status
-                                        ,created_by
-                                        ,updated_by
-                                        ,is_deleted
-                                        ,crte_time
-                                        ,updt_time)
-        VALUES (
-                #{name}
-                ,#{flowKey}
-                ,#{category}
-                ,#{description}
-                ,#{remark}
-                ,#{status}
-                ,#{createdBy}
-                ,#{updatedBy}
-                ,0
-                ,#{crteTime}
-                ,#{updtTime}
+        INSERT INTO wf_flow_definition (
+            name, flow_key, category, description, remark, status
+            , created_by, updated_by, is_deleted, crte_time, updt_time
+        ) VALUES (
+            #{name}, #{flowKey}, #{category}, #{description}, #{remark}, #{status}
+            , #{createdBy}, #{updatedBy}, 0, #{crteTime}, #{updtTime}
         )
     </insert>
 
-    <!-- 更新流程定义。 -->
+    <!-- 更新流程定义 -->
     <update id="editFlowDefinition">
         UPDATE wf_flow_definition
         SET updt_time = #{updtTime}
-        <if test="name != null">, name = #{name}</if>
-        <if test="flowKey != null">, flow_key = #{flowKey}</if>
-        <if test="category != null">, category = #{category}</if>
-        <if test="description != null">, description = #{description}</if>
-        <if test="remark != null">, remark = #{remark}</if>
-        <if test="status != null">, status = #{status}</if>
-        <if test="updatedBy != null">, updated_by = #{updatedBy}</if>
+        <if test="name != null">
+            , name = #{name}
+        </if>
+        <if test="flowKey != null">
+            , flow_key = #{flowKey}
+        </if>
+        <if test="category != null">
+            , category = #{category}
+        </if>
+        <if test="description != null">
+            , description = #{description}
+        </if>
+        <if test="remark != null">
+            , remark = #{remark}
+        </if>
+        <if test="status != null">
+            , status = #{status}
+        </if>
+        <if test="updatedBy != null">
+            , updated_by = #{updatedBy}
+        </if>
         WHERE id = #{id}
     </update>
 
-    <!-- 逻辑删除流程定义。 -->
+    <!-- 逻辑删除流程定义 -->
     <update id="deleteFlowLogical">
-        UPDATE wf_flow_definition SET is_deleted = 1
-                                        ,updated_by = #{updatedBy}
-                                        ,updt_time = #{updtTime}
+        UPDATE wf_flow_definition
+        SET is_deleted = 1
+            , updated_by = #{updatedBy}
+            , updt_time = #{updtTime}
         WHERE id = #{id}
     </update>
 
-    <!-- 停用流程定义。 -->
+    <!-- 停用流程定义 -->
     <update id="editFlowDefinitionStatus">
-        UPDATE wf_flow_definition SET status = 'disabled'
-                                        ,updated_by = #{updatedBy}
-                                        ,updt_time = #{updtTime}
+        UPDATE wf_flow_definition
+        SET status = 'disabled'
+            , updated_by = #{updatedBy}
+            , updt_time = #{updtTime}
         WHERE id = #{id}
     </update>
 
     <!-- ==================== 流程版本 ==================== -->
 
-    <!-- 查询最新流程版本。 -->
+    <!-- 查询最新流程版本 -->
     <select id="queryLatestFlowVersion" resultType="com.znty.rrs.entity.bo.FlowVersionBo">
         SELECT * FROM wf_flow_version
         WHERE flow_id = #{flowId}
         ORDER BY ver_num DESC
-        ,id DESC
+        , id DESC
         LIMIT 1
     </select>
 
-    <!-- 查询当前草稿版本。 -->
+    <!-- 查询当前草稿版本 -->
     <select id="queryDraftFlowVersion" resultType="com.znty.rrs.entity.bo.FlowVersionBo">
         SELECT * FROM wf_flow_version
         WHERE flow_id = #{flowId} AND status = 'draft'
         ORDER BY ver_num DESC
-        ,id DESC
+        , id DESC
         LIMIT 1
     </select>
 
-    <!-- 根据 ID 查询流程版本。 -->
+    <!-- 根据 ID 查询流程版本 -->
     <select id="queryFlowVersionById" resultType="com.znty.rrs.entity.bo.FlowVersionBo">
         SELECT * FROM wf_flow_version WHERE id = #{id}</select>
 
-    <!-- 查询流程版本列表，可按版本号筛选。 -->
+    <!-- 查询流程版本列表，可按版本号筛选 -->
     <select id="queryFlowVersionByFlowIdList" resultType="com.znty.rrs.entity.bo.FlowVersionBo">
         SELECT * FROM wf_flow_version
         WHERE flow_id = #{flowId}
@@ -175,106 +177,75 @@
             AND ver_num = #{verNum}
         </if>
         ORDER BY ver_num DESC
-        ,id DESC</select>
+        , id DESC</select>
 
-    <!-- 新建流程版本。 -->
+    <!-- 新建流程版本 -->
     <insert id="addFlowVersion" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO wf_flow_version (flow_id
-        ,flow_key
-        ,ver_num
-        ,status
-        ,publish_note
-                                     ,canvas_nodes
-                                     ,canvas_edges
-                                     ,canvas_pan_x
-                                     ,canvas_pan_y
-                                     ,canvas_zoom
-                                     ,published_by
-                                     ,published_time
-                                     ,created_by
-                                     ,crte_time
-                                     ,updt_time)
-        VALUES (
-                #{flowId}
-                ,#{flowKey}
-                ,#{verNum}
-                ,#{status}
-                ,#{publishNote}
-                ,#{canvasNodes}
-                ,#{canvasEdges}
-                ,#{canvasPanX}
-                ,#{canvasPanY}
-                ,#{canvasZoom}
-                ,#{publishedBy}
-                ,#{publishedTime}
-                ,#{createdBy}
-                ,#{crteTime}
-                ,#{updtTime}
+        INSERT INTO wf_flow_version (
+            flow_id, flow_key, ver_num, status, publish_note, canvas_nodes
+            , canvas_edges, canvas_pan_x, canvas_pan_y, canvas_zoom, published_by, published_time
+            , created_by, crte_time, updt_time
+        ) VALUES (
+            #{flowId}, #{flowKey}, #{verNum}, #{status}, #{publishNote}, #{canvasNodes}
+            , #{canvasEdges}, #{canvasPanX}, #{canvasPanY}, #{canvasZoom}, #{publishedBy}, #{publishedTime}
+            , #{createdBy}, #{crteTime}, #{updtTime}
         )
     </insert>
 
-    <!-- 更新流程版本。 -->
+    <!-- 更新流程版本 -->
     <update id="editFlowVersion">
         UPDATE wf_flow_version
         SET canvas_nodes   = #{canvasNodes}
-            ,canvas_edges   = #{canvasEdges}
-            ,canvas_pan_x   = #{canvasPanX}
-            ,canvas_pan_y   = #{canvasPanY}
-            ,canvas_zoom    = #{canvasZoom}
-            ,updt_time      = #{updtTime}
-        <if test="flowKey != null">, flow_key = #{flowKey}</if>
-        <if test="status != null">, status = #{status}</if>
-        <if test="publishNote != null">, publish_note = #{publishNote}</if>
-        <if test="publishedBy != null">, published_by = #{publishedBy}</if>
-        <if test="publishedTime != null">, published_time = #{publishedTime}</if>
+            , canvas_edges   = #{canvasEdges}
+            , canvas_pan_x   = #{canvasPanX}
+            , canvas_pan_y   = #{canvasPanY}
+            , canvas_zoom    = #{canvasZoom}
+            , updt_time      = #{updtTime}
+        <if test="flowKey != null">
+            , flow_key = #{flowKey}
+        </if>
+        <if test="status != null">
+            , status = #{status}
+        </if>
+        <if test="publishNote != null">
+            , publish_note = #{publishNote}
+        </if>
+        <if test="publishedBy != null">
+            , published_by = #{publishedBy}
+        </if>
+        <if test="publishedTime != null">
+            , published_time = #{publishedTime}
+        </if>
         WHERE id = #{id}
     </update>
 
-    <!-- 更新流程版本状态。 -->
+    <!-- 更新流程版本状态 -->
     <update id="editFlowVersionStatus">
-        UPDATE wf_flow_version SET status = #{status}
-                                   ,updt_time = #{updtTime}
+        UPDATE wf_flow_version
+        SET status = #{status}
+            , updt_time = #{updtTime}
         WHERE id = #{id}
     </update>
 
     <!-- ==================== 流程节点 ==================== -->
 
-    <!-- 删除指定版本的流程节点。 -->
+    <!-- 删除指定版本的流程节点 -->
     <delete id="deleteFlowNodeByVersionId">
         DELETE FROM wf_flow_node WHERE version_id = #{versionId}
     </delete>
 
-    <!-- 新建流程节点。 -->
+    <!-- 新建流程节点 -->
     <insert id="addFlowNode" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO wf_flow_node (version_id
-        ,flow_id
-        ,node_id
-        ,node_type
-        ,label
-        ,shape
-                                  ,pos_x
-                                  ,pos_y
-                                  ,sub_label
-                                  ,sort_order
-                                  ,crte_time
-                                  ,updt_time)
-        VALUES (
-                #{versionId}
-                ,#{flowId}
-                ,#{nodeId}
-                ,#{nodeType}
-                ,#{label}
-                ,#{shape}
-                ,#{posX}
-                ,#{posY}
-                ,#{subLabel}
-                ,#{sortOrder}
-                ,#{crteTime}
-                ,#{updtTime}
+        INSERT INTO wf_flow_node (
+            version_id, flow_id, node_id, node_type, label, shape
+            , pos_x, pos_y, sub_label, sort_order, crte_time, updt_time
+        ) VALUES (
+            #{versionId}, #{flowId}, #{nodeId}, #{nodeType}, #{label}, #{shape}
+            , #{posX}, #{posY}, #{subLabel}, #{sortOrder}, #{crteTime}, #{updtTime}
         )
     </insert>
 
-    <!-- 根据 ID 查询流程节点。 -->
+    <!-- 根据 ID 查询流程节点 -->
     <select id="queryFlowNodeById" resultType="com.znty.rrs.entity.bo.FlowNodeBo">
         SELECT *
         FROM wf_flow_node
@@ -283,7 +254,7 @@
 
     <!-- ==================== 审批节点配置 ==================== -->
 
-    <!-- 删除指定版本的审批配置。 -->
+    <!-- 删除指定版本的审批配置 -->
     <delete id="deleteApprovalConfigByVersionId">
         DELETE FROM wf_node_approval_config
         WHERE node_id IN (SELECT id FROM wf_flow_node WHERE version_id = #{versionId})
@@ -300,181 +271,128 @@
         )
     </delete>
 
-    <!-- 新建审批配置。 -->
+    <!-- 新建审批配置 -->
     <insert id="addApprovalConfig" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO wf_node_approval_config (node_id
-        ,approval_strategy
-        ,approval_remark
-        ,crte_time
-        ,updt_time)
-        VALUES (
-                #{nodeId}
-                ,#{approvalStrategy}
-                ,#{approvalRemark}
-                ,#{crteTime}
-                ,#{updtTime}
+        INSERT INTO wf_node_approval_config (
+            node_id, approval_strategy, approval_remark, crte_time, updt_time
+        ) VALUES (
+            #{nodeId}, #{approvalStrategy}, #{approvalRemark}, #{crteTime}, #{updtTime}
         )
     </insert>
 
     <!-- 新增审批处理人明细 -->
     <insert id="addApprovalHandler" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO wf_node_approval_handler (approval_config_id
-        ,handler_type
-        ,handler_id
-        ,handler_name
-        ,sort_order
-        ,crte_time
-        ,updt_time)
-        VALUES (
-                #{approvalConfigId}
-                ,#{handlerType}
-                ,#{handlerId}
-                ,#{handlerName}
-                ,#{sortOrder}
-                ,#{crteTime}
-                ,#{updtTime}
+        INSERT INTO wf_node_approval_handler (
+            approval_config_id, handler_type, handler_id, handler_name, sort_order
+            , crte_time, updt_time
+        ) VALUES (
+            #{approvalConfigId}, #{handlerType}, #{handlerId}, #{handlerName}, #{sortOrder}
+            , #{crteTime}, #{updtTime}
         )
     </insert>
 
     <!-- ==================== 自动执行节点配置 ==================== -->
 
-    <!-- 删除指定版本的自动任务配置。 -->
+    <!-- 删除指定版本的自动任务配置 -->
     <delete id="deleteAutoConfigByVersionId">
         DELETE FROM wf_node_auto_config
         WHERE node_id IN (SELECT id FROM wf_flow_node WHERE version_id = #{versionId})
     </delete>
 
-    <!-- 新建自动任务配置。 -->
+    <!-- 新建自动任务配置 -->
     <insert id="addAutoConfig" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO wf_node_auto_config (node_id, task_seq, task_code, auto_remark, crte_time, updt_time)
-        VALUES (
-                #{nodeId}
-                ,#{taskSeq}
-                ,#{taskCode}
-                ,#{autoRemark}
-                ,#{crteTime}
-                ,#{updtTime}
+        INSERT INTO wf_node_auto_config (
+            node_id, task_seq, task_code, auto_remark, crte_time, updt_time
+        ) VALUES (
+            #{nodeId}, #{taskSeq}, #{taskCode}, #{autoRemark}, #{crteTime}, #{updtTime}
         )</insert>
 
     <!-- ==================== 通知节点配置 ==================== -->
 
-    <!-- 删除指定版本的通知配置。 -->
+    <!-- 删除指定版本的通知配置 -->
     <delete id="deleteNotifyConfigByVersionId">
         DELETE FROM wf_node_notify_config
         WHERE node_id IN (SELECT id FROM wf_flow_node WHERE version_id = #{versionId})
     </delete>
 
-    <!-- 新建通知配置。 -->
+    <!-- 新建通知配置 -->
     <insert id="addNotifyConfig" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO wf_node_notify_config (node_id
-        ,notify_channels
-        ,notify_target
-                                           ,notify_persons
-                                           ,notify_tpl
-                                           ,notify_remark
-                                           ,crte_time
-                                           ,updt_time)
-        VALUES (
-                #{nodeId}
-                ,#{notifyChannels}
-                ,#{notifyTarget}
-                ,#{notifyPersons}
-                ,#{notifyTpl}
-                ,#{notifyRemark}
-                ,#{crteTime}
-                ,#{updtTime}
+        INSERT INTO wf_node_notify_config (
+            node_id, notify_channels, notify_target, notify_persons, notify_tpl, notify_remark
+            , crte_time, updt_time
+        ) VALUES (
+            #{nodeId}, #{notifyChannels}, #{notifyTarget}, #{notifyPersons}, #{notifyTpl}, #{notifyRemark}
+            , #{crteTime}, #{updtTime}
         )
     </insert>
 
     <!-- ==================== 条件节点配置 ==================== -->
 
-    <!-- 删除指定版本的条件配置。 -->
+    <!-- 删除指定版本的条件配置 -->
     <delete id="deleteConditionConfigByVersionId">
         DELETE FROM wf_node_condition_config
         WHERE node_id IN (SELECT id FROM wf_flow_node WHERE version_id = #{versionId})
     </delete>
 
-    <!-- 新建条件配置。 -->
+    <!-- 新建条件配置 -->
     <insert id="addConditionConfig" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO wf_node_condition_config (node_id, condition_remark, crte_time, updt_time)
-        VALUES (
-                #{nodeId}
-                ,#{conditionRemark}
-                ,#{crteTime}
-                ,#{updtTime}
+        INSERT INTO wf_node_condition_config (
+            node_id, condition_remark, crte_time, updt_time
+        ) VALUES (
+            #{nodeId}, #{conditionRemark}, #{crteTime}, #{updtTime}
         )</insert>
 
     <!-- ==================== 流程连线 ==================== -->
 
-    <!-- 删除指定版本的流程连线。 -->
+    <!-- 删除指定版本的流程连线 -->
     <delete id="deleteFlowEdgeByVersionId">
         DELETE FROM wf_flow_edge WHERE version_id = #{versionId}
     </delete>
 
-    <!-- 新建流程连线。 -->
+    <!-- 新建流程连线 -->
     <insert id="addFlowEdge" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO wf_flow_edge (version_id
-        ,flow_id
-        ,edge_id
-        ,from_node_id
-        ,to_node_id
-                                  ,label
-                                  ,route_action
-                                  ,cond_logic
-                                  ,remark
-                                  ,crte_time
-                                  ,updt_time)
-        VALUES (
-                #{versionId}
-                ,#{flowId}
-                ,#{edgeId}
-                ,#{fromNodeId}
-                ,#{toNodeId}
-                ,#{label}
-                ,#{routeAction}
-                ,#{condLogic}
-                ,#{remark}
-                ,#{crteTime}
-                ,#{updtTime}
+        INSERT INTO wf_flow_edge (
+            version_id, flow_id, edge_id, from_node_id, to_node_id, label
+            , route_action, cond_logic, remark, crte_time, updt_time
+        ) VALUES (
+            #{versionId}, #{flowId}, #{edgeId}, #{fromNodeId}, #{toNodeId}, #{label}
+            , #{routeAction}, #{condLogic}, #{remark}, #{crteTime}, #{updtTime}
         )
     </insert>
 
     <!-- ==================== 连线条件规则 ==================== -->
 
-    <!-- 删除指定版本的连线条件规则。 -->
+    <!-- 删除指定版本的连线条件规则 -->
     <delete id="deleteCondRuleByVersionId">
         DELETE FROM wf_edge_cond_rule
         WHERE edge_id IN (SELECT id FROM wf_flow_edge WHERE version_id = #{versionId})
     </delete>
 
-    <!-- 新建连线条件规则。 -->
+    <!-- 新建连线条件规则 -->
     <insert id="addCondRule" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO wf_edge_cond_rule (edge_id, seq, field_code, operator, field_val, crte_time, updt_time)
-        VALUES (
-                #{edgeId}
-                ,#{seq}
-                ,#{fieldCode}
-                ,#{operator}
-                ,#{fieldVal}
-                ,#{crteTime}
-                ,#{updtTime}
+        INSERT INTO wf_edge_cond_rule (
+            edge_id, seq, field_code, operator, field_val
+            , crte_time, updt_time
+        ) VALUES (
+            #{edgeId}, #{seq}, #{fieldCode}, #{operator}, #{fieldVal}
+            , #{crteTime}, #{updtTime}
         )</insert>
 
     <!-- ==================== 角色字典 ==================== -->
 
-    <!-- 查询角色字典。 -->
+    <!-- 查询角色字典 -->
     <select id="queryRoleDictList" resultType="com.znty.rrs.entity.bo.RoleDictBo">
         SELECT * FROM wf_role_dict WHERE is_active = 1 ORDER BY sort_order</select>
 
     <!-- 查询所有角色 -->
     <select id="queryRoleList" resultType="com.znty.rrs.entity.bo.RoleBo">
         SELECT id
-               ,name
-               ,parent_id
-               ,NULL AS sort_order
-               ,enable
-               ,ts AS crte_time
-               ,ts AS updt_time
+               , name
+               , parent_id
+               , NULL AS sort_order
+               , enable
+               , ts AS crte_time
+               , ts AS updt_time
         FROM ais_inv_analysis.t_sys_role
         WHERE enable = 1
         ORDER BY id ASC
@@ -483,12 +401,12 @@
     <!-- 查询用户列表 -->
     <select id="queryUserList" resultType="com.znty.rrs.entity.bo.UserBo">
         SELECT u.id
-               ,u.name
-               ,u.user_name
-               ,u.dr
-               ,u.ts AS crte_time
-               ,u.ts AS updt_time
-               ,GROUP_CONCAT(DISTINCT r.name ORDER BY r.id ASC SEPARATOR '、') AS roleName
+               , u.name
+               , u.user_name
+               , u.dr
+               , u.ts AS crte_time
+               , u.ts AS updt_time
+               , GROUP_CONCAT(DISTINCT r.name ORDER BY r.id ASC SEPARATOR '、') AS roleName
         FROM ais_inv_analysis.t_sys_user u
         LEFT JOIN ais_inv_analysis.t_sys_user_role ur ON ur.user_id = u.id
         LEFT JOIN ais_inv_analysis.t_sys_role r ON r.id = ur.role_id AND r.enable = 1
@@ -507,360 +425,153 @@
             AND (u.name LIKE CONCAT('%', #{keyword}, '%') OR u.user_name LIKE CONCAT('%', #{keyword}, '%'))
         </if>
         GROUP BY u.id
-                 ,u.name
-                 ,u.user_name
-                 ,u.dr
-                 ,u.ts
+                 , u.name
+                 , u.user_name
+                 , u.dr
+                 , u.ts
         ORDER BY u.id ASC
     </select>
 
     <!-- ==================== 事件表 INSERT ==================== -->
 
-    <!-- 新建流程定义事件。 -->
+    <!-- 新建流程定义事件 -->
     <insert id="addFlowDefinitionEvt" useGeneratedKeys="true" keyProperty="evtId">
-        INSERT INTO wf_flow_definition_evt (id
-        ,name
-        ,flow_key
-        ,category
-        ,description
-        ,remark
-        ,status
-        ,created_by
-        ,updated_by
-        ,is_deleted
-        ,crte_time
-        ,updt_time
-        ,opter_id
-        ,opt_time
-        ,oprt_type)
-        VALUES (
-        #{id}
-        ,#{name}
-        ,#{flowKey}
-        ,#{category}
-        ,#{description}
-        ,#{remark}
-        ,#{status}
-        ,#{createdBy}
-        ,#{updatedBy}
-        ,#{isDeleted}
-        ,#{crteTime}
-        ,#{updtTime}
-        ,#{opterId}
-        ,#{optTime}
-        ,#{oprtType}
+        INSERT INTO wf_flow_definition_evt (
+            id, name, flow_key, category, description, remark
+            , status, created_by, updated_by, is_deleted, crte_time, updt_time
+            , opter_id, opt_time, oprt_type
+        ) VALUES (
+            #{id}, #{name}, #{flowKey}, #{category}, #{description}, #{remark}
+            , #{status}, #{createdBy}, #{updatedBy}, #{isDeleted}, #{crteTime}, #{updtTime}
+            , #{opterId}, #{optTime}, #{oprtType}
         )
     </insert>
 
-    <!-- 新建流程版本事件。 -->
+    <!-- 新建流程版本事件 -->
     <insert id="addFlowVersionEvt" useGeneratedKeys="true" keyProperty="evtId">
-        INSERT INTO wf_flow_version_evt (id
-        ,flow_id
-        ,flow_key
-        ,ver_num
-        ,status
-        ,publish_note
-        ,canvas_nodes
-        ,canvas_edges
-        ,canvas_pan_x
-        ,canvas_pan_y
-        ,canvas_zoom
-        ,published_by
-        ,published_time
-        ,created_by
-        ,crte_time
-        ,updt_time
-        ,opter_id
-        ,opt_time
-        ,oprt_type)
-        VALUES (
-        #{id}
-        ,#{flowId}
-        ,#{flowKey}
-        ,#{verNum}
-        ,#{status}
-        ,#{publishNote}
-        ,#{canvasNodes}
-        ,#{canvasEdges}
-        ,#{canvasPanX}
-        ,#{canvasPanY}
-        ,#{canvasZoom}
-        ,#{publishedBy}
-        ,#{publishedTime}
-        ,#{createdBy}
-        ,#{crteTime}
-        ,#{updtTime}
-        ,#{opterId}
-        ,#{optTime}
-        ,#{oprtType}
+        INSERT INTO wf_flow_version_evt (
+            id, flow_id, flow_key, ver_num, status, publish_note
+            , canvas_nodes, canvas_edges, canvas_pan_x, canvas_pan_y, canvas_zoom, published_by
+            , published_time, created_by, crte_time, updt_time, opter_id
+            , opt_time, oprt_type
+        ) VALUES (
+            #{id}, #{flowId}, #{flowKey}, #{verNum}, #{status}, #{publishNote}
+            , #{canvasNodes}, #{canvasEdges}, #{canvasPanX}, #{canvasPanY}, #{canvasZoom}, #{publishedBy}
+            , #{publishedTime}, #{createdBy}, #{crteTime}, #{updtTime}, #{opterId}
+            , #{optTime}, #{oprtType}
         )
     </insert>
 
-    <!-- 新建流程节点事件。 -->
+    <!-- 新建流程节点事件 -->
     <insert id="addFlowNodeEvt" useGeneratedKeys="true" keyProperty="evtId">
-        INSERT INTO wf_flow_node_evt (id
-        ,version_id
-        ,flow_id
-        ,node_id
-        ,node_type
-        ,label
-        ,shape
-        ,pos_x
-        ,pos_y
-        ,sub_label
-        ,sort_order
-        ,crte_time
-        ,updt_time
-        ,opter_id
-        ,opt_time
-        ,oprt_type)
-        VALUES (
-        #{id}
-        ,#{versionId}
-        ,#{flowId}
-        ,#{nodeId}
-        ,#{nodeType}
-        ,#{label}
-        ,#{shape}
-        ,#{posX}
-        ,#{posY}
-        ,#{subLabel}
-        ,#{sortOrder}
-        ,#{crteTime}
-        ,#{updtTime}
-        ,#{opterId}
-        ,#{optTime}
-        ,#{oprtType}
+        INSERT INTO wf_flow_node_evt (
+            id, version_id, flow_id, node_id, node_type, label
+            , shape, pos_x, pos_y, sub_label, sort_order, crte_time
+            , updt_time, opter_id, opt_time, oprt_type
+        ) VALUES (
+            #{id}, #{versionId}, #{flowId}, #{nodeId}, #{nodeType}, #{label}
+            , #{shape}, #{posX}, #{posY}, #{subLabel}, #{sortOrder}, #{crteTime}
+            , #{updtTime}, #{opterId}, #{optTime}, #{oprtType}
         )
     </insert>
 
-    <!-- 新建审批配置事件。 -->
+    <!-- 新建审批配置事件 -->
     <insert id="addApprovalConfigEvt" useGeneratedKeys="true" keyProperty="evtId">
-        INSERT INTO wf_node_approval_config_evt (id
-        ,node_id
-        ,approval_strategy
-        ,approval_remark
-        ,crte_time
-        ,updt_time
-        ,opter_id
-        ,opt_time
-        ,oprt_type)
-        VALUES (
-        #{id}
-        ,#{nodeId}
-        ,#{approvalStrategy}
-        ,#{approvalRemark}
-        ,#{crteTime}
-        ,#{updtTime}
-        ,#{opterId}
-        ,#{optTime}
-        ,#{oprtType}
+        INSERT INTO wf_node_approval_config_evt (
+            id, node_id, approval_strategy, approval_remark, crte_time, updt_time
+            , opter_id, opt_time, oprt_type
+        ) VALUES (
+            #{id}, #{nodeId}, #{approvalStrategy}, #{approvalRemark}, #{crteTime}, #{updtTime}
+            , #{opterId}, #{optTime}, #{oprtType}
         )
     </insert>
 
     <!-- 新增审批处理人明细事件 -->
     <insert id="addApprovalHandlerEvt" useGeneratedKeys="true" keyProperty="evtId">
-        INSERT INTO wf_node_approval_handler_evt (id
-        ,approval_config_id
-        ,handler_type
-        ,handler_id
-        ,handler_name
-        ,sort_order
-        ,crte_time
-        ,updt_time
-        ,opter_id
-        ,opt_time
-        ,oprt_type)
-        VALUES (
-        #{id}
-        ,#{approvalConfigId}
-        ,#{handlerType}
-        ,#{handlerId}
-        ,#{handlerName}
-        ,#{sortOrder}
-        ,#{crteTime}
-        ,#{updtTime}
-        ,#{opterId}
-        ,#{optTime}
-        ,#{oprtType}
+        INSERT INTO wf_node_approval_handler_evt (
+            id, approval_config_id, handler_type, handler_id, handler_name, sort_order
+            , crte_time, updt_time, opter_id, opt_time, oprt_type
+        ) VALUES (
+            #{id}, #{approvalConfigId}, #{handlerType}, #{handlerId}, #{handlerName}, #{sortOrder}
+            , #{crteTime}, #{updtTime}, #{opterId}, #{optTime}, #{oprtType}
         )
     </insert>
 
-    <!-- 新建自动任务配置事件。 -->
+    <!-- 新建自动任务配置事件 -->
     <insert id="addAutoConfigEvt" useGeneratedKeys="true" keyProperty="evtId">
-        INSERT INTO wf_node_auto_config_evt (id
-        ,node_id
-        ,task_seq
-        ,task_code
-        ,auto_remark
-        ,crte_time
-        ,updt_time
-        ,opter_id
-        ,opt_time
-        ,oprt_type)
-        VALUES (
-        #{id}
-        ,#{nodeId}
-        ,#{taskSeq}
-        ,#{taskCode}
-        ,#{autoRemark}
-        ,#{crteTime}
-        ,#{updtTime}
-        ,#{opterId}
-        ,#{optTime}
-        ,#{oprtType}
+        INSERT INTO wf_node_auto_config_evt (
+            id, node_id, task_seq, task_code, auto_remark, crte_time
+            , updt_time, opter_id, opt_time, oprt_type
+        ) VALUES (
+            #{id}, #{nodeId}, #{taskSeq}, #{taskCode}, #{autoRemark}, #{crteTime}
+            , #{updtTime}, #{opterId}, #{optTime}, #{oprtType}
         )
     </insert>
 
-    <!-- 新建通知配置事件。 -->
+    <!-- 新建通知配置事件 -->
     <insert id="addNotifyConfigEvt" useGeneratedKeys="true" keyProperty="evtId">
-        INSERT INTO wf_node_notify_config_evt (id
-        ,node_id
-        ,notify_channels
-        ,notify_target
-        ,notify_persons
-        ,notify_tpl
-        ,notify_remark
-        ,crte_time
-        ,updt_time
-        ,opter_id
-        ,opt_time
-        ,oprt_type)
-        VALUES (
-        #{id}
-        ,#{nodeId}
-        ,#{notifyChannels}
-        ,#{notifyTarget}
-        ,#{notifyPersons}
-        ,#{notifyTpl}
-        ,#{notifyRemark}
-        ,#{crteTime}
-        ,#{updtTime}
-        ,#{opterId}
-        ,#{optTime}
-        ,#{oprtType}
+        INSERT INTO wf_node_notify_config_evt (
+            id, node_id, notify_channels, notify_target, notify_persons, notify_tpl
+            , notify_remark, crte_time, updt_time, opter_id, opt_time, oprt_type
+        ) VALUES (
+            #{id}, #{nodeId}, #{notifyChannels}, #{notifyTarget}, #{notifyPersons}, #{notifyTpl}
+            , #{notifyRemark}, #{crteTime}, #{updtTime}, #{opterId}, #{optTime}, #{oprtType}
         )
     </insert>
 
-    <!-- 新建条件配置事件。 -->
+    <!-- 新建条件配置事件 -->
     <insert id="addConditionConfigEvt" useGeneratedKeys="true" keyProperty="evtId">
-        INSERT INTO wf_node_condition_config_evt (id
-        ,node_id
-        ,condition_remark
-        ,crte_time
-        ,updt_time
-        ,opter_id
-        ,opt_time
-        ,oprt_type)
-        VALUES (
-        #{id}
-        ,#{nodeId}
-        ,#{conditionRemark}
-        ,#{crteTime}
-        ,#{updtTime}
-        ,#{opterId}
-        ,#{optTime}
-        ,#{oprtType}
+        INSERT INTO wf_node_condition_config_evt (
+            id, node_id, condition_remark, crte_time, updt_time, opter_id
+            , opt_time, oprt_type
+        ) VALUES (
+            #{id}, #{nodeId}, #{conditionRemark}, #{crteTime}, #{updtTime}, #{opterId}
+            , #{optTime}, #{oprtType}
         )
     </insert>
 
-    <!-- 新建流程连线事件。 -->
+    <!-- 新建流程连线事件 -->
     <insert id="addFlowEdgeEvt" useGeneratedKeys="true" keyProperty="evtId">
-        INSERT INTO wf_flow_edge_evt (id
-        ,version_id
-        ,flow_id
-        ,edge_id
-        ,from_node_id
-        ,to_node_id
-        ,label
-        ,route_action
-        ,cond_logic
-        ,remark
-        ,crte_time
-        ,updt_time
-        ,opter_id
-        ,opt_time
-        ,oprt_type)
-        VALUES (
-        #{id}
-        ,#{versionId}
-        ,#{flowId}
-        ,#{edgeId}
-        ,#{fromNodeId}
-        ,#{toNodeId}
-        ,#{label}
-        ,#{routeAction}
-        ,#{condLogic}
-        ,#{remark}
-        ,#{crteTime}
-        ,#{updtTime}
-        ,#{opterId}
-        ,#{optTime}
-        ,#{oprtType}
+        INSERT INTO wf_flow_edge_evt (
+            id, version_id, flow_id, edge_id, from_node_id, to_node_id
+            , label, route_action, cond_logic, remark, crte_time, updt_time
+            , opter_id, opt_time, oprt_type
+        ) VALUES (
+            #{id}, #{versionId}, #{flowId}, #{edgeId}, #{fromNodeId}, #{toNodeId}
+            , #{label}, #{routeAction}, #{condLogic}, #{remark}, #{crteTime}, #{updtTime}
+            , #{opterId}, #{optTime}, #{oprtType}
         )
     </insert>
 
-    <!-- 新建连线条件规则事件。 -->
+    <!-- 新建连线条件规则事件 -->
     <insert id="addCondRuleEvt" useGeneratedKeys="true" keyProperty="evtId">
-        INSERT INTO wf_edge_cond_rule_evt (id
-        ,edge_id
-        ,seq
-        ,field_code
-        ,operator
-        ,field_val
-        ,crte_time
-        ,updt_time
-        ,opter_id
-        ,opt_time
-        ,oprt_type)
-        VALUES (
-        #{id}
-        ,#{edgeId}
-        ,#{seq}
-        ,#{fieldCode}
-        ,#{operator}
-        ,#{fieldVal}
-        ,#{crteTime}
-        ,#{updtTime}
-        ,#{opterId}
-        ,#{optTime}
-        ,#{oprtType}
+        INSERT INTO wf_edge_cond_rule_evt (
+            id, edge_id, seq, field_code, operator, field_val
+            , crte_time, updt_time, opter_id, opt_time, oprt_type
+        ) VALUES (
+            #{id}, #{edgeId}, #{seq}, #{fieldCode}, #{operator}, #{fieldVal}
+            , #{crteTime}, #{updtTime}, #{opterId}, #{optTime}, #{oprtType}
         )
     </insert>
 
-    <!-- 新建角色字典事件。 -->
+    <!-- 新建角色字典事件 -->
     <insert id="addRoleDictEvt" useGeneratedKeys="true" keyProperty="evtId">
-        INSERT INTO wf_role_dict_evt (id
-        ,role_code
-        ,role_name
-        ,sort_order
-        ,is_active
-        ,crte_time
-        ,updt_time
-        ,opter_id
-        ,opt_time
-        ,oprt_type)
-        VALUES (
-        #{id}
-        ,#{roleCode}
-        ,#{roleName}
-        ,#{sortOrder}
-        ,#{isActive}
-        ,#{crteTime}
-        ,#{updtTime}
-        ,#{opterId}
-        ,#{optTime}
-        ,#{oprtType}
+        INSERT INTO wf_role_dict_evt (
+            id, role_code, role_name, sort_order, is_active, crte_time
+            , updt_time, opter_id, opt_time, oprt_type
+        ) VALUES (
+            #{id}, #{roleCode}, #{roleName}, #{sortOrder}, #{isActive}, #{crteTime}
+            , #{updtTime}, #{opterId}, #{optTime}, #{oprtType}
         )
     </insert>
 
     <!-- ==================== 归一化表 SELECT（用于事件记录：捕获删除前的旧行） ==================== -->
 
-    <!-- 查询指定版本的流程节点列表。 -->
+    <!-- 查询指定版本的流程节点列表 -->
     <select id="queryFlowNodeListByVersionId" resultType="com.znty.rrs.entity.bo.FlowNodeBo">
         SELECT * FROM wf_flow_node WHERE version_id = #{versionId}</select>
 
-    <!-- 查询指定版本的审批配置列表。 -->
+    <!-- 查询指定版本的审批配置列表 -->
     <select id="queryApprovalConfigListByVersionId" resultType="com.znty.rrs.entity.bo.NodeApprovalConfigBo">
         SELECT c.* FROM wf_node_approval_config c
         INNER JOIN wf_flow_node n ON n.id = c.node_id
@@ -875,36 +586,36 @@
         INNER JOIN wf_flow_node n ON n.id = c.node_id
         WHERE n.version_id = #{versionId}
         ORDER BY h.approval_config_id ASC
-                 ,h.sort_order ASC
-                 ,h.id ASC
+                 , h.sort_order ASC
+                 , h.id ASC
     </select>
 
-    <!-- 查询指定版本的自动任务配置列表。 -->
+    <!-- 查询指定版本的自动任务配置列表 -->
     <select id="queryAutoConfigListByVersionId" resultType="com.znty.rrs.entity.bo.NodeAutoConfigBo">
         SELECT c.* FROM wf_node_auto_config c
         INNER JOIN wf_flow_node n ON n.id = c.node_id
         WHERE n.version_id = #{versionId}
     </select>
 
-    <!-- 查询指定版本的通知配置列表。 -->
+    <!-- 查询指定版本的通知配置列表 -->
     <select id="queryNotifyConfigListByVersionId" resultType="com.znty.rrs.entity.bo.NodeNotifyConfigBo">
         SELECT c.* FROM wf_node_notify_config c
         INNER JOIN wf_flow_node n ON n.id = c.node_id
         WHERE n.version_id = #{versionId}
     </select>
 
-    <!-- 查询指定版本的条件配置列表。 -->
+    <!-- 查询指定版本的条件配置列表 -->
     <select id="queryConditionConfigListByVersionId" resultType="com.znty.rrs.entity.bo.NodeConditionConfigBo">
         SELECT c.* FROM wf_node_condition_config c
         INNER JOIN wf_flow_node n ON n.id = c.node_id
         WHERE n.version_id = #{versionId}
     </select>
 
-    <!-- 查询指定版本的流程连线列表。 -->
+    <!-- 查询指定版本的流程连线列表 -->
     <select id="queryFlowEdgeListByVersionId" resultType="com.znty.rrs.entity.bo.FlowEdgeBo">
         SELECT * FROM wf_flow_edge WHERE version_id = #{versionId}</select>
 
-    <!-- 查询指定版本的连线条件规则列表。 -->
+    <!-- 查询指定版本的连线条件规则列表 -->
     <select id="queryCondRuleListByVersionId" resultType="com.znty.rrs.entity.bo.EdgeCondRuleBo">
         SELECT r.* FROM wf_edge_cond_rule r
         INNER JOIN wf_flow_edge e ON e.id = r.edge_id

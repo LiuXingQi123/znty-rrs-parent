@@ -1,21 +1,25 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.rrs.mapper.CompanyPoolQueryMapper">
-    <!-- 主体池查询 mapper，对应表：ip_pool_status（证券池状态），联查 dict_security_type 过滤 category_type='company' 的主体类型，提供发行主体池分页查询功能 -->
+    <!--
+        主体池查询 Mapper
+        从证券池状态表（ip_pool_status）读取当前在池记录
+        联查证券类型字典（dict_security_type），按 category_type = 'company' 筛选发行主体并分页
+    -->
 
     <!-- 分页查询主体池列表（通过 dict_security_type 过滤 category_type='company'） -->
     <select id="queryCompanyPoolPage" resultType="com.znty.rrs.entity.companypool.CompanyPoolQueryDto">
         SELECT ips.id
-               ,ips.security_code
-               ,ips.security_short_name
+               , ips.security_code
+               , ips.security_short_name
                <!-- 主体简介按 COMP_ID 取统一社会信用代码 -->
-               ,wci.REGISTERNUMBER AS registerNumber
-               ,ips.adjuster_name
-               ,ips.entry_time
-               ,ips.target_pool_id
-               ,ips.adjust_log_id
-               ,ips.adjust_batch_no
-               ,p.pool_name AS target_pool_name
+               , wci.REGISTERNUMBER
+               , ips.adjuster_name
+               , ips.entry_time
+               , ips.target_pool_id
+               , ips.adjust_log_id
+               , ips.adjust_batch_no
+               , p.pool_name AS target_pool_name
         FROM ip_pool_status ips
         INNER JOIN dict_security_type dst ON ips.security_type = dst.security_type
                                              AND dst.is_deleted = 0
@@ -52,7 +56,7 @@
                 AND wci.REGISTERNUMBER LIKE CONCAT(#{registerNumber}, '%')
             </if>
             <if test="entryTimeStart != null and entryTimeStart != ''">
-                AND ips.entry_time &gt;= #{entryTimeStart}
+                AND ips.entry_time >= #{entryTimeStart}
             </if>
             <if test="entryTimeEnd != null and entryTimeEnd != ''">
                 AND ips.entry_time &lt;= #{entryTimeEnd}
@@ -62,7 +66,7 @@
             </if>
         </where>
         ORDER BY ips.entry_time DESC
-                 ,ips.id DESC
+                 , ips.id DESC
     </select>
 
 </mapper>

@@ -2,19 +2,24 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.rrs.mapper.CommonMapper">
-    <!-- 公共查询 mapper，提供跨业务页面复用的基础数据查询 -->
+    <!--
+        公共数据查询 Mapper
+        从投资池配置（ip_investment_pool）读取分层树和完整路径
+        联查 Wind 发行关系及评级数据，查询债券关联主体的内外评
+    -->
 
     <!-- 查询投资池树节点列表，同时生成投资池全路径名称 -->
     <select id="queryPoolTreeList" resultType="com.znty.rrs.entity.common.PoolTreeDto">
+        <!-- 从未删除的顶层池递归读取子池，按池类型条件筛选并拼接全路径名称和排序路径 -->
         WITH RECURSIVE pool_tree AS (
             SELECT id
-                   ,parent_id
-                   ,pool_name
-                   ,pool_type
-                   ,pool_code
-                   ,variety_codes
-                   ,CAST(pool_name AS CHAR(2000)) AS pool_full_name
-                   ,CAST(LPAD(COALESCE(outer_sort, 0), 10, '0') AS CHAR(2000)) AS sort_path
+                   , parent_id
+                   , pool_name
+                   , pool_type
+                   , pool_code
+                   , variety_codes
+                   , CAST(pool_name AS CHAR(2000)) AS pool_full_name
+                   , CAST(LPAD(COALESCE(outer_sort, 0), 10, '0') AS CHAR(2000)) AS sort_path
             FROM ip_investment_pool
             WHERE is_deleted = 0
               AND parent_id IS NULL
@@ -32,13 +37,13 @@
             </if>
             UNION ALL
             SELECT child.id
-                   ,child.parent_id
-                   ,child.pool_name
-                   ,child.pool_type
-                   ,child.pool_code
-                   ,child.variety_codes
-                   ,CONCAT(parent.pool_full_name, '/', child.pool_name) AS pool_full_name
-                   ,CONCAT(parent.sort_path, '/', LPAD(COALESCE(child.inner_sort, 0), 10, '0')) AS sort_path
+                   , child.parent_id
+                   , child.pool_name
+                   , child.pool_type
+                   , child.pool_code
+                   , child.variety_codes
+                   , CONCAT(parent.pool_full_name, '/', child.pool_name) AS pool_full_name
+                   , CONCAT(parent.sort_path, '/', LPAD(COALESCE(child.inner_sort, 0), 10, '0')) AS sort_path
             FROM ip_investment_pool child
             INNER JOIN pool_tree parent ON parent.id = child.parent_id
             WHERE child.is_deleted = 0
@@ -55,33 +60,34 @@
                 </foreach>
             </if>
         )
+        <!-- 返回符合池类型条件的投资池节点，按层级排序路径和池 ID 排序 -->
         SELECT id
-               ,parent_id
-               ,pool_name
-               ,pool_full_name
-               ,pool_type
-               ,pool_code
-               ,variety_codes
+               , parent_id
+               , pool_name
+               , pool_full_name
+               , pool_type
+               , pool_code
+               , variety_codes
         FROM pool_tree
         ORDER BY sort_path ASC
-                 ,id ASC
+                 , id ASC
     </select>
 
     <!-- 批量查询证券的四类关系主体及其最新内评；同一代码存在多条评分时按 ts 取最新记录 -->
     <select id="queryGuarantorGradeList" resultType="com.znty.rrs.entity.common.GuarantorGradeDto">
-        <!-- 从 Wind 债券发行主体关系表读取四类候选；同一主体兼多类关系时按类型分别返回。 -->
+        <!-- 从 Wind 债券发行主体关系表读取四类候选；同一主体兼多类关系时按类型分别返回 -->
         WITH source_guarantor AS (
             SELECT issuer.s_info_windcode AS security_code
-                   ,issuer.s_info_compcode AS windcode
-                   ,issuer.s_info_compname AS windname
-                   ,issuer.s_info_typecode AS guarantor_type_code
-                   ,CASE issuer.s_info_typecode
+                   , issuer.s_info_compcode AS windcode
+                   , issuer.s_info_compname AS windname
+                   , issuer.s_info_typecode AS guarantor_type_code
+                   , CASE issuer.s_info_typecode
                         WHEN 115004000 THEN 1
                         WHEN 115203000 THEN 2
                         WHEN 115200000 THEN 3
                         WHEN 115201000 THEN 4
                     END AS guarantor_sort_no
-                   ,ROW_NUMBER() OVER (
+                   , ROW_NUMBER() OVER (
                        PARTITION BY issuer.s_info_windcode, issuer.s_info_compcode, issuer.s_info_typecode
                        ORDER BY issuer.opdate DESC
                    ) AS row_num
@@ -94,23 +100,23 @@
                   #{securityCode}
               </foreach>
         )
-        <!-- 同证券、同主体、同类型仅保留一条；兼多类关系的主体按类型各保留一行。 -->
-        ,eligible_guarantor AS (
+        <!-- 同证券、同主体、同类型仅保留一条；兼多类关系的主体按类型各保留一行 -->
+        , eligible_guarantor AS (
             SELECT security_code
-                   ,windcode
-                   ,windname
-                   ,guarantor_type_code
-                   ,guarantor_sort_no
+                   , windcode
+                   , windname
+                   , guarantor_type_code
+                   , guarantor_sort_no
             FROM source_guarantor
             WHERE row_num = 1
         )
-        <!-- 从投资分析评级视图读取候选主体内评，并按更新时间倒序编号。 -->
-        ,ranked_grade AS (
+        <!-- 从投资分析评级视图读取候选主体内评，并按更新时间倒序编号 -->
+        , ranked_grade AS (
             SELECT grade.windcode
-                   ,grade.windname
-                   ,grade.total_score
-                   ,grade.ts
-                   ,ROW_NUMBER() OVER (
+                   , grade.windname
+                   , grade.total_score
+                   , grade.ts
+                   , ROW_NUMBER() OVER (
                        PARTITION BY grade.windcode
                        ORDER BY grade.ts DESC
                    ) AS row_num
@@ -122,7 +128,7 @@
             )
         )
         <!-- 按评级日期取认可机构最新外评，评级与机构来自同一行 -->
-        ,ranked_outer_rating AS (
+        , ranked_outer_rating AS (
             SELECT rating.s_info_compcode
                    , rating.b_info_creditrating
                    , rating.b_info_creditratingagency
@@ -143,13 +149,13 @@
                   WHERE candidate.windcode = rating.s_info_compcode
               )
         )
-        <!-- 返回关系主体；无内评时评分字段为空，并保持关系优先级顺序。 -->
+        <!-- 返回关系主体；无内评时评分字段为空，并保持关系优先级顺序 -->
         SELECT eligible.security_code
-               ,eligible.windcode
-               ,COALESCE(grade.windname, eligible.windname) AS windname
-               ,eligible.guarantor_type_code
-               ,grade.total_score
-               ,grade.ts
+               , eligible.windcode
+               , COALESCE(grade.windname, eligible.windname) AS windname
+               , eligible.guarantor_type_code
+               , grade.total_score
+               , grade.ts
                , outer_rating.b_info_creditrating AS rating_bondissuer
                , outer_rating.b_info_creditratingagency AS rating_bondissuer_agency
         FROM eligible_guarantor eligible
@@ -158,8 +164,8 @@
         LEFT JOIN ranked_outer_rating outer_rating ON outer_rating.s_info_compcode = eligible.windcode
                                                    AND outer_rating.row_num = 1
         ORDER BY eligible.security_code ASC
-                 ,eligible.guarantor_sort_no ASC
-                 ,grade.ts DESC
-                 ,eligible.windcode ASC
+                 , eligible.guarantor_sort_no ASC
+                 , grade.ts DESC
+                 , eligible.windcode ASC
     </select>
 </mapper>

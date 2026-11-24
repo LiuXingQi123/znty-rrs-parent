@@ -16,17 +16,30 @@ import java.util.List;
 @Mapper
 public interface BatchSecurityPoolAdjustMapper {
 
-    /** 分页查询启用叶子投资池 */
+    /**
+     * 分页查询已启用、支持债券且无启用子池的信用债池，可按池 ID 范围筛选
+     *
+     * @param req 批量调库目标池查询条件
+     * @return 符合条件的批量调库目标池列表
+     */
     List<BatchSecurityPoolDto> queryPoolPage(BatchSecurityPoolAdjustReq req);
 
     /**
-     * 查询指定投资池当前有效在池数量（按证券类型分项）。
+     * 查询指定投资池当前有效在池数量（按证券类型分项）
      * 分类取 ip_pool_status.security_type（不经 rrs_securityinfo）；
      * typeCode：crmw / company / category_type（bond 等）/ unknown
+     *
+     * @param poolIds 投资池 ID 列表
+     * @return 符合条件的各池类型的当前在池数量列表
      */
     List<BatchPoolTypeCountDto> queryPoolCurrentCountByTypeList(@Param("poolIds") List<Long> poolIds);
 
-    /** 分页查询目标池批量调整候选证券 */
+    /**
+     * 分页查询批量调库候选券，按调入或调出方向筛选不在池或已在池的证券
+     *
+     * @param req 批量调库候选证券查询条件
+     * @return 符合条件的批量调库候选证券列表
+     */
     List<BatchSecurityCandidateDto> querySecurityPage(BatchSecurityPoolAdjustReq req);
 
     /**
@@ -39,6 +52,11 @@ public interface BatchSecurityPoolAdjustMapper {
     List<SelfSelectedRightsHolderDto> querySelfSelectedRightsHolderPage(@Param("companyCode") String companyCode,
                                                                        @Param("companyName") String companyName);
 
-    /** 查询指定投资池是否为启用叶子池 */
+    /**
+     * 查询指定投资池是否为启用叶子池
+     *
+     * @param poolId 投资池 ID
+     * @return 符合条件的目标池数量，未命中时为 0
+     */
     int queryEnabledLeafPoolCount(@Param("poolId") Long poolId);
 }

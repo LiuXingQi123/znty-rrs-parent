@@ -1,34 +1,38 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.rrs.mapper.ForbiddenPoolQueryMapper">
-    <!-- 禁投池查询 mapper，对应表：ip_pool_status（证券池状态），仅查询债券禁止库 -->
+    <!--
+        禁投池当前状态查询 Mapper
+        从池状态表（ip_pool_status）查询债券禁止库中当前有效的记录
+        联查主体简介、证券主档与类型字典，返回主体和证券列表及类型选项
+    -->
 
     <!--
       分页查询禁投池证券列表。
-      公司简介按 COMP_ID 关联主体，主体名称统一展示 COMP_NAME 全称。
+      公司简介按 COMP_ID 关联主体，主体名称统一展示 COMP_NAME 全称
     -->
     <select id="queryForbiddenPoolPage" resultType="com.znty.rrs.entity.forbiddenpoolquery.ForbiddenPoolQueryDto">
         SELECT ips.id
-               ,ips.security_code
-               ,ips.security_short_name
-               ,ips.adjuster_name
-               ,ips.entry_time
-               ,ips.target_pool_id
-               ,ips.adjust_log_id
-               ,ips.adjust_batch_no
-               ,p.pool_name AS target_pool_name
-               ,ips.security_type
-               ,dst.security_type_name
-               ,dst.category_type
-               ,COALESCE(wci.COMP_NAME, bi.issuer, ips.security_short_name) AS issuer
+               , ips.security_code
+               , ips.security_short_name
+               , ips.adjuster_name
+               , ips.entry_time
+               , ips.target_pool_id
+               , ips.adjust_log_id
+               , ips.adjust_batch_no
+               , p.pool_name AS target_pool_name
+               , ips.security_type
+               , dst.security_type_name
+               , dst.category_type
+               , COALESCE(wci.COMP_NAME, bi.issuer, ips.security_short_name) AS issuer
                <!-- 主体行取自身信用代码，债券行取发行主体信用代码 -->
-               ,COALESCE(wci.REGISTERNUMBER,
-                         (SELECT rc.REGISTERNUMBER FROM ais_inv_ods.wind_compintroduction rc
+               , COALESCE(wci.REGISTERNUMBER
+                         , (SELECT rc.REGISTERNUMBER FROM ais_inv_ods.wind_compintroduction rc
                           WHERE rc.COMP_ID = bi.issuer_code LIMIT 1)) AS registerNumber
-               ,bi.security_status
-               ,bi.maturity_date
-               ,bi.delist_date
-               ,bi.repurchase_date
+               , bi.security_status
+               , bi.maturity_date
+               , bi.delist_date
+               , bi.repurchase_date
         FROM ip_pool_status ips
         INNER JOIN ip_investment_pool p ON p.id = ips.target_pool_id
                                        AND p.is_deleted = 0
@@ -77,7 +81,7 @@
                 AND (bi.wind_code IS NULL OR bi.security_status = 'U')
             </if>
             <if test="entryTimeStart != null and entryTimeStart != ''">
-                AND ips.entry_time &gt;= #{entryTimeStart}
+                AND ips.entry_time >= #{entryTimeStart}
             </if>
             <if test="entryTimeEnd != null and entryTimeEnd != ''">
                 AND ips.entry_time &lt;= CONCAT(#{entryTimeEnd}, ' 23:59:59')
@@ -97,13 +101,13 @@
             </if>
         </where>
         ORDER BY ips.entry_time DESC
-                 ,ips.id DESC
+                 , ips.id DESC
     </select>
 
     <!-- 查询债券禁止库中出现的证券类型选项 -->
     <select id="querySecurityTypeList" resultType="com.znty.rrs.entity.common.SecurityTypeOptionDto">
         SELECT DISTINCT ips.security_type
-                       ,dst.security_type_name
+                       , dst.security_type_name
         FROM ip_pool_status ips
         INNER JOIN ip_investment_pool p ON p.id = ips.target_pool_id
                                        AND p.is_deleted = 0
@@ -121,7 +125,7 @@
               </foreach>
           </if>
         ORDER BY dst.sort_order ASC
-                 ,ips.security_type ASC
+                 , ips.security_type ASC
     </select>
 
 </mapper>

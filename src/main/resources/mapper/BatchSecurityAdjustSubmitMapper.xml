@@ -1,225 +1,79 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.rrs.mapper.BatchSecurityAdjustSubmitMapper">
+    <!--
+        证券 Excel 批量直通提交 Mapper
+        批量写入调库日志（ip_adjust_log）、审批步骤和证券快照
+        按证券和目标池结束旧生效状态，并保存直通调入的池状态（ip_pool_status）
+    -->
 
+    <!-- 批量新增日志并回填日志主键 -->
     <insert id="addAdjustLogs" useGeneratedKeys="true" keyProperty="rows.id">
-        INSERT INTO ip_adjust_log (security_code
-                                  , security_short_name
-                                  , security_type
-                                  , crmw_name
-                                  , crmw_scode
-                                  , crmw_mktcode
-                                  , crmw_stype
-                                  , adjust_type
-                                  , adjust_mode
-                                  , adjust_batch_no
-                                  , target_pool_id
-                                  , target_pool_name
-                                  , pool_type
-                                  , flow_id
-                                  , flow_key
-                                  , flow_type
-                                  , audit_status
-                                  , adjuster_id
-                                  , adjuster_name
-                                  , adjust_reason
-                                  , adjust_advice
-                                  , submit_time
-                                  , is_deleted
-                                  , crte_time
-                                  , updt_time)
-        VALUES
-        <foreach collection="rows" item="row" separator=",">
-            (#{row.securityCode}
-                   , #{row.securityShortName}
-                   , #{row.securityType}
-                   , #{row.crmwName}
-                   , #{row.crmwScode}
-                   , #{row.crmwMktcode}
-                   , #{row.crmwStype}
-                   , #{row.adjustType}
-                   , #{row.adjustMode}
-                   , #{row.adjustBatchNo}
-                   , #{row.targetPoolId}
-                   , #{row.targetPoolName}
-                   , #{row.poolType}
-                   , #{row.flowId}
-                   , #{row.flowKey}
-                   , #{row.flowType}
-                   , #{row.auditStatus}
-                   , #{row.adjusterId}
-                   , #{row.adjusterName}
-                   , #{row.adjustReason}
-                   , #{row.adjustAdvice}
-                   , COALESCE(#{row.submitTime}, NOW())
-                   , 0
-                   , NOW()
-                   , NOW())
-        </foreach>
-    </insert>
-
-    <insert id="addAdjustSteps">
-        INSERT INTO ip_adjust_step (adjust_log_id
-                                   , adjust_batch_no
-                                   , flow_node_id
-                                   , node_code
-                                   , node_label
-                                   , node_type
-                                   , approval_strategy
-                                   , sort_order
-                                   , step_status
-                                   , handler_id
-                                   , handler_name
-                                   , process_action
-                                   , process_comment
-                                   , start_time
-                                   , process_time
-                                   , crte_time
-                                   , updt_time)
-        VALUES
-        <foreach collection="rows" item="row" separator=",">
-            (#{row.adjustLogId}
-                   , #{row.adjustBatchNo}
-                   , #{row.flowNodeId}
-                   , #{row.nodeCode}
-                   , #{row.nodeLabel}
-                   , #{row.nodeType}
-                   , #{row.approvalStrategy}
-                   , #{row.sortOrder}
-                   , #{row.stepStatus}
-                   , #{row.handlerId}
-                   , #{row.handlerName}
-                   , #{row.processAction}
-                   , #{row.processComment}
-                   , #{row.startTime}
-                   , #{row.processTime}
-                   , NOW()
-                   , NOW())
-        </foreach>
-    </insert>
-
-    <insert id="addSecuritySnapshots">
-        INSERT INTO ip_adjust_security_snapshot (
-            adjust_log_id
-           , submitter_id
-           , submit_time
-           , wind_code
-           , full_name
-           , short_name
-           , issuer
-           , issuer_code
-           , issue_amountplan
-           , coupon_rate
-           , date_inright_exists
-           , carry_date
-           , maturity_date
-           , info_pledge_ratio
-           , rating_bond_agency
-           , rating_bond
-           , rating_bondissuer
-           , rating_outlook
-           , guarantor
-           , guarantor_id
-           , agency_name
-           , inner_issuer_rating
-           , security_type
-           , sec_typename
-           , date_call_exists
-           , inner_guarantor_rating
-           , date_exists
-           , date_exists_str
-           , fund_use
-           , prompt_reason
-           , analysis
-           , term_year
-           , term_day
-           , maturityembedded_desc
-           , comp_type
-           , issue_amountact
-           , date_repurchase_exists
-           , abs_flag
-           , guarant_flag
-           , guarant_type
-           , rating_bondissuer_agency
-           , agency_nameid
-           , bond_biz_type
-           , abs_originator_name
-           , abs_share_ratio
-           , expected_maturity_date
-           , legal_maturity_date
-           , abs_report_org
-           , abs_custodian
-           , company_selector
-           , extra_ind_1
-           , extra_ind_2
-           , extra_ind_3
-           , is_deleted
-           , crte_time
-           , updt_time
-        )
-        VALUES
+        INSERT INTO ip_adjust_log (
+            security_code, security_short_name, security_type, crmw_name, crmw_scode, crmw_mktcode
+            , crmw_stype, adjust_type, adjust_mode, adjust_batch_no, target_pool_id, target_pool_name
+            , pool_type, flow_id, flow_key, flow_type, audit_status, adjuster_id
+            , adjuster_name, adjust_reason, adjust_advice, submit_time, is_deleted
+            , crte_time, updt_time
+        ) VALUES
         <foreach collection="rows" item="row" separator=",">
             (
-                #{row.adjustLogId}
-               , #{row.submitterId}
-               , #{row.submitTime}
-               , #{row.windCode}
-               , #{row.fullName}
-               , #{row.shortName}
-               , #{row.issuer}
-               , #{row.issuerCode}
-               , #{row.issueAmountplan}
-               , #{row.couponRate}
-               , #{row.dateInrightExists}
-               , #{row.carryDate}
-               , #{row.maturityDate}
-               , #{row.infoPledgeRatio}
-               , #{row.ratingBondAgency}
-               , #{row.ratingBond}
-               , #{row.ratingBondissuer}
-               , #{row.ratingOutlook}
-               , #{row.guarantor}
-               , #{row.guarantorId}
-               , #{row.agencyName}
-               , #{row.innerIssuerRating}
-               , #{row.securityType}
-               , #{row.secTypename}
-               , #{row.dateCallExists}
-               , #{row.innerGuarantorRating}
-               , #{row.dateExists}
-               , #{row.dateExistsStr}
-               , #{row.fundUse}
-               , #{row.promptReason}
-               , #{row.analysis}
-               , #{row.termYear}
-               , #{row.termDay}
-               , #{row.maturityembeddedDesc}
-               , #{row.compType}
-               , #{row.issueAmountact}
-               , #{row.dateRepurchaseExists}
-               , #{row.absFlag}
-               , #{row.guarantFlag}
-               , #{row.guarantType}
-               , #{row.ratingBondissuerAgency}
-               , #{row.agencyNameid}
-               , #{row.bondBizType}
-               , #{row.absOriginatorName}
-               , #{row.absShareRatio}
-               , #{row.expectedMaturityDate}
-               , #{row.legalMaturityDate}
-               , #{row.absReportOrg}
-               , #{row.absCustodian}
-               , #{row.companySelector}
-               , #{row.extraInd1}
-               , #{row.extraInd2}
-               , #{row.extraInd3}
-               , #{row.isDeleted}
-               , #{row.crteTime}
-               , #{row.updtTime}
+                #{row.securityCode}, #{row.securityShortName}, #{row.securityType}, #{row.crmwName}, #{row.crmwScode}, #{row.crmwMktcode}
+                , #{row.crmwStype}, #{row.adjustType}, #{row.adjustMode}, #{row.adjustBatchNo}, #{row.targetPoolId}, #{row.targetPoolName}
+                , #{row.poolType}, #{row.flowId}, #{row.flowKey}, #{row.flowType}, #{row.auditStatus}, #{row.adjusterId}
+                , #{row.adjusterName}, #{row.adjustReason}, #{row.adjustAdvice}, COALESCE(#{row.submitTime}, NOW()), 0
+                , NOW(), NOW()
             )
         </foreach>
     </insert>
 
+    <!-- 批量新增初始流程步骤 -->
+    <insert id="addAdjustSteps">
+        INSERT INTO ip_adjust_step (
+            adjust_log_id, adjust_batch_no, flow_node_id, node_code, node_label, node_type
+            , approval_strategy, sort_order, step_status, handler_id, handler_name, process_action
+            , process_comment, start_time, process_time, crte_time, updt_time
+        ) VALUES
+        <foreach collection="rows" item="row" separator=",">
+            (
+                #{row.adjustLogId}, #{row.adjustBatchNo}, #{row.flowNodeId}, #{row.nodeCode}, #{row.nodeLabel}, #{row.nodeType}
+                , #{row.approvalStrategy}, #{row.sortOrder}, #{row.stepStatus}, #{row.handlerId}, #{row.handlerName}, #{row.processAction}
+                , #{row.processComment}, #{row.startTime}, #{row.processTime}, NOW(), NOW()
+            )
+        </foreach>
+    </insert>
+
+    <!-- 批量新增证券申请快照 -->
+    <insert id="addSecuritySnapshots">
+        INSERT INTO ip_adjust_security_snapshot (
+            adjust_log_id, submitter_id, submit_time, wind_code, full_name, short_name
+            , issuer, issuer_code, issue_amountplan, coupon_rate, date_inright_exists, carry_date
+            , maturity_date, info_pledge_ratio, rating_bond_agency, rating_bond, rating_bondissuer
+            , rating_outlook, guarantor, guarantor_id, agency_name, inner_issuer_rating, security_type
+            , sec_typename, date_call_exists, inner_guarantor_rating, date_exists, date_exists_str, fund_use
+            , prompt_reason, analysis, term_year, term_day, maturityembedded_desc, comp_type
+            , issue_amountact, date_repurchase_exists, abs_flag, guarant_flag, guarant_type
+            , rating_bondissuer_agency, agency_nameid, bond_biz_type, abs_originator_name, abs_share_ratio
+            , expected_maturity_date, legal_maturity_date, abs_report_org, abs_custodian, company_selector
+            , extra_ind_1, extra_ind_2, extra_ind_3, is_deleted, crte_time, updt_time
+        ) VALUES
+        <foreach collection="rows" item="row" separator=",">
+            (
+                #{row.adjustLogId}, #{row.submitterId}, #{row.submitTime}, #{row.windCode}, #{row.fullName}, #{row.shortName}
+                , #{row.issuer}, #{row.issuerCode}, #{row.issueAmountplan}, #{row.couponRate}, #{row.dateInrightExists}, #{row.carryDate}
+                , #{row.maturityDate}, #{row.infoPledgeRatio}, #{row.ratingBondAgency}, #{row.ratingBond}, #{row.ratingBondissuer}
+                , #{row.ratingOutlook}, #{row.guarantor}, #{row.guarantorId}, #{row.agencyName}, #{row.innerIssuerRating}, #{row.securityType}
+                , #{row.secTypename}, #{row.dateCallExists}, #{row.innerGuarantorRating}, #{row.dateExists}, #{row.dateExistsStr}, #{row.fundUse}
+                , #{row.promptReason}, #{row.analysis}, #{row.termYear}, #{row.termDay}, #{row.maturityembeddedDesc}, #{row.compType}
+                , #{row.issueAmountact}, #{row.dateRepurchaseExists}, #{row.absFlag}, #{row.guarantFlag}, #{row.guarantType}
+                , #{row.ratingBondissuerAgency}, #{row.agencyNameid}, #{row.bondBizType}, #{row.absOriginatorName}, #{row.absShareRatio}
+                , #{row.expectedMaturityDate}, #{row.legalMaturityDate}, #{row.absReportOrg}, #{row.absCustodian}, #{row.companySelector}
+                , #{row.extraInd1}, #{row.extraInd2}, #{row.extraInd3}, #{row.isDeleted}, #{row.crteTime}, #{row.updtTime}
+            )
+        </foreach>
+    </insert>
+
+    <!-- 按证券代码与池组合结束旧生效状态 -->
     <update id="deletePoolStatusesSoft">
         UPDATE ip_pool_status
         SET is_deleted = 1
@@ -232,63 +86,23 @@
         </foreach>
     </update>
 
+    <!-- 批量新增调入生效状态 -->
     <insert id="addPoolStatuses">
-        INSERT INTO ip_pool_status (security_code
-                                  , security_short_name
-                                  , security_type
-                                  , crmw_name
-                                  , crmw_scode
-                                  , crmw_mktcode
-                                  , crmw_stype
-                                  , adjust_type
-                                  , adjust_mode
-                                  , adjust_batch_no
-                                  , adjust_log_id
-                                  , target_pool_id
-                                  , target_pool_name
-                                  , pool_type
-                                  , flow_id
-                                  , flow_key
-                                  , flow_type
-                                  , audit_status
-                                  , adjuster_id
-                                  , adjuster_name
-                                  , adjust_reason
-                                  , adjust_advice
-                                  , submit_time
-                                  , entry_time
-                                  , is_deleted
-                                  , crte_time
-                                  , updt_time)
-        VALUES
+        INSERT INTO ip_pool_status (
+            security_code, security_short_name, security_type, crmw_name, crmw_scode, crmw_mktcode
+            , crmw_stype, adjust_type, adjust_mode, adjust_batch_no, adjust_log_id, target_pool_id
+            , target_pool_name, pool_type, flow_id, flow_key, flow_type, audit_status
+            , adjuster_id, adjuster_name, adjust_reason, adjust_advice, submit_time, entry_time
+            , is_deleted, crte_time, updt_time
+        ) VALUES
         <foreach collection="rows" item="row" separator=",">
-            (#{row.securityCode}
-                   , #{row.securityShortName}
-                   , #{row.securityType}
-                   , #{row.crmwName}
-                   , #{row.crmwScode}
-                   , #{row.crmwMktcode}
-                   , #{row.crmwStype}
-                   , #{row.adjustType}
-                   , #{row.adjustMode}
-                   , #{row.adjustBatchNo}
-                   , #{row.adjustLogId}
-                   , #{row.targetPoolId}
-                   , #{row.targetPoolName}
-                   , #{row.poolType}
-                   , #{row.flowId}
-                   , #{row.flowKey}
-                   , #{row.flowType}
-                   , #{row.auditStatus}
-                   , #{row.adjusterId}
-                   , #{row.adjusterName}
-                   , #{row.adjustReason}
-                   , #{row.adjustAdvice}
-                   , NOW()
-                   , NOW()
-                   , 0
-                   , NOW()
-                   , NOW())
+            (
+                #{row.securityCode}, #{row.securityShortName}, #{row.securityType}, #{row.crmwName}, #{row.crmwScode}, #{row.crmwMktcode}
+                , #{row.crmwStype}, #{row.adjustType}, #{row.adjustMode}, #{row.adjustBatchNo}, #{row.adjustLogId}, #{row.targetPoolId}
+                , #{row.targetPoolName}, #{row.poolType}, #{row.flowId}, #{row.flowKey}, #{row.flowType}, #{row.auditStatus}
+                , #{row.adjusterId}, #{row.adjusterName}, #{row.adjustReason}, #{row.adjustAdvice}, NOW(), NOW()
+                , 0, NOW(), NOW()
+            )
         </foreach>
     </insert>
 

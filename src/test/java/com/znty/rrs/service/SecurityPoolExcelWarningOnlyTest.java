@@ -75,7 +75,7 @@ public class SecurityPoolExcelWarningOnlyTest {
         req.setItems(Collections.singletonList(item));
 
         assertThat(f.service.addExcelImportAdjustLogList(Collections.singletonList(req))).hasSize(1);
-        verify(f.pools, never()).lockPoolByIdsList(any());
+        verify(f.pools, never()).queryExistingPoolIdList(any());
         verify(batch).querySecurities(codes);
         verify(batch).queryActiveStates(codes);
         verify(f.mapper, never()).querySecurityBoByCode(anyString());

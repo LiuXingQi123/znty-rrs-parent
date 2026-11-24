@@ -16,6 +16,7 @@ public interface CompanyPoolQueryMapper {
      * 分页查询主体池中的主体列表（security_type 属于公司主体大类）
      *
      * @param req 查询条件
+     * @return 符合条件的主体在池记录列表
      */
     List<CompanyPoolQueryDto> queryCompanyPoolPage(CompanyPoolQueryReq req);
 }
