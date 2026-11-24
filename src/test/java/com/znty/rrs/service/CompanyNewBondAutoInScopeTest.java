@@ -72,7 +72,7 @@ public class CompanyNewBondAutoInScopeTest {
     /** 主券候选 SQL 返回原始到期日，由 Java 按本轮截止日判断 */
     @Test
     public void newBondSqlShouldReadMaturityWithoutApplyingTheCutoff() throws Exception {
-        assertThat(render(CompanyBondSyncPolicy.newBondInboundScope())).contains("bond.maturity_date")
+        assertThat(render(CompanyBondSyncPolicy.newBondInboundScope())).contains("WHERE bond.security_status != 'D'")
                 .doesNotContain("TIMESTAMPADD", "insufficient_maturity", "excel_company_actions", "ROW_NUMBER");
     }
 

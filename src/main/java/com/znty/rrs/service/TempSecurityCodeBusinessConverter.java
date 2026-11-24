@@ -176,7 +176,7 @@ public class TempSecurityCodeBusinessConverter {
         for (String code : codes) {
             SecurityInfoBo member = securityPoolAdjustMapper.querySecurityBoByCode(code);
             if (member == null || member.getSecurityType() == null || member.getSecurityType().trim().isEmpty()
-                    || member.getSecurityStatus() == null || member.getSecuritySource() == null
+                    || member.getSecuritySource() == null
                     || "temporary".equals(member.getSecuritySource())
                     || (!plan.singleCode && "D".equals(member.getSecurityStatus()))
                     || "crmw".equals(member.getSecurityType()) || "company".equals(member.getSecurityType())) {

@@ -25,6 +25,7 @@
                ,COALESCE(wci.REGISTERNUMBER,
                          (SELECT rc.REGISTERNUMBER FROM ais_inv_ods.wind_compintroduction rc
                           WHERE rc.COMP_ID = bi.issuer_code LIMIT 1)) AS registerNumber
+               ,bi.security_status
                ,bi.maturity_date
                ,bi.delist_date
                ,bi.repurchase_date
@@ -65,15 +66,15 @@
             </if>
             <if test="securityStatus == 'active'">
                 AND dst.category_type = 'bond'
-                AND bi.maturity_date &gt;= DATE_FORMAT(CURDATE(), '%Y%m%d')
+                AND (bi.wind_code IS NULL OR bi.security_status != 'D')
             </if>
             <if test="securityStatus == 'matured'">
                 AND dst.category_type = 'bond'
-                AND bi.maturity_date &lt; DATE_FORMAT(CURDATE(), '%Y%m%d')
+                AND bi.security_status = 'D'
             </if>
             <if test="securityStatus == 'unknown'">
                 AND dst.category_type = 'bond'
-                AND bi.maturity_date IS NULL
+                AND (bi.wind_code IS NULL OR bi.security_status = 'U')
             </if>
             <if test="entryTimeStart != null and entryTimeStart != ''">
                 AND ips.entry_time &gt;= #{entryTimeStart}

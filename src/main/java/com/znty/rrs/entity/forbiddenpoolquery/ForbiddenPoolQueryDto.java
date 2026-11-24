@@ -54,10 +54,14 @@ public class ForbiddenPoolQueryDto {
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private Date entryTime;
 
-    /** 到期日（前端用于派生证券状态：存续/到期） */
+
+    /** 证券主档状态，D 为到期 */
+    private String securityStatus;
+
+    /** 到期日，格式 yyyyMMdd */
     private String maturityDate;
 
-    /** 退市日期 */
+    /** 摘牌日（业务到期日，格式 yyyyMMdd） */
     private String delistDate;
 
     /** 行权日期（回售） */

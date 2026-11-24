@@ -61,7 +61,7 @@
               AND ips.audit_status = '20'
               AND dst.category_type != 'company'
               <if test="!includeExpired">
-                  AND (si.maturity_date IS NULL OR TRIM(si.maturity_date) = '' OR si.maturity_date &gt;= DATE_FORMAT(CURDATE(), '%Y%m%d'))
+                  AND (si.delist_date IS NULL OR TRIM(si.delist_date) = '' OR si.delist_date >= DATE_FORMAT(CURDATE(), '%Y%m%d'))
               </if>
             UNION ALL
             <!-- CRMW 当前状态：导出凭证本身，按状态表中的凭证代码输出，名称保留原回显口径 -->

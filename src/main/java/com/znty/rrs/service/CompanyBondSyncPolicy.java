@@ -33,8 +33,8 @@ public final class CompanyBondSyncPolicy {
     public static boolean isCrmwCombinationPool(InvestmentPoolBo pool) {
         return pool != null && PoolType.CRMW.getCode().equals(pool.getPoolType());
     }
-    /** 到期日按 yyyyMMdd 存储，空值沿用原有校验口径 */
-    static boolean meetsMaturity(String maturityDate, String cutoff) {
-        return maturityDate == null || maturityDate.compareTo(cutoff) >= 0;
+    /** 摘牌日按 yyyyMMdd 存储，空值沿用原有校验口径 */
+    static boolean meetsDelistCutoff(String delistDate, String cutoff) {
+        return delistDate == null || delistDate.compareTo(cutoff) >= 0;
     }
 }

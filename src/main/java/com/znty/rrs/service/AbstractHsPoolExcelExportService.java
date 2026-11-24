@@ -45,7 +45,7 @@ import java.util.Set;
  * 恒生池 Excel 定时导出公共实现
  *
  * 统一承载三个恒生池导出任务的参数解析、池范围处理、市场转换、工作簿生成和文件备份
- * 1. 全量任务按当前生效池状态导出，普通证券按任务配置决定是否排除已到期数据，CRMW 不校验到期日
+ * 1. 全量任务按当前生效池状态导出，普通证券按任务配置决定是否排除已到期数据，独立 CRMW 组合不校验摘牌日
  * 2. 增量任务按成功执行水位导出审批通过的调入、调出事件，不要求证券当前仍在池
  * 3. 所有任务按叶子池生成 Sheet，支持空池 Sheet、恒生池名称拆分和同名 Sheet 合并
  * 4. 主文件按日期分目录并使用固定名称，覆盖前归档旧版，导出过程和结果写入任务明细日志
@@ -188,7 +188,7 @@ public abstract class AbstractHsPoolExcelExportService implements RrsScheduledTa
                 detail.line("扫描条件：poolIds=" + poolScope
                         + "；ip_pool_status/ip_pool_status_crmw.is_deleted=0、audit_status=20、"
                         + "category_type!=company；普通证券包含已到期=" + includeExpiredForFullExport()
-                        + "，CRMW 不校验到期日");
+                        + "，独立 CRMW 组合不校验摘牌日");
             }
             // 2. 预留增量任务交易日过滤入口，交易日数据源和非交易日策略确认后再启用
             if (isIncrement() && shouldSkipByTradeDay(startTime)) {

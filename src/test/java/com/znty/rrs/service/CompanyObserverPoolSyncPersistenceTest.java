@@ -98,7 +98,7 @@ public class CompanyObserverPoolSyncPersistenceTest {
         jdbc.execute("CREATE TABLE ip_pool_relation (pool_id BIGINT, relation_type VARCHAR(32), relation_pool_id BIGINT, is_deleted INT)");
         jdbc.execute("CREATE TABLE dict_security_type (security_type VARCHAR(32), category_type VARCHAR(32), is_deleted INT)");
         jdbc.execute("CREATE TABLE rrs_securityinfo (wind_code VARCHAR(32), short_name VARCHAR(100), security_type VARCHAR(32),"
-                + " issuer_code VARCHAR(100), issuer VARCHAR(100), security_status VARCHAR(1), maturity_date VARCHAR(8), abs_flag INT)");
+                + " issuer_code VARCHAR(100), issuer VARCHAR(100), security_status VARCHAR(1), delist_date VARCHAR(8), abs_flag INT)");
         jdbc.update("INSERT INTO dict_security_type VALUES ('company','company',0), ('mtn','bond',0), ('abs','bond',0), ('crmw','bond',0)");
         jdbc.update("INSERT INTO ais_inv_analysis.t_inv_company VALUES (1,'C1','主体一')");
         jdbc.update("INSERT INTO ais_inv_analysis.company_observer_view (company_id,company_code,observer_type,isHo) VALUES (1,'C1','2','0')");
@@ -161,7 +161,7 @@ public class CompanyObserverPoolSyncPersistenceTest {
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ip_pool_status WHERE is_deleted=0", Integer.class)).isEqualTo(1);
     }
 
-    /** 普通债、CRMW 和当天到期债随主体切换，ABS 不参与；退市和已到期债排除；重复执行无日志。 */
+    /** 主体名单切换只处理主体状态，债券由独立任务处理，重复执行无日志 */
     @Test
     public void shouldPersistRoundTripAndRemainIdempotent() {
         assertThat(service.execute().getAffectedCount()).isEqualTo(1);
@@ -392,6 +392,7 @@ public class CompanyObserverPoolSyncPersistenceTest {
     /** 使用真实候选查询及 Java 决定撤销已失去所有主体依据的跟随状态 */
     @Test
     public void removesOnlyFollowedStatusAfterLastSourceLeaves() {
+        jdbc.update("UPDATE rrs_securityinfo SET security_status='U' WHERE wind_code='B1'");
         jdbc.update("INSERT INTO ip_pool_status (id,security_code,security_type,target_pool_id,audit_status,is_deleted,"
                 + "adjust_mode,adjust_type,adjust_batch_no,adjust_reason) VALUES"
                 + " (100,'B1','mtn',16,'20',0,'调入','自动调整','BOND1','【任务名称：补债】【主体跟随】（依据池ID：23）'),"
@@ -418,7 +419,8 @@ public class CompanyObserverPoolSyncPersistenceTest {
     public void appliesLatestExcelCompanyDecisionToBothFollowPools() {
         jdbc.execute("CREATE TABLE rrs_temp_security_code (temp_security_code VARCHAR(32), security_code VARCHAR(32),"
                 + " is_deleted INT, status VARCHAR(32))");
-        List<ScheduledSecurity> masters = batchSecurityCheckMapper.queryScheduledSecurities(Arrays.asList("B1", "OLD", "ABS1"));
+        jdbc.update("UPDATE rrs_securityinfo SET security_status='N' WHERE wind_code='B1'");
+        List<ScheduledSecurity> masters = batchSecurityCheckMapper.queryScheduledSecurities(Arrays.asList("B1", "OLD", "ABS1", "DEL"));
         assertThat(masters).filteredOn(ScheduledSecurity::isEligibleForFollow).extracting(ScheduledSecurity::getWindCode)
                 .containsExactlyInAnyOrder("B1", "OLD");
         jdbc.update("INSERT INTO ip_pool_status (security_code,security_type,target_pool_id,audit_status,is_deleted,adjust_mode) VALUES"

@@ -37,11 +37,15 @@ public class SecurityPoolQueryServiceTest {
         SecurityPoolQueryDto row = new SecurityPoolQueryDto();
         row.setSecurityShortName("测试债券"); row.setSecurityCode("100001"); row.setTargetPoolId(2L);
         row.setDateExists(new BigDecimal("9999")); row.setDateExistsStr("1年");
-        row.setSecurityStatus("active"); row.setAbsFlag(1);
+        row.setSecurityStatus("L"); row.setAbsFlag(1);
+        row.setMaturityDate("20310101");
+        row.setDelistDate("20000101");
         row.setStdCreditFlag(1);
         SecurityPoolQueryDto nonStandard = new SecurityPoolQueryDto();
         nonStandard.setStdCreditFlag(0);
+        nonStandard.setSecurityStatus("D");
         SecurityPoolQueryDto undetermined = new SecurityPoolQueryDto();
+        undetermined.setSecurityStatus("U");
         row.setEntryTime(new Date());
         when(queryMapper.querySecurityPoolPage(org.mockito.ArgumentMatchers.any(SecurityPoolQueryReq.class)))
                 .thenReturn(Arrays.asList(row, nonStandard, undetermined));
@@ -66,6 +70,12 @@ public class SecurityPoolQueryServiceTest {
             assertThat(workbook.getSheetAt(0).getSheetConditionalFormatting().getNumConditionalFormattings()).isEqualTo(7);
             assertThat(workbook.getSheetAt(0).getRow(1).getCell(0).getStringCellValue()).isEqualTo("测试债券");
             assertThat(workbook.getSheetAt(0).getRow(1).getCell(4).getStringCellValue()).isEqualTo("一级池/二级池");
+            assertThat(workbook.getSheetAt(0).getRow(0).getCell(11).getStringCellValue()).isEqualTo("到期日");
+            assertThat(workbook.getSheetAt(0).getRow(1).getCell(11).getStringCellValue()).isEqualTo("20310101");
+            assertThat(workbook.getSheetAt(0).getRow(0).getCell(14).getStringCellValue()).isEqualTo("摘牌日");
+            assertThat(workbook.getSheetAt(0).getRow(1).getCell(14).getStringCellValue()).isEqualTo("20000101");
+            assertThat(workbook.getSheetAt(0).getRow(2).getCell(13).getStringCellValue()).isEqualTo("到期");
+            assertThat(workbook.getSheetAt(0).getRow(3).getCell(13).getStringCellValue()).isEqualTo("存续");
             assertThat(workbook.getSheetAt(0).getRow(0).getCell(12).getStringCellValue()).isEqualTo("证券期限");
             assertThat(workbook.getSheetAt(0).getRow(1).getCell(12).getStringCellValue()).isEqualTo("1年");
             assertThat(workbook.getSheetAt(0).getRow(1).getCell(13).getStringCellValue()).isEqualTo("存续");

@@ -35,17 +35,29 @@ public class ScheduledTaskDemoDataTest {
         }
     }
 
-    /** 到期任务的 Demo 参数显式给出原有 1 天口径，便于直接在页面调整 */
+    /** 到期出池任务的 Demo 使用摘牌日和默认偏移天数 */
     @Test
-    public void expiredTasksShouldProvideEditableMaturityOffsetDays() throws Exception {
+    public void expiredTasksShouldConfigureDelistDateOffset() throws Exception {
         String sql = new String(Files.readAllBytes(Paths.get("sql", "rrs_scheduled_task_demo_data.sql")),
                 StandardCharsets.UTF_8);
         for (String taskCode : new String[]{"security_expired_auto_out", "crmw_expired_auto_out"}) {
             String row = Arrays.stream(sql.split("\\R"))
                     .filter(line -> line.contains("'" + taskCode + "'"))
                     .findFirst().orElse("");
-            assertThat(row).contains("\"maturityOffsetDays\":1");
-            assertThat(row).contains("maturityOffsetDays 天");
+            assertThat(row).contains("摘牌日", "maturityOffsetDays", "\"maturityOffsetDays\":1");
+        }
+    }
+
+    /** 普通债和 ABS 自动补入都保留可配置的摘牌日入池门槛 */
+    @Test
+    public void companyInboundTasksShouldKeepMinimumDaysToMaturity() throws Exception {
+        String sql = new String(Files.readAllBytes(Paths.get("sql", "rrs_scheduled_task_demo_data.sql")),
+                StandardCharsets.UTF_8);
+        for (String taskCode : new String[]{"company_inpool_bond_auto_in", "company_abs_bond_auto_in"}) {
+            String row = Arrays.stream(sql.split("\\r?\\n"))
+                    .filter(line -> line.contains("'" + taskCode + "'"))
+                    .findFirst().orElse("");
+            assertThat(row).contains("摘牌日", "\"minDaysToMaturity\":0");
         }
     }
 

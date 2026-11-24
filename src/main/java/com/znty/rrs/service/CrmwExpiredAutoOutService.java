@@ -52,10 +52,10 @@ public class CrmwExpiredAutoOutService implements RrsScheduledTask {
     private static final String PARAM_HELP =
             "参数格式：JSON 对象，例如 <code>{\"poolIds\":[18],\"maturityOffsetDays\":1}</code>；也可不填 poolIds，仅扫描投资池关系配置中绑定了本任务的池\n"
                     + PARAM_HELP_TOOLTIP_PREFIX + "数组写法（单池）：<code>{\"poolIds\":[18]}</code>\n"
-                    + PARAM_HELP_TOOLTIP_PREFIX + "配置含义：扫描 18（CRMW库）内已生效的 CRMW 组合，到期后从 18（CRMW库）自动调出\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "配置含义：扫描 18（CRMW库）内已生效的 CRMW 组合，凭证摘牌日早于截止日期时从 18（CRMW库）自动调出\n"
                     + PARAM_HELP_TOOLTIP_PREFIX + "poolIds（CRMW 出池扫描池）：可选；与投资池「关系配置 → 自动调出规则」中绑定本任务的池取并集后扫描\n"
                     + "maturityOffsetDays（到期日期偏移天数）：可选，省略默认 1；须为 int 范围内的整数，允许 0 和负数\n"
-                    + "天数含义：凭证到期日早于数据库当前日期减去该天数才出池（不含截止当天）；1=早于昨天，0=早于今天，3=早于三天前，-1=早于明天\n"
+                    + "天数含义：凭证摘牌日早于数据库当前日期减去该天数才出池（不含截止当天）；1=早于昨天，0=早于今天，3=早于三天前，-1=早于明天\n"
                     + "扫描范围：扩展参数 poolIds 与投资池关系配置绑定本任务的池取并集；并集为空时本轮失败\n"
                     + "处理规则：扫描目标池内已生效的 CRMW 组合；按 maturityOffsetDays 计算截止日期，默认 1 沿用早于昨天（T-2）的口径\n"
                     + "限制规则：当前已在目标池配置的调出限制池时，跳过该条记录\n"
@@ -148,7 +148,7 @@ public class CrmwExpiredAutoOutService implements RrsScheduledTask {
         int maturityOffsetDays = AutoAdjustPoolScopeHelper.parseMaturityOffsetDays(paramJson);
         List<Long> poolIds = poolScopeHelper.resolveUnionPoolIds(
                 paramJson, TASK_CODE, RuleType.AUTO_OUT.getCode(), detail);
-        String maturityRule = "到期日早于当前日期减去 " + maturityOffsetDays + " 天";
+        String maturityRule = "凭证摘牌日早于当前日期减去 " + maturityOffsetDays + " 天";
         infoDetail(detail, "扫描池列表 poolIds=" + poolIds);
         infoDetail(detail, "扫描条件：ip_pool_status_crmw.is_deleted=0、audit_status=20、target_pool_id IN "
                 + poolIds + "、pool_type=crmw、凭证 security_type=crmw、" + maturityRule
@@ -205,7 +205,7 @@ public class CrmwExpiredAutoOutService implements RrsScheduledTask {
                 item.setAdjusterId(AUTO_ADJUSTER_ID);
                 item.setAdjusterName(AUTO_ADJUSTER_NAME);
                 String reason = ScheduledAdjustLogHelper.appendDetails(ScheduledAdjustLogHelper.taskLabel(taskName),
-                        ScheduledAdjustLogHelper.dateDetail("凭证到期日", item.getMaturityDate()),
+                        ScheduledAdjustLogHelper.dateDetail("凭证摘牌日", item.getDelistDate()),
                         "出池口径：" + maturityRule);
                 item.setAdjustReason(reason);
                 // 按 CRMW 凭证和标的证券组合生成自动调库批次号

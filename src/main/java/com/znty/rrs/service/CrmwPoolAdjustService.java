@@ -3793,10 +3793,10 @@ public class CrmwPoolAdjustService {
      * @return 债券到期提示，未命中时为 null
      */
     private String inCheckBondMaturity(AdjustCheckContext ctx) {
-        String maturityDate = ctx.getSecurityInfo().getMaturityDate();
-        if (maturityDate != null && !maturityDate.isEmpty()) {
+        String delistDate = ctx.getSecurityInfo().getDelistDate();
+        if (delistDate != null && !delistDate.isEmpty()) {
             String today = new SimpleDateFormat("yyyyMMdd").format(new Date());
-            if (maturityDate.compareTo(today) < 0) {
+            if (delistDate.compareTo(today) < 0) {
                 return "债券已到期";
             }
         }
@@ -3833,10 +3833,10 @@ public class CrmwPoolAdjustService {
      * @return 债券到期提示，未命中时为 null
      */
     private String outCheckBondMaturity(AdjustCheckContext ctx) {
-        String maturityDate = ctx.getSecurityInfo().getMaturityDate();
-        if (maturityDate != null && !maturityDate.isEmpty()) {
+        String delistDate = ctx.getSecurityInfo().getDelistDate();
+        if (delistDate != null && !delistDate.isEmpty()) {
             String today = new SimpleDateFormat("yyyyMMdd").format(new Date());
-            if (maturityDate.compareTo(today) < 0) {
+            if (delistDate.compareTo(today) < 0) {
                 return "债券已到期";
             }
         }

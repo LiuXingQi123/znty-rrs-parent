@@ -22,6 +22,8 @@ import com.znty.rrs.mapper.SecurityPoolAdjustMapper;
 import org.junit.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -349,9 +351,9 @@ public class SecurityPoolBatchCheckTest {
         ineligible.setSecurityType("mtn");
         ineligible.setIssuerCode("ISSUER");
         ineligible.setEligibleForFollow(true);
-        String futureMaturity = java.time.LocalDate.now().plusDays(1).format(java.time.format.DateTimeFormatter.BASIC_ISO_DATE);
-        String cutoff = java.time.LocalDate.now().plusDays(2).format(java.time.format.DateTimeFormatter.BASIC_ISO_DATE);
-        ineligible.setMaturityDate(futureMaturity);
+        String futureDelistDate = LocalDate.now().plusDays(1).format(DateTimeFormatter.BASIC_ISO_DATE);
+        String cutoff = LocalDate.now().plusDays(2).format(DateTimeFormatter.BASIC_ISO_DATE);
+        ineligible.setDelistDate(futureDelistDate);
         when(fixture.batch.queryScheduledSecurities(Collections.singletonList("B1")))
                 .thenReturn(Collections.singletonList(ineligible));
 
@@ -417,6 +419,43 @@ public class SecurityPoolBatchCheckTest {
         assertThat(result.getItems()).hasSize(3).allMatch(AdjustCheckDto.CheckResultItem::isCanAdjust);
         assertThat(result.getItems()).filteredOn(item -> linked.getId().equals(item.getTargetPoolId()))
                 .extracting(AdjustCheckDto.CheckResultItem::getSecurityCode).containsExactly("B2");
+    }
+
+    /** 关联券复核使用摘牌日，主体 Excel 调入沿用天数豁免 */
+    @Test
+    public void scheduledChecksRelatedDelistDateUnlessCompanyWasImported() {
+        Fixture fixture = new Fixture();
+        fixture.withLinkedPool();
+        Row related = new Row();
+        related.setSecurityCode("B1");
+        related.setRelatedCode("B2");
+        when(fixture.batch.queryRelatedCodes(anyList(), anyList())).thenReturn(Collections.singletonList(related));
+
+        LocalDate today = LocalDate.now();
+        String cutoff = today.plusDays(2).format(DateTimeFormatter.BASIC_ISO_DATE);
+        ScheduledSecurity primary = new ScheduledSecurity();
+        ScheduledSecurity relatedSecurity = new ScheduledSecurity();
+        for (ScheduledSecurity security : Arrays.asList(primary, relatedSecurity)) {
+            security.setSecurityType("mtn");
+            security.setIssuerCode("ISSUER");
+            security.setEligibleForFollow(true);
+            security.setMaturityDate("20991231");
+        }
+        primary.setWindCode("B1");
+        primary.setDelistDate(cutoff);
+        relatedSecurity.setWindCode("B2");
+        relatedSecurity.setDelistDate(today.plusDays(1).format(DateTimeFormatter.BASIC_ISO_DATE));
+        when(fixture.batch.queryScheduledSecurities(anyList())).thenReturn(Arrays.asList(primary, relatedSecurity));
+
+        AdjustCheckReq request = request("B1");
+        List<AdjustCheckReq> requests = Collections.singletonList(request);
+        AdjustCheckDto ordinary = fixture.service.checkCompanyFollowBatch(requests, cutoff, Collections.emptySet()).get(0);
+        assertThat(ordinary.getItems()).anySatisfy(item -> {
+            assertThat(item.getSecurityCode()).isEqualTo("B2");
+            assertThat(item.getFailReasons()).contains("证券不符合定时补债范围或距到期天数不足");
+        });
+        AdjustCheckDto imported = fixture.service.checkCompanyFollowBatch(requests, cutoff, Collections.singleton(request)).get(0);
+        assertThat(imported.getItems()).anyMatch(item -> "B2".equals(item.getSecurityCode()) && item.isCanAdjust());
     }
 
     /** 补债跳过已在池的联动项，普通页面继续保留原校验结果 */

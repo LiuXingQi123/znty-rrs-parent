@@ -1,5 +1,6 @@
 package com.znty.rrs.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.znty.rrs.common.enums.MarketCode;
 import com.znty.rrs.common.enums.TempOprtSource;
 import com.znty.rrs.common.enums.TempStatus;
@@ -618,5 +619,15 @@ public class TempSecurityCodeServiceTest {
     /** 解析日期。 */
     private Date parseDate(String value) throws Exception {
         return new SimpleDateFormat("yyyy-MM-dd").parse(value);
+    }
+
+    /** 临时代码到期日保留登记接口的日期格式 */
+    @Test
+    public void tempMaturityDateShouldRoundTripAsRegistrationDate() throws Exception {
+        ObjectMapper mapper = new ObjectMapper();
+        TempSecurityCodeReq request = mapper.readValue("{\"tempMaturityDate\":\"2031-01-01\"}", TempSecurityCodeReq.class);
+        TempSecurityCodeDto result = new TempSecurityCodeDto();
+        result.setTempMaturityDate(request.getTempMaturityDate());
+        assertThat(mapper.valueToTree(result).get("tempMaturityDate").asText()).isEqualTo("2031-01-01");
     }
 }

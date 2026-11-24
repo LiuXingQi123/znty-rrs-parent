@@ -58,12 +58,14 @@ public class SecurityPoolAdjustDetailApiTest extends ControllerApiTestSupport {
         SecurityInfoDetailDto master = new SecurityInfoDetailDto();
         master.setWindCode("100001");
         master.setMaturityDate("20290318");
+        master.setDelistDate("20290325");
         master.setRatingBondissuer("AAA");
         when(service.querySecurityMasterDetail(any(SecurityPoolAdjustReq.class))).thenReturn(master);
         postJson(mockMvc, "/api/v1/securityPoolAdjust/querySecurityMasterDetail", "{\"securityCode\":\"100001\"}")
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.windCode").value("100001"))
                 .andExpect(jsonPath("$.data.maturityDate").value("20290318"))
+                .andExpect(jsonPath("$.data.delistDate").value("20290325"))
                 .andExpect(jsonPath("$.data.ratingBondissuer").value("AAA"));
     }
 }

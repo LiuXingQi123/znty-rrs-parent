@@ -709,7 +709,9 @@ public class SecurityPoolAdjustServiceStepTest {
         InvestmentPoolBo pool = new InvestmentPoolBo();
         pool.setId(1L);
         SecurityInfoBo sec = new SecurityInfoBo();
-        sec.setMaturityDate("2020-01-01");
+        sec.setMaturityDate("20991231");
+        sec.setDelistDate("20200101");
+        sec.setSecurityStatus("L");
         AdjustCheckContext ctx = new AdjustCheckContext();
         ctx.setSecurityInfo(sec);
         ctx.setTargetPool(pool);
@@ -734,7 +736,7 @@ public class SecurityPoolAdjustServiceStepTest {
         InvestmentPoolBo pool = new InvestmentPoolBo();
         pool.setId(1L);
         SecurityInfoBo sec = new SecurityInfoBo();
-        sec.setDelistDate("2020-01-01");
+        sec.setDelistDate("20200101");
         AdjustCheckContext ctx = new AdjustCheckContext();
         ctx.setSecurityInfo(sec);
         ctx.setTargetPool(pool);
@@ -1130,8 +1132,10 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityInfoBo sec = new SecurityInfoBo();
         sec.setWindCode("101.IB");
         sec.setSecurityType("corporate_bond");
-        // 到期日早于今日
-        sec.setMaturityDate("20200101");
+        // 摘牌日早于今日
+        sec.setMaturityDate("20991231");
+        sec.setDelistDate("20200101");
+        sec.setSecurityStatus("L");
         AdjustCheckContext ctx = new AdjustCheckContext();
         ctx.setTargetPool(pool);
         ctx.setSecurityInfo(sec);

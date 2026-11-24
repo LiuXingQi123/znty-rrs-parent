@@ -7,6 +7,7 @@ import com.znty.rrs.entity.batchsecuritypooladjust.BatchSecurityPoolAdjustReq;
 import com.znty.rrs.entity.securitypooladjust.SecurityPoolAdjustReq;
 import com.znty.rrs.entity.securitypooladjust.SecurityInfoDto;
 import com.znty.rrs.entity.securitypooladjusthistory.SecurityPoolAdjustHistoryReq;
+import com.znty.rrs.entity.securitypoolquery.SecurityPoolQueryDto;
 import com.znty.rrs.entity.securitypoolquery.SecurityPoolQueryReq;
 import com.znty.rrs.entity.stocksecuritybatchadjust.StockSecurityBatchAdjustReq;
 import com.znty.rrs.mapper.SecurityPoolAdjustMapper;
@@ -156,6 +157,29 @@ public class SecurityIdentityQueryMapperTest {
             request.setValue("issuerCode", "不存在的编码");
             assertThat(querySecurityList(req)).as(statement).isEmpty();
         }
+    }
+
+    /** 证券池仅将状态 D 判为到期，保留未关联主档的在池记录 */
+    @Test
+    public void shouldTreatOnlyDelistedSecuritiesAsMatured() {
+        JdbcTemplate jdbc = new JdbcTemplate(database);
+        jdbc.update("UPDATE rrs_securityinfo SET security_status='U' WHERE wind_code='B'");
+        jdbc.update("UPDATE rrs_securityinfo SET security_status='D' WHERE wind_code='C'");
+        jdbc.update("UPDATE rrs_securityinfo SET security_status='N' WHERE wind_code='D'");
+        jdbc.update("INSERT INTO ip_pool_status (id, security_code, security_type, target_pool_id, audit_status, is_deleted)"
+                + " VALUES (2, 'MISSING', 'bond', 2, '20', 0)");
+        SecurityPoolQueryMapper mapper = session.getMapper(SecurityPoolQueryMapper.class);
+        SecurityPoolQueryReq req = new SecurityPoolQueryReq();
+
+        req.setSecurityStatus("active");
+        assertThat(mapper.querySecurityPoolPage(req))
+                .extracting(SecurityPoolQueryDto::getSecurityCode).containsExactlyInAnyOrder("A", "B", "D", "MISSING");
+        req.setSecurityStatus("matured");
+        assertThat(mapper.querySecurityPoolPage(req))
+                .extracting(SecurityPoolQueryDto::getSecurityCode).containsExactly("C");
+        req.setSecurityStatus("unknown");
+        assertThat(mapper.querySecurityPoolPage(req))
+                .extracting(SecurityPoolQueryDto::getSecurityCode).containsExactlyInAnyOrder("B", "MISSING");
     }
 
     /** 禁投池主体自身与债券发行主体的信用代码都按前缀筛选 */

@@ -22,7 +22,7 @@ public class HsPoolFullExcelExportService extends AbstractHsPoolExcelExportServi
                 + "exportEmptyPool（是否生成空池 Sheet）：可选；默认 true，false 时跳过没有数据的池。\n"
                 + "exportPoolWithoutHsName（是否导出恒生池名称为空的池）：可选布尔值，默认 false，跳过这些池；设为 true 时使用投资池完整名称生成 Sheet。\n"
                 + "outputDir（导出根目录）：可选，默认 null，使用 rrs.hs-pool-export.storage-path。主文件写入 yyyyMMdd 目录，同日覆盖时旧版归档至 bak。\n"
-                + "导出内容：当前已生效的非主体证券和 CRMW；普通证券排除已到期数据，CRMW 不校验到期日；恒生池名称可用竖线配置多个 Sheet 名。";
+                + "导出内容：当前已生效的非主体证券和 CRMW；普通证券排除摘牌日早于当天的记录，独立 CRMW 组合不校验摘牌日；恒生池名称可用竖线配置多个 Sheet 名。";
     }
 
     /** 返回全量导出标记 */

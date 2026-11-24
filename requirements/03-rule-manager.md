@@ -71,7 +71,7 @@ Vue 2.5 + Element UI 2.15 + axios + moment（CDN）。所有请求走统一封�
 ### 3.1 新建/编辑规则
 
 - 入口：「新建规则」→ `openCreateRuleDialog`（`editingRule=null`）；表格「编辑」/规则名链接 → `editRule(rule)`（`editingRule=rule`，深拷贝避免污染列表）。
-- 表单字段：规则名称（maxlength=50）、规则描述、规则分类、规则参数（标签云，每标签显示类型徽标+名称，可关闭）、规则脚本（textarea + 4 个快速模板：池锁定/进行中流程/债券到期/ABS只能一级库）。模板均先校验证券代码非空，失败文案与 `checkAdjust` / `describeRange` 对齐。
+- 表单字段：规则名称（maxlength=50）、规则描述、规则分类、规则参数（标签云，每标签显示类型徽标+名称，可关闭）、规则脚本（textarea + 4 个快速模板：池锁定/进行中流程/债券到期/ABS只能一级库）。债券到期模板读取证券主档状态，D 表示到期。模板均先校验证券代码非空，失败文案与 `checkAdjust` / `describeRange` 对齐。
 - 保存 `saveRule()`：前端校验 `name` 和 `script` 非空，构造请求体：
   ```json
   { "id": "编辑时为规则ID，新建时为null", "name", "description", "category",

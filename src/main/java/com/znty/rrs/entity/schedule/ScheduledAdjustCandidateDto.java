@@ -30,8 +30,8 @@ public class ScheduledAdjustCandidateDto extends IpAdjustLogBo {
     /** 发行主体名称 */
     private String issuerName;
 
-    /** 到期日，格式 yyyyMMdd */
-    private String maturityDate;
+    /** 摘牌日（业务到期日，格式 yyyyMMdd） */
+    private String delistDate;
 
     /** 到期出池候选是否已在任一调出限制池中 */
     private boolean outRestricted;

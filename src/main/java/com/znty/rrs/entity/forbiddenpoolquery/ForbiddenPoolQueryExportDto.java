@@ -23,8 +23,8 @@ public class ForbiddenPoolQueryExportDto {
     private String entryTime;
     /** 证券状态 */
     private String securityStatusLabel;
-    /** 退市日期 */
-    private String delistDate;
+    /** 到期日，格式 yyyyMMdd */
+    private String maturityDate;
     /** 行权日期（回售） */
     private String repurchaseDate;
 }

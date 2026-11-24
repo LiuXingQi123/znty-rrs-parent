@@ -111,7 +111,7 @@ public class ExcelPoolExclusionService {
          * @param candidates 普通债入池候选
          * @param sourcePoolId 主体来源池
          * @param targetPoolId 债券目标池
-         * @param cutoff 普通债到期门槛日期
+         * @param cutoff 普通债摘牌日截止日期
          * @return 可继续检查入池的候选
          */
         List<ScheduledAdjustCandidateDto> filterInbound(List<ScheduledAdjustCandidateDto> candidates,
@@ -134,7 +134,7 @@ public class ExcelPoolExclusionService {
                 // Excel 调入的主体可以跳过普通到期门槛
                 boolean excelCompanyIn = hasExcelDecision(issuerCode, sourcePoolId, AdjustMode.IN);
                 bond.setExcelCompanyAdjustment(excelCompanyIn);
-                if (excelCompanyIn || CompanyBondSyncPolicy.meetsMaturity(bond.getMaturityDate(), cutoff)) {
+                if (excelCompanyIn || CompanyBondSyncPolicy.meetsDelistCutoff(bond.getDelistDate(), cutoff)) {
                     result.add(bond);
                 }
             }

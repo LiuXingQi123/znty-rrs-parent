@@ -93,7 +93,7 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
                     + PARAM_HELP_TOOLTIP_PREFIX + "mappings（跨池入池映射）：可选；用于主体所在池与债券入池目标池不一致的场景，可配置多组\n"
                     + PARAM_HELP_TOOLTIP_PREFIX + "companyInPoolId（主体所在池）：主体必须已在该池内，才扫描其旗下债券\n"
                     + PARAM_HELP_TOOLTIP_PREFIX + "bondTargetPoolId（债券入池目标池）：上述主体旗下符合条件的债券将自动写入该池\n"
-                    + PARAM_HELP_TOOLTIP_PREFIX + "minDaysToMaturity：距到期最少天数，须为非负整数；省略或填 0 时到期当天可入，填 1 时到期当天不入\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "minDaysToMaturity：距摘牌日最少天数，须为非负整数；省略或填 0 时摘牌当天可入，填 1 时摘牌当天不入\n"
                     + PARAM_HELP_TOOLTIP_PREFIX + "关系配置：在投资池「自动调入规则」中绑定本任务的池，会按同池映射并入扫描范围\n"
                     + "扫描范围：所有已有生效主体的普通池自动追加同池映射，再与参数及关系绑定池取并集；无映射时本轮无调整\n"
                     + "处理规则：主体已在主体池且生效时，将其旗下未退市、未到期且未在债券目标池的债券自动入池\n"

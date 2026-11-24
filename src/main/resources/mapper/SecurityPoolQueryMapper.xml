@@ -34,11 +34,7 @@
                ,bi.inner_class
                ,bi.inright_flag
                ,bi.std_credit_flag
-               ,CASE
-                    WHEN bi.maturity_date IS NULL OR bi.maturity_date = '' THEN NULL
-                    WHEN bi.maturity_date &gt;= DATE_FORMAT(CURDATE(), '%Y%m%d') THEN 'active'
-                    ELSE 'matured'
-                END AS securityStatus
+               ,bi.security_status
                ,bi.delist_date
                ,bi.repurchase_date
         FROM ip_pool_status ips
@@ -57,13 +53,13 @@
             AND ips.audit_status = '20'
             <!-- 仅债券大类（含 crmw 凭证在 ip_pool_status 的跟债记录）；主体走主体池查询 -->
             <if test="securityStatus == 'active'">
-                AND bi.maturity_date &gt;= DATE_FORMAT(CURDATE(), '%Y%m%d')
+                AND (bi.wind_code IS NULL OR bi.security_status != 'D')
             </if>
             <if test="securityStatus == 'matured'">
-                AND bi.maturity_date &lt; DATE_FORMAT(CURDATE(), '%Y%m%d')
+                AND bi.security_status = 'D'
             </if>
             <if test="securityStatus == 'unknown'">
-                AND bi.maturity_date IS NULL
+                AND (bi.wind_code IS NULL OR bi.security_status = 'U')
             </if>
             <if test="poolIds != null and poolIds.size() > 0">
                 AND ips.target_pool_id IN

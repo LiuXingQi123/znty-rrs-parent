@@ -33,7 +33,7 @@ public class ForbiddenPoolQueryReq extends PageRequest {
     /** 对象类型：company=主体 / bond=债券 */
     private String categoryType;
 
-    /** 证券状态：active=存续 / matured=到期 / unknown=未知到期日 */
+    /** 证券状态：active=未到期 / matured=到期 / unknown=状态为 U 或未关联主档 */
     private String securityStatus;
 
     /** 入池日期起（yyyy-MM-dd） */

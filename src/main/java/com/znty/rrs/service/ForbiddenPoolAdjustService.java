@@ -3301,15 +3301,15 @@ public class ForbiddenPoolAdjustService {
     // ═══════════════════════════════════════════════════════════
 
     /**
-     * 规则：债券到期（maturity_date）
+     * 规则：债券到期（delist_date）
      *
-     * <p>债券到期日早于今日则禁止调入。对应老项目 checkInPool:544（ptype=4000 债券分支）。
+     * <p>债券摘牌日早于今日则禁止调入。对应老项目 checkInPool:544（ptype=4000 债券分支）。
      */
     private String inCheckBondMaturity(AdjustCheckContext ctx) {
-        String maturityDate = ctx.getSecurityInfo().getMaturityDate();
-        if (maturityDate != null && !maturityDate.isEmpty()) {
+        String delistDate = ctx.getSecurityInfo().getDelistDate();
+        if (delistDate != null && !delistDate.isEmpty()) {
             String today = new SimpleDateFormat("yyyyMMdd").format(new Date());
-            if (maturityDate.compareTo(today) < 0) {
+            if (delistDate.compareTo(today) < 0) {
                 return "债券已到期";
             }
         }
@@ -3333,15 +3333,15 @@ public class ForbiddenPoolAdjustService {
     }
 
     /**
-     * 规则：债券到期（maturity_date，调出）
+     * 规则：债券到期（delist_date，调出）
      *
-     * <p>债券到期日早于今日则禁止调出。对应老项目 checkOutPool 到期校验。
+     * <p>债券摘牌日早于今日则禁止调出。对应老项目 checkOutPool 到期校验。
      */
     private String outCheckBondMaturity(AdjustCheckContext ctx) {
-        String maturityDate = ctx.getSecurityInfo().getMaturityDate();
-        if (maturityDate != null && !maturityDate.isEmpty()) {
+        String delistDate = ctx.getSecurityInfo().getDelistDate();
+        if (delistDate != null && !delistDate.isEmpty()) {
             String today = new SimpleDateFormat("yyyyMMdd").format(new Date());
-            if (maturityDate.compareTo(today) < 0) {
+            if (delistDate.compareTo(today) < 0) {
                 return "债券已到期";
             }
         }

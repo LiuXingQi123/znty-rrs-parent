@@ -2,7 +2,7 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.rrs.mapper.AbsPoolReconcileMapper">
 
-    <!-- ABS 主档全集：未退市即可参与，到期判断在任务内按 maturity_date 做，与同父类任务口径分离 -->
+    <!-- ABS 主档全集：排除退市 ABS，补入时在任务内按摘牌日校验剩余天数 -->
     <select id="queryAbsBondList" resultType="com.znty.rrs.entity.schedule.AbsBondCandidateDto">
         SELECT bond.wind_code AS security_code
                ,bond.short_name AS security_short_name
@@ -10,7 +10,7 @@
                ,bond.abs_flag
                ,bond.issuer_code
                ,bond.issuer AS issuer_name
-               ,bond.maturity_date
+               ,bond.delist_date
                ,bond.market
         FROM rrs_securityinfo bond
         INNER JOIN dict_security_type dst ON dst.security_type = bond.security_type

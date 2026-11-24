@@ -51,7 +51,7 @@ public class SecurityPoolQueryDto {
     private String issueDate;
     /** 起息日 */
     private String carryDate;
-    /** 到期日 */
+    /** 到期日，格式 yyyyMMdd */
     private String maturityDate;
     /** 剩余期限（天），对应 rrs_securityinfo.date_exists；业务校验仍用天数 */
     private BigDecimal dateExists;
@@ -73,9 +73,9 @@ public class SecurityPoolQueryDto {
     private Integer inrightFlag;
     /** 是否标准信用债：1=是 / 0=否 / null=未判定 */
     private Integer stdCreditFlag;
-    /** 证券状态：active=存续 / matured=到期 */
+    /** 证券主档状态：L=上市中 / N=待上市 / D=到期 / U=未知 */
     private String securityStatus;
-    /** 退市日期 */
+    /** 摘牌日（业务到期日，格式 yyyyMMdd） */
     private String delistDate;
     /** 行权日期（回售） */
     private String repurchaseDate;

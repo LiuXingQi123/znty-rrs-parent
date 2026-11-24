@@ -485,9 +485,9 @@ public class HsPoolExcelExportServiceTest {
         }
     }
 
-    /** 验证全量 SQL 按参数过滤普通证券到期日，但始终不过滤 CRMW 到期日。 */
+    /** 验证全量 SQL 按摘牌日过滤普通证券，独立 CRMW 组合沿用原范围 */
     @Test
-    public void fullExportSqlShouldNotFilterCrmwMaturityDate() throws Exception {
+    public void fullExportSqlShouldUseDelistDateOnlyForOrdinarySecurities() throws Exception {
         Path mapperPath = Paths.get("src/main/resources/mapper/HsPoolExcelExportMapper.xml");
         String mapperXml = new String(Files.readAllBytes(mapperPath), StandardCharsets.UTF_8);
         int ordinaryBlockStart = mapperXml.indexOf("<!-- 普通证券当前状态");
@@ -498,8 +498,10 @@ public class HsPoolExcelExportServiceTest {
         assertThat(crmwBlockStart).isGreaterThanOrEqualTo(0);
         assertThat(crmwBlockEnd).isGreaterThan(crmwBlockStart);
         assertThat(mapperXml.substring(ordinaryBlockStart, crmwBlockStart))
-                .contains("<if test=\"!includeExpired\">", "maturity_date");
-        assertThat(mapperXml.substring(crmwBlockStart, crmwBlockEnd)).doesNotContain("maturity_date");
+                .contains("<if test=\"!includeExpired\">", "si.delist_date IS NULL", "TRIM(si.delist_date) = ''",
+                        "si.delist_date >= DATE_FORMAT(CURDATE(), '%Y%m%d')")
+                .doesNotContain("maturity_date", "security_status");
+        assertThat(mapperXml.substring(crmwBlockStart, crmwBlockEnd)).doesNotContain("maturity_date", "delist_date", "security_status");
     }
 
     /** 验证恒生市场编码与外部市场定义一致。 */

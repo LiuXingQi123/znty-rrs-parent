@@ -390,7 +390,7 @@ public class CompanyAbsBondAutoInServiceTest {
         }
 
         /** 指定到期日的 ABS 主档，用于到期保护用例 */
-        private void absMaster(String securityCode, String issuerCode, String issuerName, String maturityDate) {
+        private void absMaster(String securityCode, String issuerCode, String issuerName, String delistDate) {
             AbsBondCandidateDto abs = new AbsBondCandidateDto();
             abs.setSecurityCode(securityCode);
             abs.setSecurityShortName(securityCode + "简称");
@@ -398,7 +398,7 @@ public class CompanyAbsBondAutoInServiceTest {
             abs.setAbsFlag(1);
             abs.setIssuerCode(issuerCode);
             abs.setIssuerName(issuerName);
-            abs.setMaturityDate(maturityDate);
+            abs.setDelistDate(delistDate);
             abs.setMarket("SSE");
             absRows.add(abs);
             when(absPoolReconcileMapper.queryAbsBondList()).thenReturn(absRows);

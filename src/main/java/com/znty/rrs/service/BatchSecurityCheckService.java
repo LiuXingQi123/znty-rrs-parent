@@ -96,7 +96,7 @@ public class BatchSecurityCheckService {
      * 按主体的 Excel 决定批量校验其跟随债券
      *
      * @param requests 同轮待处理的调库请求
-     * @param maturityCutoff 本轮初筛使用的到期截止日
+     * @param maturityCutoff 本轮初筛使用的摘牌日截止日期
      * @param excelCompanyRequests 随已生效 Excel 主体决定处理的请求
      * @return 各请求的可执行调库项
      */
@@ -336,7 +336,7 @@ public class BatchSecurityCheckService {
      * 加载批次使用的证券、投资池及校验事实
      *
      * @param requests 本批调库请求
-     * @param maturityCutoff 普通债跟随任务的截止日，人工批量为空
+     * @param maturityCutoff 普通债跟随任务的摘牌日截止日期，人工批量为空
      * @param clearTarget 是否加载清空出库已占用的自选权益人
      * @param excel 是否按 Excel 输入匹配主档代码
      * @return 本批共享校验数据
@@ -408,7 +408,7 @@ public class BatchSecurityCheckService {
                     data.securities.put(code, security);
                     if (security.isEligibleForFollow()) {
                         data.scheduledEligibleWithoutMaturityCodes.add(code);
-                        if (CompanyBondSyncPolicy.meetsMaturity(security.getMaturityDate(), maturityCutoff)) {
+                        if (CompanyBondSyncPolicy.meetsDelistCutoff(security.getDelistDate(), maturityCutoff)) {
                             data.scheduledEligibleCodes.add(code);
                         }
                     }

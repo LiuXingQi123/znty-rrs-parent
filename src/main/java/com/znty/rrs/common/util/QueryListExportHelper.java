@@ -1,5 +1,6 @@
 package com.znty.rrs.common.util;
 
+import com.znty.rrs.common.enums.SecurityStatus;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.ExcelWriter;
 import com.alibaba.excel.write.metadata.WriteSheet;
@@ -137,22 +138,13 @@ public final class QueryListExportHelper {
     }
 
     /**
-     * 按到期日计算证券状态（对齐禁投池查询前端 getBondStatus）。
-     * <p>支持 {@code yyyyMMdd} / {@code yyyy-MM-dd}；空值返回空串。</p>
+     * 转换债券主档状态为列表和导出的展示名称
      *
-     * @param maturityDate 到期日文本
-     * @return 存续 / 到期 / 空串
+     * @param status 证券主档状态
+     * @return D 显示到期，其他状态显示存续
      */
-    public static String bondStatusByMaturityDate(String maturityDate) {
-        // 兼容多种到期日文本格式
-        Date maturity = parseFlexibleDate(maturityDate);
-        if (maturity == null) {
-            return "";
-        }
-        // 按自然日比较：到期日早于今天为到期，否则存续
-        String today = new SimpleDateFormat("yyyyMMdd").format(new Date());
-        String day = new SimpleDateFormat("yyyyMMdd").format(maturity);
-        return day.compareTo(today) < 0 ? "到期" : "存续";
+    public static String bondStatusLabel(String status) {
+        return SecurityStatus.DELISTED.getCode().equals(status) ? "到期" : "存续";
     }
 
     /**

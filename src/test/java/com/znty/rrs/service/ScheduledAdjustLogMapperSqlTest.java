@@ -22,9 +22,9 @@ public class ScheduledAdjustLogMapperSqlTest {
         String xml = new String(Files.readAllBytes(path), StandardCharsets.UTF_8);
 
         assertThat(selectBlock(xml, "queryPoolSecurityByExpired"))
-                .contains(",si.maturity_date");
+                .contains(",si.delist_date");
         assertThat(selectBlock(xml, "queryCrmwPoolByExpired"))
-                .contains(",crmw.maturity_date");
+                .contains(",crmw.delist_date");
         assertIssuerColumns(selectBlock(xml, "queryCompanyNewBondForAutoIn"));
         assertIssuerColumns(selectBlock(xml, "queryCompanyFollowedBondsForAutoOut"));
     }
@@ -35,7 +35,7 @@ public class ScheduledAdjustLogMapperSqlTest {
         assertThat(Arrays.stream(IpAdjustLogBo.class.getDeclaredFields())
                 .map(field -> field.getName())
                 .collect(Collectors.toList()))
-                .doesNotContain("issuerCode", "issuerName", "maturityDate", "outerRating",
+                .doesNotContain("issuerCode", "issuerName", "delistDate", "outerRating",
                         "inForbiddenPool", "inRestrictedPool", "inLowOuterRating");
     }
 

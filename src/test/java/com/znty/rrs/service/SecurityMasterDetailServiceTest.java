@@ -29,11 +29,13 @@ public class SecurityMasterDetailServiceTest {
         SecurityInfoDetailDto master = new SecurityInfoDetailDto();
         master.setWindCode("BOND1.IB");
         master.setMaturityDate("20290318");
+        master.setDelistDate("20290325");
         master.setRatingBondissuer("AAA");
         when(mapper.querySecurityDetail("BOND1.IB")).thenReturn(master);
 
         assertThat(service.querySecurityMasterDetail(req)).isSameAs(master);
         assertThat(master.getMaturityDate()).isEqualTo("20290318");
+        assertThat(master.getDelistDate()).isEqualTo("20290325");
         verify(mapper).querySecurityDetail("BOND1.IB");
         verifyNoMoreInteractions(mapper);
     }

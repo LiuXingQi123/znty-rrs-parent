@@ -68,7 +68,7 @@
 
 ### 3.1 新增 `addTempSecurityCode`（`@Transactional`）
 
-`validateAddReq` → 查 `queryCompanyByCode(tempCompanyCode)` 校验主体存在（`wind_compintroduction`）→ `resolveCompanyName`（fullName 优先，其次 shortName，否则抛「发行主体缺少名称」）→ 构造 `TempSecurityCodeBo`，`secId = "TEMP_" + tempSecurityCode`，`status = TempStatus.TEMPORARY.getCode()`（`temporary`）、`oprtSource = manual`、`isDeleted=0`、`crteTime`/`updtTime=now` → `addTempSecurityCode` INSERT（回填 id）→ 同步写入 `rrs_securityinfo`（`wind_code=tempSecurityCode`，`sec_id=secId`，名称、类型、发行主体全称+`issuer_code`、`firstissue_date`/`maturity_date` 将表单日期格式化为 `yyyyMMdd`，起息/止息/`date_exists` 未知不写，`security_status='L'` 上市中，`security_source='temporary'`；市场同时写入临时代码表 `temp_security_market` 和证券表 `market`，两处均取表单选择的市场编码）→ `queryTempSecurityCodeDetail` 返回详情。正式证券字段仍为 NULL。**必须写明确的 `security_status`**：临时代码占位写 `'L'`（上市中）；外部/特殊来源若无状态写 `'U'`（未知，`SecurityStatus.UNKNOWN`）。证券池调整列表条件是 `security_status != 'D'`，若留 `NULL`/空串，SQL 三值逻辑会把行滤掉。
+`validateAddReq` → 查 `queryCompanyByCode(tempCompanyCode)` 校验主体存在（`wind_compintroduction`）→ `resolveCompanyName`（fullName 优先，其次 shortName，否则抛「发行主体缺少名称」）→ 构造 `TempSecurityCodeBo`，`secId = "TEMP_" + tempSecurityCode`，`status = TempStatus.TEMPORARY.getCode()`（`temporary`）、`oprtSource = manual`、`isDeleted=0`、`crteTime`/`updtTime=now` → `addTempSecurityCode` INSERT（回填 id）→ 同步写入 `rrs_securityinfo`（`wind_code=tempSecurityCode`，`sec_id=secId`，名称、类型、发行主体全称+`issuer_code`、`firstissue_date`/`maturity_date` 将表单日期格式化为 `yyyyMMdd`，起息/止息/`date_exists` 未知不写，`security_status='L'` 上市中，`security_source='temporary'`；市场同时写入临时代码表 `temp_security_market` 和证券表 `market`，两处均取表单选择的市场编码）→ `queryTempSecurityCodeDetail` 返回详情。正式证券字段仍为 NULL。**必须写明确的 `security_status`**：临时代码占位写 `'L'`（上市中）；外部/特殊来源若无状态写 `'U'`（未知，`SecurityStatus.UNKNOWN`）。证券到期状态筛选只排除主档状态 `D`，空值归为未到期。
 
 新增临时代码时，「资产支持证券」（`abs`）的占位主档写入 `abs_flag=1`，可在「禁投池调整 → ABS」中查询。其他类型（含「资产证券化」`abs_all`）的占位标识为空。
 
@@ -126,7 +126,7 @@ CRMW 按凭证、标的和日志分别留痕；重复扫描已完成事件不再
 
 ### 3.3 取消发行 `editTempSecurityCodeToCancelled`（`@Transactional`）
 
-`validateIdReq` → `queryOperableTempSecurityCode(id)`（必须 `temporary`）→ 将临时代码对应 `rrs_securityinfo` 的到期/止息日期改为前一日（`yyyyMMdd`）并置 `security_status='D'` → 更新 `updateTime`/`status=CANCELLED`(`cancelled`)/`oprtSource=manual`/`updtTime` → 返回详情。不写正式证券字段。
+`validateIdReq` → `queryOperableTempSecurityCode(id)`（必须 `temporary`）→ 将临时代码对应 `rrs_securityinfo` 的摘牌日 `delist_date` 和止息日期改为前一日（`yyyyMMdd`）并置 `security_status='D'` → 更新 `updateTime`/`status=CANCELLED`(`cancelled`)/`oprtSource=manual`/`updtTime` → 返回详情。不写正式证券字段。
 
 ### 3.4 删除 `deleteTempSecurityCode`（`@Transactional`）
 
@@ -162,7 +162,7 @@ CRMW 按凭证、标的和日志分别留痕；重复扫描已完成事件不再
 | `rrs_temp_security_code_update_log`（日志表） | 替换日志 | 记录临时代码、正式代码、被替换表名、被替换记录 ID、替换状态、替换时间 |
 | `dict_security_type`（只读+校验） | 证券类型字典 | `security_type, security_type_name, category_type(bond/stock/fund/company), category_type_name, sort_order, is_deleted`；`querySecurityTypeList` 过滤 `category_type != 'company'`，`querySecurityTypeCount` 校验类型存在 |
 | `ais_inv_ods.wind_compintroduction`（跨库只读） | 发行主体 | `COMP_ID, COMP_NAME, COMP_SNAME, REGISTERNUMBER`；`queryIssuerOptionList` 最多取 100 条，`queryCompanyOptionList` 最多取 50 条，`queryCompanyByCode` 按主体代码取单条 |
-| `rrs_securityinfo`（upsert 写入） | 证券基础信息库 | key=`wind_code`；`security_source` 区分来源：`official=原始数据（可能含临时代码） / temporary=临时代码占位证券 / temp_converted=临时代码转正式证券`；`addSecurityInfo` 按 `wind_code = securityCode` 写入：`full_name`/`short_name=securityName`、`market=securityMarket`（取表单临时市场，与 `temp_security_market` 一致）、`security_type`、`issuer=tempCompanyNameSnapshot`、`issuer_code=tempCompanyCode`、`firstissue_date`/`maturity_date` 将表单发行/到期日格式化为 `yyyyMMdd`（起息/止息/`date_exists` 未知不写）、**`security_status='L'`（上市中；上市状态枚举 `SecurityStatus`：`L`/`N`/`D`/`U`，勿留 NULL，否则调库列表 `!= 'D'` 查不到；来源无状态用 `U`）**、`create_time`/`ts=updateTime`；正式证券已存在时不覆盖 `security_source` |
+| `rrs_securityinfo`（upsert 写入） | 证券基础信息库 | key=`wind_code`；`security_source` 区分来源：`official=原始数据（可能含临时代码） / temporary=临时代码占位证券 / temp_converted=临时代码转正式证券`；`addSecurityInfo` 按 `wind_code = securityCode` 写入：`full_name`/`short_name=securityName`、`market=securityMarket`（取表单临时市场，与 `temp_security_market` 一致）、`security_type`、`issuer=tempCompanyNameSnapshot`、`issuer_code=tempCompanyCode`、`firstissue_date`/`maturity_date` 将表单发行/到期日格式化为 `yyyyMMdd`（起息/止息/`date_exists` 未知不写）、**`security_status='L'`（上市中；上市状态枚举 `SecurityStatus`：`L`/`N`/`D`/`U`，来源无状态可用 `U`，状态为 NULL 也按未到期处理）**、`create_time`/`ts=updateTime`；正式证券已存在时不覆盖 `security_source` |
 
 ---
 
@@ -204,7 +204,7 @@ CRMW 按凭证、标的和日志分别留痕；重复扫描已完成事件不再
 - **新增校验** `validateAddReq`：
   - `tempSecurityName`/`tempSecurityCode`/`tempSecurityMarket`/`tempSecurityType` 必填（`validateRequired` 空白串判定）
   - `tempCompanyCode` 非空（「发行主体不能为空」）
-  - `tempIssueDate`/`tempMaturityDate` 必填，且 `tempMaturityDate.after(tempIssueDate)`（「到期日期必须晚于发行日期」）
+  - `tempIssueDate`/`tempMaturityDate` 必填，`tempMaturityDate` 格式为 `yyyy-MM-dd`，且 `tempMaturityDate.after(tempIssueDate)`（「到期日期必须晚于发行日期」）
   - `validateMarket(tempSecurityMarket)`：使用 `MarketCode.isValid` 校验上述 11 项市场编码，否则「临时证券市场不合法，market=...」
   - `validateSecurityType`：`querySecurityTypeCount > 0`，否则「证券类型不存在或已删除，securityType=...」
   - 唯一性：`queryTempSecurityCodeCount(tempSecurityCode, null) > 0` → 「临时证券代码已存在，tempSecurityCode=...」（查 `is_deleted=0`）

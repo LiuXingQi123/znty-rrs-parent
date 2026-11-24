@@ -1,6 +1,7 @@
 package com.znty.rrs.service;
 
 import com.znty.rrs.common.enums.BondStatus;
+import com.znty.rrs.common.util.QueryListExportHelper;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.ExcelWriter;
 import com.alibaba.excel.write.metadata.WriteSheet;
@@ -115,7 +116,7 @@ public class SecurityPoolQueryService {
             target.setMaturityDate(source.getMaturityDate());
             // 与页面「证券期限」列一致，直接导出 dateExistsStr 展示串
             target.setDateExistsStr(source.getDateExistsStr() == null ? "" : source.getDateExistsStr());
-            target.setSecurityStatusLabel(statusLabel(source.getSecurityStatus()));
+            target.setSecurityStatusLabel(QueryListExportHelper.bondStatusLabel(source.getSecurityStatus()));
             target.setDelistDate(source.getDelistDate());
             target.setRepurchaseDate(source.getRepurchaseDate());
             target.setAbsLabel(yesNo(source.getAbsFlag() != null && source.getAbsFlag() == 1 || "abs".equals(source.getSecurityType())));
@@ -133,11 +134,6 @@ public class SecurityPoolQueryService {
     /** 格式化页面相同的入池时间。 */
     private String formatDateTime(Date value) {
         return value == null ? "" : new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(value);
-    }
-
-    /** 转换证券状态中文名称。 */
-    private String statusLabel(String status) {
-        return "active".equals(status) ? "存续" : "matured".equals(status) ? "到期" : "";
     }
 
     /** 转换是否展示文字。 */

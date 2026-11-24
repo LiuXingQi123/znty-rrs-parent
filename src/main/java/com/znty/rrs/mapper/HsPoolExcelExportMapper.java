@@ -23,7 +23,7 @@ public interface HsPoolExcelExportMapper {
      * 查询指定叶子投资池当前有效的非主体证券及 CRMW。
      *
      * @param poolId 投资池 ID
-     * @param includeExpired 是否包含已到期普通证券；CRMW 始终不校验到期日
+     * @param includeExpired 是否包含已到期普通证券；独立 CRMW 组合不校验摘牌日
      * @return 当前有效在库证券
      */
     List<HsPoolExportRowDto> queryFullExportRowList(@Param("poolId") Long poolId,

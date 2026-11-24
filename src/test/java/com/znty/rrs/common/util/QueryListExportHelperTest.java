@@ -25,11 +25,13 @@ public class QueryListExportHelperTest {
         assertThat(QueryListExportHelper.auditStatusLabel(null)).isEqualTo("");
     }
 
-    /** 到期日派生证券状态。 */
+    /** 由证券主档状态转换导出标签 */
     @Test
-    public void bondStatusByMaturityDateShouldMatchFrontendRule() {
-        assertThat(QueryListExportHelper.bondStatusByMaturityDate(null)).isEqualTo("");
-        assertThat(QueryListExportHelper.bondStatusByMaturityDate("20991231")).isEqualTo("存续");
-        assertThat(QueryListExportHelper.bondStatusByMaturityDate("20000101")).isEqualTo("到期");
+    public void bondStatusLabelShouldMatchFrontendRule() {
+        assertThat(QueryListExportHelper.bondStatusLabel(null)).isEqualTo("存续");
+        assertThat(QueryListExportHelper.bondStatusLabel("L")).isEqualTo("存续");
+        assertThat(QueryListExportHelper.bondStatusLabel("D")).isEqualTo("到期");
+        assertThat(QueryListExportHelper.bondStatusLabel("N")).isEqualTo("存续");
+        assertThat(QueryListExportHelper.bondStatusLabel("U")).isEqualTo("存续");
     }
 }

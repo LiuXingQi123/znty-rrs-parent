@@ -26,7 +26,7 @@ public class SecurityPoolQueryReq extends PageRequest {
     private String issuerCode;
     /** 证券类型（精确匹配） */
     private String securityType;
-    /** 证券状态：active=存续 / matured=到期 / unknown=未知到期日 */
+    /** 证券状态：active=未到期 / matured=到期 / unknown=状态为 U 或未关联主档 */
     private String securityStatus;
     /** 入池时间起 */
     private String entryTimeStart;

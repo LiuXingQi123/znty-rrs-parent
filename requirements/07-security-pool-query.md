@@ -45,7 +45,7 @@ this.loadList();                  // 列表数据
 | `securityFullName` | `''` | 文本输入 | 证券全称 |
 | `issuerCode` | `''` | 文本输入 | 主体编码 |
 | `securityType` | `''` | 下拉 | 动态加载 |
-| `securityStatus` | `'active'` | 下拉 | 默认存续 |
+| `securityStatus` | 空 | 下拉 | 默认不限 |
 | `entryTimeRange` | `null` | 日期范围 | 入池时间 |
 | `adjusterName` | `''` | 文本输入 | 调整人 |
 | `issuer` | `''` | 文本输入 | 主体全称 |
@@ -116,15 +116,15 @@ this.loadList();                  // 列表数据
 | 证券全称 | `fullName` | tooltip |
 | 发行日期 | `issueDate` | 居中 |
 | 起息日 | `carryDate` | 居中 |
-| 到期日 | `maturityDate` | 居中 |
+| 到期日 | `maturityDate` | yyyyMMdd，居中 |
 | 证券期限 | `dateExistsStr` | 库字段 `date_exists_str`（展示串）；列表只读展示，空则空。原 `dateExists`/`date_exists`（天）仍保留供业务校验，列表不再展示 |
 | 是否ABS/担保/永续/次级/私募/含权/标准信用债 | `absFlag` 等 | 与证券池调整页一致的「是/否」Tag；私募按 `issueType` 或 `innerClass` 含“私募”，ABS 兼容类型 `abs` |
-| 证券状态 | `securityStatus` | `active`→绿色「存续」；`matured`→琥珀「到期」；其他空 |
-| 退市日期 | `delistDate` | 居中 |
+| 证券状态 | `securityStatus` | D 显示到期，其他状态显示存续 |
+| 摘牌日 | `delistDate` | 业务到期日，yyyyMMdd，居中 |
 | 行权日期（回售） | `repurchaseDate` | 居中 |
 | 操作 | — | `fixed="right"`，收藏按钮 |
 
-**当前有效池展示逻辑**：后端 SQL 固定 `WHERE ips.is_deleted=0 AND ips.audit_status='20'`，即只返回审批通过（20）的池状态记录，未审批/驳回数据不会混入。**查询范围**：内连 `dict_security_type` 且 `category_type='bond'`（债券大类，含 `ip_pool_status` 中 `security_type=crmw` 的跟债记录；主体 `category_type=company` 走主体池查询）。禁止/观察/黑名单中的债券（含跟进的 CRMW 凭证）仍可查。CRMW 库的「凭证+标的」仍走 CRMW 池查询（`ip_pool_status_crmw`）。**不再**按 `pool_type` 排除 `crmw`/`forbidden`。`maturity_date` 为 `yyyyMMdd` 字符串，证券状态由后端与 `DATE_FORMAT(CURDATE(), '%Y%m%d')` 比较后计算。
+**当前有效池展示逻辑**：后端 SQL 固定 `WHERE ips.is_deleted=0 AND ips.audit_status='20'`，即只返回审批通过（20）的池状态记录，未审批/驳回数据不会混入。**查询范围**：内连 `dict_security_type` 且 `category_type='bond'`（债券大类，含 `ip_pool_status` 中 `security_type=crmw` 的跟债记录；主体 `category_type=company` 走主体池查询）。禁止/观察/黑名单中的债券（含跟进的 CRMW 凭证）仍可查。CRMW 库的「凭证+标的」仍走 CRMW 池查询（`ip_pool_status_crmw`）。**不再**按 `pool_type` 排除 `crmw`/`forbidden`。到期日 `maturity_date` 与摘牌日 `delist_date` 分别返回，两者格式均为 `yyyyMMdd`。摘牌日用于记录业务到期日。证券状态直接返回主档 `security_status`。
 
 ### 4.1 跳转详情
 
@@ -182,7 +182,7 @@ this.loadList();                  // 列表数据
 |---|---|---|
 | `ip_pool_status` | 投资池当前状态（主表） | id, security_code, security_short_name, security_type, target_pool_id, target_pool_name, adjust_batch_no, audit_status, adjuster_name, entry_time, is_deleted |
 | `ip_investment_pool` | 投资池定义（树/全路径/名称） | id, parent_id, pool_code, pool_name, pool_type, pool_level, outer_sort, inner_sort, status, is_deleted |
-| `rrs_securityinfo` | 证券基础信息（利率/发行主体/到期日等） | wind_code, issuer, full_name, coupon_rate, firstissue_date, carry_date, maturity_date, delist_date, repurchase_date |
+| `rrs_securityinfo` | 证券基础信息（利率/发行主体/到期日等） | wind_code, issuer, full_name, coupon_rate, firstissue_date, carry_date, maturity_date, delist_date, security_status, repurchase_date |
 | `dict_security_type` | 证券类型字典 | security_type, security_type_name, category_type, sort_order, is_deleted |
 | `my_security_pool` | 用户自选证券（收藏） | id, security_code, security_type, market, user_id, status(use/del), create_time, update_time |
 
@@ -200,7 +200,7 @@ this.loadList();                  // 列表数据
   - `INNER JOIN dict_security_type dst ON dst.security_type = ips.security_type AND dst.is_deleted=0 AND dst.category_type='bond'`（仅债券大类；取证券类型名称）
   - `LEFT JOIN my_security_pool mbp ON ips.security_code = mbp.security_code AND mbp.user_id=#{currentUserId} AND mbp.status='use'`（取收藏 ID，用户隔离）
 - **WHERE 条件构造**：固定 `ips.is_deleted=0 AND ips.audit_status='20'`（债券大类，含 crmw 跟债记录；主体不进本页）；动态条件用 `<if>`：
-  - `securityStatus='active'` → `bi.maturity_date >= DATE_FORMAT(CURDATE(), '%Y%m%d')`；`'matured'` → `bi.maturity_date < DATE_FORMAT(CURDATE(), '%Y%m%d')`
+  - `securityStatus='active'` → `bi.security_status != 'D'`，也保留未关联主档的在池记录。`'matured'` → `bi.security_status = 'D'`
   - `poolIds` → `ips.target_pool_id IN (...)` foreach
   - `securityCode`/`issuerCode` → `LIKE CONCAT(#{x}, '%')`
   - `securityShortName`/`adjusterName` → `LIKE CONCAT('%', #{x}, '%')`
@@ -209,7 +209,7 @@ this.loadList();                  // 列表数据
   - `issuer` → `bi.issuer LIKE`
   - `bondYesFlags` → 对 `guarant_flag/inright_flag/yx_flag/cj_flag/std_credit_flag`、私募文案、ABS 标志逐项追加条件，多选 AND
   - `mySecurities==true` → `mbp.id IS NOT NULL`
-- **SELECT 计算列**：证券状态 `CASE WHEN maturity_date IS NULL OR '' THEN NULL WHEN >= DATE_FORMAT(CURDATE(), '%Y%m%d') THEN 'active' ELSE 'matured' END AS securityStatus`；`mySecurityPoolId` 直接取 `mbp.id`
+- **SELECT**：读取主档 `security_status`、`maturity_date` 和 `delist_date`；`mySecurityPoolId` 取 `mbp.id`。
 - **排序**：`entry_time DESC, id DESC`
 - **Service 后处理**：`fillPoolFullName` 用 `investmentPoolService.queryPoolFullNameMap()`（递归 CTE 全路径映射）覆盖 `targetPoolName` 为全路径
 

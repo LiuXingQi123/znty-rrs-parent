@@ -255,7 +255,6 @@
         LEFT JOIN dict_security_type dst ON dst.security_type = si.security_type
                                         AND dst.is_deleted = 0
         WHERE si.wind_code = #{securityCode}
-          AND si.security_status IS NOT NULL
           <if test="!allowDelisted">
               AND si.security_status != 'D'
           </if>
@@ -315,7 +314,7 @@
         WHERE wind_code = #{securityCode}
     </select>
 
-    <!-- 新增临时代码占位证券：须写明确 security_status（占位用 L；来源无状态用 U），否则 != 'D' 会因 NULL 三值逻辑滤行 -->
+    <!-- 新增临时代码占位证券，状态写 L 表示上市中 -->
     <insert id="addSecurityInfo">
         INSERT INTO rrs_securityinfo (
             wind_code
@@ -368,7 +367,7 @@
     <!-- 取消发行时更新临时证券主数据 -->
     <update id="editSecurityInfoToCancelled">
         UPDATE rrs_securityinfo
-        SET maturity_date = #{cancelDate}
+        SET delist_date = #{cancelDate}
            ,end_date = #{cancelDate}
            ,security_status = 'D'
            ,ts = #{updateTime}

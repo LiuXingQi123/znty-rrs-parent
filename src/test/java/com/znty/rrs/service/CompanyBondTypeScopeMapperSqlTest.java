@@ -70,7 +70,7 @@ public class CompanyBondTypeScopeMapperSqlTest {
         for (String queryId : queryIds) {
             // 只截取当前 select，避免其他非主体联动查询的过滤条件干扰断言
             String select = selectBlock(xml, queryId);
-            assertThat(select).contains("bond.security_status != 'D'");
+            assertThat(select).contains("WHERE bond.security_status != 'D'");
             assertThat(select).contains("bondTypeScope.excludeAbs");
             assertThat(select).contains("bondTypeScope.excludedSecurityTypes");
             assertThat(select).doesNotContain("COALESCE(bond.abs_flag, 0) != 1");

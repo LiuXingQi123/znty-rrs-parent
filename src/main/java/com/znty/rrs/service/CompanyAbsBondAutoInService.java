@@ -87,10 +87,10 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
     /** 距到期最小剩余天数默认值，0 表示到期当天仍可入池 */
     private static final int DEFAULT_MIN_DAYS_TO_MATURITY = 0;
 
-    /** 到期日格式，与主档 maturity_date 一致 */
+    /** 摘牌日格式，与主档 delist_date 一致 */
     private static final String DATE_PATTERN = "yyyyMMdd";
 
-    /** 到期日解析格式，用于计算距到期的剩余天数 */
+    /** 摘牌日解析格式，用于计算距到期的剩余天数 */
     private static final DateTimeFormatter MATURITY_FORMATTER = DateTimeFormatter.BASIC_ISO_DATE;
 
     /** 扩展参数 JSON 解析器 */
@@ -512,7 +512,7 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
             // 2. 已到期或距到期不足保护天数的 ABS 不再补入
             if (isMaturityTooClose(abs, context.today, context.params.minDaysToMaturity)) {
                 if (context.params.minDaysToMaturity > 0) {
-                    infoDetail(detail, "ABS[" + securityCode + "]到期日 " + abs.getMaturityDate()
+                    infoDetail(detail, "ABS[" + securityCode + "]摘牌日 " + abs.getDelistDate()
                             + "，距到期不足 " + context.params.minDaysToMaturity + " 天，跳过自动入池");
                 }
                 continue;
@@ -669,11 +669,11 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
     /**
      * 判断 ABS 是否已到期，或距到期不足保护天数
      *
-     * 到期日为空时不限制；保护天数为 0 时等价于「到期日早于今天才跳过」，
+     * 摘牌日为空时不限制；保护天数为 0 时等价于「摘牌日早于今天才跳过」，
      * 即到期当天仍可补入，与改造前的行为保持一致
      *
      * 执行顺序：
-     * 1. 到期日为空直接放行
+     * 1. 摘牌日为空直接放行
      * 2. 按 yyyyMMdd 解析后算剩余天数，不足保护天数则不再补入
      * 3. 日期格式异常时退回字符串比较，至少挡住已过期的记录
      *
@@ -683,17 +683,17 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
      * @return true 表示不再补入
      */
     private boolean isMaturityTooClose(AbsBondCandidateDto abs, String today, int minDays) {
-        String maturity = abs.getMaturityDate() == null ? null : abs.getMaturityDate().trim();
-        if (!StringUtils.hasText(maturity)) {
+        String delistDate = abs.getDelistDate() == null ? null : abs.getDelistDate().trim();
+        if (!StringUtils.hasText(delistDate)) {
             return false;
         }
         try {
             long remainDays = ChronoUnit.DAYS.between(
-                    LocalDate.parse(today, MATURITY_FORMATTER), LocalDate.parse(maturity, MATURITY_FORMATTER));
+                    LocalDate.parse(today, MATURITY_FORMATTER), LocalDate.parse(delistDate, MATURITY_FORMATTER));
             return remainDays < minDays;
         } catch (DateTimeParseException e) {
-            log.warn("ABS[{}]到期日格式异常: {}，按字符串比较处理", abs.getSecurityCode(), maturity);
-            return maturity.compareTo(today) < 0;
+            log.warn("ABS[{}]摘牌日格式异常: {}，按字符串比较处理", abs.getSecurityCode(), delistDate);
+            return delistDate.compareTo(today) < 0;
         }
     }
 
@@ -784,7 +784,7 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
      * 出池与入池共用同一套字段填充，避免两条分支各写一遍导致批次号或原因格式不一致
      *
      * 执行顺序：
-     * 1. 复制主档的代码、简称、类型、ABS 标志、发行主体与到期日
+     * 1. 复制主档的代码、简称、类型、ABS 标志、发行主体与摘牌日
      * 2. 填自动调整类型、调整方向、目标池、审核状态与系统操作人
      * 3. 追加发行主体、主体所在池、联动触发主体三段原因说明
      * 4. 按债券和目标池生成批次号，提交时间取本轮统一时间
@@ -807,7 +807,7 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
         candidate.setAbsFlag(abs.getAbsFlag());
         candidate.setIssuerCode(abs.getIssuerCode());
         candidate.setIssuerName(abs.getIssuerName());
-        candidate.setMaturityDate(abs.getMaturityDate());
+        candidate.setDelistDate(abs.getDelistDate());
         candidate.setTriggerCompanyCode(trigger);
         candidate.setAdjustType(AdjustType.AUTO.getCode());
         candidate.setAdjustMode(adjustMode);

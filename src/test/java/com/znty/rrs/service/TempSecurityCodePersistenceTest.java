@@ -33,6 +33,8 @@ import java.util.UUID;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Map;
 import java.util.regex.Matcher;
@@ -1109,6 +1111,17 @@ public class TempSecurityCodePersistenceTest {
         assertMasterIds();
     }
 
+    /** 正式证券状态为 U 时仍可人工转正 */
+    @Test
+    public void manualConversionShouldAcceptUnknownFormalSecurityStatus() throws Exception {
+        TempSecurityCodeDto added = service.addTempSecurityCode(addReq("001.IB"));
+        jdbc.update("UPDATE rrs_securityinfo SET security_status='U' WHERE wind_code='FORMAL.IB'");
+
+        TempSecurityCodeDto updated = service.editTempSecurityCodeToUpdated(operation(added.getId(), "FORMAL.IB"));
+
+        assertThat(updated.getStatus()).isEqualTo("updated");
+    }
+
     /** 人工转正和临时代码定时转正均拒绝退市正式代码 */
     @Test
     public void ordinaryConversionsShouldStillRejectDelistedFormalSecurity() throws Exception {
@@ -1149,6 +1162,12 @@ public class TempSecurityCodePersistenceTest {
         assertThat(jdbc.queryForObject("SELECT sec_id FROM rrs_temp_security_code WHERE id=?", String.class, cancelled.getId()))
                 .isEqualTo("TEMP_CANCEL.IB");
         assertThat(result.getStatus()).isEqualTo("cancelled");
+        assertThat(jdbc.queryForObject("SELECT maturity_date FROM rrs_securityinfo WHERE wind_code='CANCEL.IB'", String.class))
+                .isEqualTo("20310101");
+        assertThat(jdbc.queryForObject("SELECT delist_date FROM rrs_securityinfo WHERE wind_code='CANCEL.IB'", String.class))
+                .isEqualTo(LocalDate.now().minusDays(1).format(DateTimeFormatter.BASIC_ISO_DATE));
+        assertThat(jdbc.queryForObject("SELECT security_status FROM rrs_securityinfo WHERE wind_code='CANCEL.IB'", String.class))
+                .isEqualTo("D");
         assertThat(jdbc.queryForObject("SELECT sec_id FROM rrs_securityinfo WHERE wind_code='CANCEL.IB'", String.class))
                 .isEqualTo("TEMP_CANCEL.IB");
         // 删除另一条临时代码，再通过页面新增入口重建同码

@@ -1,5 +1,6 @@
 package com.znty.rrs.service;
 
+import com.znty.rrs.common.enums.CategoryType;
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
 import com.znty.rrs.common.PageResult;
@@ -86,9 +87,10 @@ public class ForbiddenPoolQueryService {
             target.setTargetPoolName(source.getTargetPoolName());
             // 入池时间格式与页面一致
             target.setEntryTime(QueryListExportHelper.formatDateTime(source.getEntryTime()));
-            // 与前端 getBondStatus 一致：按到期日派生存续/到期
-            target.setSecurityStatusLabel(QueryListExportHelper.bondStatusByMaturityDate(source.getMaturityDate()));
-            target.setDelistDate(source.getDelistDate());
+            // 债券按主档状态展示，主体行显示空白
+            target.setSecurityStatusLabel(CategoryType.BOND.getCode().equals(source.getCategoryType())
+                    ? QueryListExportHelper.bondStatusLabel(source.getSecurityStatus()) : "");
+            target.setMaturityDate(source.getMaturityDate());
             target.setRepurchaseDate(source.getRepurchaseDate());
             result.add(target);
         }

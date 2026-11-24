@@ -133,7 +133,7 @@
 |---|---|---|
 | `ip_adjust_log` | 证券池调库记录（主表） | id, security_code, security_short_name, security_type, adjust_type, adjust_mode, adjust_batch_no, target_pool_id, target_pool_name, pool_type, flow_id, audit_status, adjuster_id, adjuster_name, adjust_reason, submit_time, entry_time, is_deleted |
 | `ip_investment_pool` | 投资池定义（树/全路径/名称） | id, parent_id, pool_name, pool_type, outer_sort, inner_sort, status, is_deleted |
-| `rrs_securityinfo` | 证券基础信息 | wind_code, issuer, full_name, maturity_date |
+| `rrs_securityinfo` | 证券基础信息 | wind_code, issuer, full_name, security_status |
 | `dict_security_type` | 证券类型字典 | security_type, security_type_name, sort_order, is_deleted |
 
 ### 7.2 可见数据范围控制
@@ -148,7 +148,7 @@
   - `LEFT JOIN rrs_securityinfo sb ON sb.wind_code=al.security_code`
   - `INNER JOIN dict_security_type dst ON dst.security_type=al.security_type AND dst.is_deleted=0 AND dst.category_type='bond'`（仅债券大类，与证券池调整列表同口径；主体归主体历史）
 - **WHERE**：`al.is_deleted=0`（债券大类，含 crmw 跟债记录；不限 audit_status，含全量历史；禁投/观察/黑名单/重点观察目标池的债券记录可查；**不再** `pool_type NOT IN ('crmw','forbidden')`）
-  - 预留的 `securityStatus` 筛选按 `yyyyMMdd` 格式比较 `maturity_date` 与 `DATE_FORMAT(NOW(), '%Y%m%d')`
+  - 预留的 `securityStatus` 筛选按证券主档状态，D 表示到期，其余状态归为存续
   - `adjustTimeEnd` 后端补 `CONCAT(#{adjustTimeEnd}, ' 23:59:59')`，start 直接用日期串
   - `myBonds==true` → `al.adjuster_id = #{currentUserId}`
   - `bondYesFlags` → 按主档证券特征逐项追加条件，多选 AND

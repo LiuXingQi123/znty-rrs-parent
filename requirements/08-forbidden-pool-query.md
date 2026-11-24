@@ -55,11 +55,11 @@ Vue 实例挂载 `#forbidden_pool_query`。布局：顶栏（闪电图标 +「�
     "pageIndex", "pageSize" }
   ```
 - 后端 `ForbiddenPoolQueryService.queryForbiddenPoolPage`：`PageHelper.startPage` 分页；`queryForbiddenPoolPage` SQL；`fillPoolFullName`（用投资池全路径名覆盖 `targetPoolName`）；返回 `PageResult`。
-- 返回 `PageResult<ForbiddenPoolQueryDto>`（`id, securityShortName, securityCode, issuer, adjusterName, securityType, securityTypeName, targetPoolName, targetPoolId, adjustLogId(状态表 adjust_log_id，非本行 id), adjustBatchNo, entryTime, maturityDate, delistDate, repurchaseDate`）。
+- 返回 `PageResult<ForbiddenPoolQueryDto>`（`id, securityShortName, securityCode, issuer, adjusterName, securityType, securityTypeName, targetPoolName, targetPoolId, adjustLogId(状态表 adjust_log_id，非本行 id), adjustBatchNo, entryTime, securityStatus, maturityDate, delistDate, repurchaseDate`）。
 
 ### 2.2.1 导出当前查询结果
 
-点击「导出」调用 `POST /api/v1/forbiddenPoolQuery/exportForbiddenPoolExcel`，筛选条件与列表相同但不传分页；仍按 VIEWABLE 权限过滤。Excel 列与页面一致（不含序号；统一社会信用代码经筛选生效但导出模板暂不含该列）；「证券状态」后端按到期日派生存续/到期，对齐前端 `getBondStatus`。
+点击「导出」调用 `POST /api/v1/forbiddenPoolQuery/exportForbiddenPoolExcel`，筛选条件与列表相同但不传分页；仍按 VIEWABLE 权限过滤。Excel 列与页面一致（不含序号；统一社会信用代码经筛选生效但导出模板暂不含该列）；「证券状态」后端按证券主档状态展示。债券状态 D 为到期，其余为存续。主体行留空。
 
 ### 2.3 表格列渲染
 
@@ -73,8 +73,8 @@ Vue 实例挂载 `#forbidden_pool_query`。布局：顶栏（闪电图标 +「�
 | 证券类型 | `securityTypeName` | 有值 `el-tag type=info`，无值空 |
 | 投资池名称 | `targetPoolName` | tooltip，显示投资池全路径名 |
 | 入池时间 | `entryTime` | `moment(...).format('YYYY-MM-DD HH:mm')` |
-| 证券状态 | `getBondStatus(row)` | 存续=绿色；到期=琥珀。**前端根据到期日实时计算**：`moment(maturityDate).isBefore(moment(),'day') ? '到期' : '存续'` |
-| 退市日期 | `delistDate` | 居中 |
+| 证券状态 | `securityStatus` | 存续=绿色；到期=琥珀。债券状态 D 显示到期，其余显示存续。主体行留空。 |
+| 到期日 | `maturityDate` | 列表和 Excel 都取 `rrs_securityinfo.maturity_date`，格式 `yyyyMMdd`，空值留白 |
 | 行权日期（回售） | `repurchaseDate` | 居中 |
 
 ### 2.4 跳转详情
@@ -97,7 +97,7 @@ Vue 实例挂载 `#forbidden_pool_query`。布局：顶栏（闪电图标 +「�
 - **统一社会信用代码筛选**：主体行（`ips.security_type='company'`）已 LEFT JOIN `wind_compintroduction`，直接匹配 `wci.REGISTERNUMBER`；债券行 `wci` 为空，用 `EXISTS` 按 `issuer_code` 反查发行主体的 `REGISTERNUMBER` 匹配，与「主体代码」同时匹配主体与债券发行主体的口径一致。
 - **信用代码展示**：`SELECT` 用 `COALESCE(wci.REGISTERNUMBER, 标量子查询)` 输出 `registerNumber`，主体行取自身、债券行取发行主体，列表与查询条件同一口径。
 - **分页硬上限**：`PageRequest.getPageSize()` 限制最大 4000；`pageIndex` <1 兜底为 1。
-- **证券状态筛选 SQL**：`maturity_date` 按 `yyyyMMdd` 存储；`securityStatus == 'active'` → `bi.maturity_date >= DATE_FORMAT(CURDATE(), '%Y%m%d')`；`'matured'` → `bi.maturity_date < DATE_FORMAT(CURDATE(), '%Y%m%d')`，与证券池查询保持一致。
+- **证券状态筛选 SQL**：`securityStatus == 'active'` → `bi.security_status != 'D'`，也保留未关联主档的在池债券。`'matured'` → `bi.security_status = 'D'`。
 - **`targetPoolName` 覆盖**：XML 查出的 `p.pool_name AS target_pool_name` 会被 Service 的 `fillPoolFullName` 用投资池全路径名覆盖。即表格「投资池名称」列实际显示全路径名（含父级）。
 - **无可见数据范围/权限校验**：无按当前用户或角色过滤的逻辑，未引用 `ip_pool_permission`。任何调用方都能看到全部禁投池数据。
 - 日期筛选与排序均使用 `ips.entry_time`（入池时间）。
@@ -120,7 +120,7 @@ Vue 实例挂载 `#forbidden_pool_query`。布局：顶栏（闪电图标 +「�
 涉及表：
 - `ip_pool_status`（投资池当前状态表）：证券当前所在池快照。
 - `ip_investment_pool`（投资池主表）：禁投池记录 `pool_type='forbidden'`。
-- `rrs_securityinfo`（证券信息表）：关联键 `wind_code = ips.security_code`，提供 `issuer/maturity_date/delist_date/repurchase_date`。
+- `rrs_securityinfo`（证券信息表）：关联键 `wind_code = ips.security_code`，提供 `issuer/maturity_date/delist_date/security_status/repurchase_date`。
 - `dict_security_type`（证券类型字典）。
 
 **主查询 SQL**（`ForbiddenPoolQueryMapper.xml`）：
@@ -130,7 +130,7 @@ SELECT ips.id, ips.security_code, ips.security_short_name, ips.adjuster_name,
        p.pool_name AS target_pool_name, ips.security_type,
        dst.security_type_name,
        COALESCE(wci.COMP_NAME, bi.issuer, ips.security_short_name) AS issuer,
-       bi.maturity_date, bi.delist_date, bi.repurchase_date
+       bi.security_status, bi.maturity_date, bi.delist_date, bi.repurchase_date
 FROM ip_pool_status ips
 INNER JOIN ip_investment_pool p ON p.id = ips.target_pool_id
                                  AND p.is_deleted = 0
@@ -145,8 +145,8 @@ LEFT JOIN ais_inv_ods.wind_compintroduction wci ON wci.COMP_ID = ips.security_co
     <if securityType> AND ips.security_type = #{securityType} </if>
     <if categoryType=='company'> AND ips.security_type = 'company' </if>
     <if categoryType=='bond'> AND dst.category_type = 'bond' </if>
-    <if securityStatus=='active'> AND dst.category_type = 'bond' AND bi.maturity_date >= DATE_FORMAT(CURDATE(), '%Y%m%d') </if>
-    <if securityStatus=='matured'> AND dst.category_type = 'bond' AND bi.maturity_date < DATE_FORMAT(CURDATE(), '%Y%m%d') </if>
+    <if securityStatus=='active'> AND dst.category_type = 'bond' AND (bi.wind_code IS NULL OR bi.security_status != 'D') </if>
+    <if securityStatus=='matured'> AND dst.category_type = 'bond' AND bi.security_status = 'D' </if>
     <if entryTimeStart> AND ips.entry_time >= #{entryTimeStart} </if>
     <if entryTimeEnd> AND ips.entry_time <= CONCAT(#{entryTimeEnd}, ' 23:59:59') </if>
     <if adjusterName> AND ips.adjuster_name LIKE CONCAT('%', #{adjusterName}, '%') </if>
@@ -158,7 +158,7 @@ ORDER BY ips.entry_time DESC, ips.id DESC
 ## 6. 验收标准
 
 - 关键字、类型及分页组合查询正确，只返回禁投池数据。
-- 证券状态由前端按到期日计算展示。
+- 证券状态由前端按主档状态展示。
 - `ForbiddenPoolQueryApiTest` 覆盖页面全部接口。
 
 ## 7. 关键源码索引

@@ -79,7 +79,7 @@ public class SecurityInfoBo {
     private String repurchaseContent;
     /** 兑付起始日 */
     private String paymentDate;
-    /** 摘牌日 */
+    /** 摘牌日（业务到期日，格式 yyyyMMdd） */
     private String delistDate;
     /** 短期融资券,如果F4_1090等于DQ时-1,否则为0 */
     private Integer securitiesTypesDq;
@@ -145,7 +145,7 @@ public class SecurityInfoBo {
     private String agencyName;
     /** 主承销商Id */
     private String agencyNameid;
-    /** 证券状态：L=上市中 / N=待上市 / D=退市 / U=未知（对应 SecurityStatus；勿与 BondStatus 存续/到期混淆） */
+    /** 证券状态：L=上市中 / N=待上市 / D=退市 / U=未知（债券 D 即到期） */
     private String securityStatus;
     /** 证券来源 */
     private String securitySource;

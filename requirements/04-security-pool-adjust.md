@@ -70,7 +70,7 @@
 
 - 路径：`POST /api/v1/securityPoolAdjust/querySecurityPage`
 - 请求体：`{ securityCode, securityShortName, securityFullName, issuerCode, securityType, issuer, bondYesFlags, pageIndex, pageSize }`
-- 后端：`SecurityPoolAdjustService.querySecurityPage`，`PageHelper.startPage` 分页，SQL 限定 **`dict_security_type.category_type=bond`（债券大类，包含 CRMW 凭证）**，主体、股票、基金由大类过滤，固定排除退市（`security_status != 'D'`；上市状态枚举 `SecurityStatus`：`L`上市中 / `N`待上市 / `D`退市 / `U`未知，仅排除 `D`，`L`/`N`/`U` 均可查；来源未给状态须落 `U`，勿留 `NULL`，否则三值逻辑会滤掉该行）；按 `wind_code` 前缀匹配，按 `short_name` / `issuer` 包含匹配，`securityType` 精确匹配 `si.security_type`（列表无固定 ORDER BY），INNER JOIN `dict_security_type` 取 `security_type_name`。可选 `bondYesFlags` 多选（`guarant`/`inright`/`yx`/`private`/`abs`/`cj`/`stdCredit`）：勾选即筛对应「是」，多选 AND；`private` 对齐发行方式或内部分类含「私募」，`abs` 为 `absFlag=1` 或类型 `abs`（`abs_all` 不算）。CRMW 凭证可作为人工单券候选，禁投池旗下债券统计与联动也包含 CRMW。
+- 后端：`SecurityPoolAdjustService.querySecurityPage`，`PageHelper.startPage` 分页，SQL 限定 **`dict_security_type.category_type=bond`（债券大类，包含 CRMW 凭证）**，主体、股票、基金由大类过滤，固定排除主档状态为 `D` 的证券。`L` 上市中、`N` 待上市、`U` 未知均可进入候选；按 `wind_code` 前缀匹配，按 `short_name` / `issuer` 包含匹配，`securityType` 精确匹配 `si.security_type`（列表无固定 ORDER BY），INNER JOIN `dict_security_type` 取 `security_type_name`。可选 `bondYesFlags` 多选（`guarant`/`inright`/`yx`/`private`/`abs`/`cj`/`stdCredit`）：勾选即筛对应「是」，多选 AND；`private` 对齐发行方式或内部分类含「私募」，`abs` 为 `absFlag=1` 或类型 `abs`（`abs_all` 不算）。CRMW 凭证可作为人工单券候选，禁投池旗下债券统计与联动也包含 CRMW。
 - 返回：`PageResult<SecurityInfoDto>`，前端取 `data.records` 与 `data.total`。
 - 参数传递：`SecurityPoolAdjustService.querySecurityPage` 将完整 `SecurityPoolAdjustReq` 传给 Mapper，证券全称和主体编码与其他筛选条件一起绑定，避免拆分参数时遗漏
 
@@ -286,8 +286,8 @@
 
 | 类型 | 规则方法 | 失败原因 |
 |---|---|---|
-| 债券 bond | `inCheckBondMaturity` / `inCheckMainGradeRule` | 失败文案为检查项表述（可多条并存）：债券已到期；主体债入库矩阵未配置允许池；目标池不在矩阵/特殊债下调后允许范围内；**主体无内评分**（ABS 为“所选权益人无内评分”）；**无法匹配债券期限档**；**可转债、可交换债、信用风险缓释工具不适用信用债分级库**。矩阵内评来源：非 ABS 非担保债只用债务主体内评；非 ABS 担保债取债务主体与页面所选担保人内评较优值；ABS 直接使用自选权益人（优先）或普通权益人内评，不与债务主体/担保人孰高。特殊债降档、期限档和观察池规则保持不变。ABS 权益人内评不作为强担保评级，不触发重点观察名单强担保豁免。`releaseRules` 仍跳过矩阵。 |
-| 股票 stock | `inCheckStockDelist` / `inCheckGradeAstrict` | 股票已退市（`delist_date` 早于今日）；`grade_astrict` 入口仍调用但**方法恒 return null**（未接 StockResearch/investrank，空实现不拦截） |
+| 债券 bond | `inCheckBondMaturity` / `inCheckMainGradeRule` | 失败文案为检查项表述（可多条并存）：债券已到期（摘牌日早于当天）；主体债入库矩阵未配置允许池；目标池不在矩阵/特殊债下调后允许范围内；**主体无内评分**（ABS 为“所选权益人无内评分”）；**无法匹配债券期限档**；**可转债、可交换债、信用风险缓释工具不适用信用债分级库**。矩阵内评来源：非 ABS 非担保债只用债务主体内评；非 ABS 担保债取债务主体与页面所选担保人内评较优值；ABS 直接使用自选权益人（优先）或普通权益人内评，不与债务主体/担保人孰高。特殊债降档、期限档和观察池规则保持不变。ABS 权益人内评不作为强担保评级，不触发重点观察名单强担保豁免。`releaseRules` 仍跳过矩阵。 |
+| 股票 stock | `inCheckStockDelist` / `inCheckGradeAstrict` | 股票已退市（摘牌日早于当天）；`grade_astrict` 入口仍调用但**方法恒 return null**（未接 StockResearch/investrank，空实现不拦截） |
 | 基金 fund | `inCheckFundRate` | 基金池的评分，必须在{expr}（仅 **checkAdjust** 按请求 `fundRate` 校验；**正式提交不携带 fundRate、不再次校验**） |
 | 主体 company | —（主体不校验到期，暂无） | |
 
@@ -316,8 +316,8 @@
 
 | 类型 | 规则方法 | 失败原因 |
 |---|---|---|
-| 债券 bond | `outCheckBondMaturity` | 债券已到期（`maturity_date` 早于今日） |
-| 股票 stock | `outCheckStockDelist` | 股票已退市（`delist_date` 早于今日） |
+| 债券 bond | `outCheckBondMaturity` | 债券已到期（摘牌日早于当天） |
+| 股票 stock | `outCheckStockDelist` | 股票已退市（摘牌日早于当天） |
 | 基金 fund | —（暂无） | |
 | 主体 company | —（主体不校验到期） | |
 
@@ -601,8 +601,8 @@ Demo 在原始 `INSERT` 中为全部 54 条证券显式填写标识，设置以�
 | 行业限制 | 查 `IndustryPartition.industrycode` 与池 `IndustryCode` 比对 | 用 `rrs_securityinfo.industry_name == pool.industry_code` | 可能有问题，老系统是行业编码，新系统当前像名称对配置值精确匹配 |
 | 股票分管人限制 | `IsManage=1` 且当前用户不是分管股票则拦 | 未实现 | 缺少；如果股票池仍要求分管人权限，需要补 |
 | 股票入池评级限制 | `grade_astrict` + `StockResearch.investrank` | 入口保留，但当前无股票评级来源，先跳过 | 当前是有意放宽；后续接股票研究评级后再补强 |
-| 股票退市 | 股票 `EndDate` 有值就拦 | `delist_date < today` 才拦 | 口径不同，老系统更严格 |
-| 债券到期 | 到期日早于当前日则拦 | 已有 | 基本一致 |
+| 股票退市 | 股票 `EndDate` 有值就拦 | 摘牌日早于当天则拦截 | 口径不同，老系统更严格 |
+| 债券到期 | 到期日早于当前日则拦 | 摘牌日早于当天则拦 | 日期取摘牌日 |
 | 债券大库/主体评级矩阵 | 私募→次级→永续→担保后写覆盖；ABS 直接使用自选权益人（优先）或普通权益人内评并保留原特殊债降档；非 ABS 担保债取主体/所选担保人内评孰优，非担保债仅主体内评；含权只改期限；重点观察名单禁新增、已在库只能去五级，开关开启时强担保可豁免重点观察名单准入及池间调入限制，ABS 权益人不享受强担保豁免；可转债/可交换/CRMW 不适用 1～5 | 已落地于证券池调库申请页的选池、校验和提交链路；本次不改变批量调库、CRMW、详情及审批页面 | 永续+担保按担保债，不再强制下调。观察池不跳过矩阵。已在库不符由定时任务生成待办，不自动出池。CRMW 按需求豁免 |
 | 基金评分 | 池配置 `FundRateLimit`，且传了 `fundRate` 才校验 | 池配置后，未传 `fundRate` 也失败 | 新系统更严格，需确认前端是否总能提供基金评分 |
 | 研报限制 | check/提交阶段均有逻辑，且支持 `RschDocMode > 100` 自定义规则类 | 提交阶段支持 none/any/internal | 缺少自定义研报规则；批量跳过报告配置也未复刻 |

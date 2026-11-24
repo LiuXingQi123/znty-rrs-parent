@@ -29,8 +29,8 @@ public class AbsBondCandidateDto {
     /** 主档发行主体名称 */
     private String issuerName;
 
-    /** 到期日，格式 yyyyMMdd */
-    private String maturityDate;
+    /** 摘牌日（业务到期日，格式 yyyyMMdd） */
+    private String delistDate;
 
     /** 主档市场编码，用于池 market_codes 准入判断 */
     private String market;

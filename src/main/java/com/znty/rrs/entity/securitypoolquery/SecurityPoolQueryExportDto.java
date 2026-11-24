@@ -29,13 +29,13 @@ public class SecurityPoolQueryExportDto {
     private String issueDate;
     /** 起息日 */
     private String carryDate;
-    /** 到期日 */
+    /** 到期日，格式 yyyyMMdd */
     private String maturityDate;
     /** 证券期限（与页面 dateExistsStr 一致） */
     private String dateExistsStr;
     /** 证券状态 */
     private String securityStatusLabel;
-    /** 退市日期 */
+    /** 摘牌日（业务到期日，格式 yyyyMMdd） */
     private String delistDate;
     /** 行权日期（回售） */
     private String repurchaseDate;

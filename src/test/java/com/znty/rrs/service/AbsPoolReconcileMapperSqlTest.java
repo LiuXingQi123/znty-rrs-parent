@@ -51,7 +51,7 @@ public class AbsPoolReconcileMapperSqlTest {
         String sql = render("queryAbsBondList");
         assertThat(sql).contains("dst.category_type = 'bond'")
                 .contains("(COALESCE(bond.abs_flag, 0) = 1 OR bond.security_type = 'abs')")
-                .contains("bond.security_status != 'D'");
+                .contains("AND bond.security_status != 'D'");
     }
 
     /**
