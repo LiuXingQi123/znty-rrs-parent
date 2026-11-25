@@ -29,23 +29,34 @@ import java.util.TreeMap;
 import java.util.stream.Collectors;
 
 /**
- * Excel 主体调库的批量提交与直通落池
+ * 处理 Excel 主体调库的批量提交和直通落池
+ *
+ * {@link SecurityPoolExcelImportService} 提交主体导入或清空目标池时调用本类
+ * 调库项由 {@link ForbiddenPoolAdjustService} 按主体规则准备，本类批量写入日志和审批步骤
+ * 直通项在同一事务中更新主体池状态，需要审批的记录保留给后续流程
  */
 @Service
 public class BatchCompanyAdjustSubmitService {
 
+    /** 每批写入主体日志、步骤或池状态的最大条数 */
     private static final int BATCH_SIZE = 200;
 
+    /** 批量读取主体并写入调库记录及池状态 */
     @Resource
     private BatchCompanyAdjustSubmitMapper batchCompanyAdjustSubmitMapper;
+
+    /** 读取提交时使用的投资池配置 */
     @Resource
     private InvestmentPoolMapper investmentPoolMapper;
+
+    /** 按主体调库规则准备每组申请和审批步骤 */
     @Resource
     private ForbiddenPoolAdjustService forbiddenPoolAdjustService;
 
     /**
      * 批量提交已确认的 Excel 主体导入或清空项
      *
+     * 执行顺序：
      * 1. 批量读取主体主档和投资池
      * 2. 按当前流程配置生成日志和初始步骤
      * 3. 批量写入日志、流程步骤及直通池状态
@@ -93,6 +104,11 @@ public class BatchCompanyAdjustSubmitService {
     /**
      * 写入日志、初始流程步骤和已生效池状态
      *
+     * 执行顺序：
+     * 1. 逐项新增调库日志列表
+     * 2. 主体调库日志主键回填失败时终止处理
+     * 3. 仅直通生效的调库项更新池状态
+     *
      * @param rows 按原提交顺序生成的日志及步骤
      * @return 已写入的日志 ID
      */
@@ -134,11 +150,16 @@ public class BatchCompanyAdjustSubmitService {
     /**
      * 按原顺序应用直通项，同一主体同池的多次操作分批执行
      *
+     * 执行顺序：
+     * 1. 依次收集已审批通过的记录，达到分组上限或遇到相同主体和目标池时先写入当前小批
+     * 2. 循环结束后写入余下的记录，每次写入先结束旧状态再新增本批调入状态
+     *
      * @param approved 已生效的调库日志
      */
     private void applyApprovedRows(List<IpAdjustLogBo> approved) {
         List<IpAdjustLogBo> chunk = new ArrayList<>();
         Set<List<Object>> keys = new HashSet<>();
+        // 1. 依次收集已审批通过的记录，达到分组上限或遇到相同主体和目标池时先写入当前小批
         for (IpAdjustLogBo log : approved) {
             List<Object> key = Arrays.asList(log.getSecurityCode(), log.getTargetPoolId());
             if (chunk.size() == BATCH_SIZE || keys.contains(key)) {
@@ -150,6 +171,7 @@ public class BatchCompanyAdjustSubmitService {
             keys.add(key);
             chunk.add(log);
         }
+        // 2. 循环结束后写入余下的记录，每次写入先结束旧状态再新增本批调入状态
         if (!chunk.isEmpty()) {
             // 写入最后一批池状态
             writePoolStates(chunk);
@@ -158,6 +180,9 @@ public class BatchCompanyAdjustSubmitService {
 
     /**
      * 结束旧在池状态并新增本批直通调入状态
+     *
+     * 执行顺序：
+     * 1. 主体调入池状态写入失败时终止处理
      *
      * @param rows 主体和池组合不重复的直通调库日志
      */
@@ -178,8 +203,11 @@ public class BatchCompanyAdjustSubmitService {
     /**
      * 判断是否需要原入口处理引用的附件
      *
+     * 执行顺序：
+     * 1. 获取明细列表
+     *
      * @param request 主体提交请求
-     * @return 是否传入报告或材料
+     * @return true=有调库项引用报告或材料，false=没有调库项引用报告或材料
      */
     private boolean hasAttachmentReferences(ForbiddenPoolAdjustSubmitReq request) {
         return request.getItems() != null && request.getItems().stream().anyMatch(item ->

@@ -18,51 +18,64 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 基金池调整历史服务。
- * <p>负责基金调库历史分页查询、导出，以及筛选条件所需的基金类型查询。</p>
+ * 查询基金池的调入调出历史
+ *
+ * 按页面条件筛选基金调整日志，提供基金类型选项，并支持导出同一范围的历史记录
+ * 列表和导出都补齐投资池全路径名称
  */
 @Service
 public class FundPoolAdjustHistoryService {
 
-    /** 基金池调整历史数据访问组件。 */
+    /** 基金池调整历史数据访问组件 */
     @Resource
     private FundPoolAdjustHistoryMapper fundPoolAdjustHistoryMapper;
 
-    /** 投资池服务。 */
+    /** 投资池服务 */
     @Resource
     private InvestmentPoolService investmentPoolService;
 
     /**
-     * 分页查询基金池调整历史列表。
+     * 分页查询基金池调整历史列表
+     *
+     * 执行顺序：
+     * 1. 按筛选条件分页查询调整历史
+     * 2. 回填投资池全路径名称
+     * 3. 返回本页记录和查询总条数
      *
      * @param req 基金池调整历史筛选条件
      * @return 分页后的基金池调整历史记录
      */
     public PageResult<FundPoolAdjustHistoryDto> queryFundPoolAdjustHistoryPage(FundPoolAdjustHistoryReq req) {
-        // 开启分页并查询基金池调整历史列表。
+        // 1. 按筛选条件分页查询调整历史
         PageHelper.startPage(req.getPageIndex(), req.getPageSize());
         List<FundPoolAdjustHistoryDto> list = fundPoolAdjustHistoryMapper.queryFundPoolAdjustHistoryPage(req);
-        // 回填投资池全路径名称，保持页面展示完整。
+        // 2. 回填投资池全路径名称
         fillPoolFullName(list);
-        // 读取分页总数并组装分页结果。
+        // 3. 返回本页记录和查询总条数
         PageInfo<FundPoolAdjustHistoryDto> pageInfo = new PageInfo<>(list);
         return new PageResult<>(list, pageInfo.getTotal(), req.getPageIndex(), req.getPageSize());
     }
 
     /**
-     * 按当前筛选条件导出全部命中的基金池调整历史。
+     * 按当前筛选条件导出全部命中的基金池调整历史
+     *
+     * 执行顺序：
+     * 1. 复用列表 SQL 查询全部命中记录，不受当前分页限制
+     * 2. 回填投资池全路径名称，保证导出与页面展示一致
+     * 3. 将查询记录转换为模板所需的导出行
+     * 4. 按基金历史模板生成 Excel 文件
      *
      * @param req 与列表查询相同的筛选条件（可不传分页）
      * @return 可下载的 Excel 文件
      */
     public CommonFileDto exportFundPoolAdjustHistoryExcel(FundPoolAdjustHistoryReq req) {
-        // 复用列表 SQL 查询全部命中记录，不受当前分页限制。
+        // 1. 复用列表 SQL 查询全部命中记录，不受当前分页限制
         List<FundPoolAdjustHistoryDto> list = fundPoolAdjustHistoryMapper.queryFundPoolAdjustHistoryPage(req);
-        // 回填投资池全路径名称，保证导出与页面展示一致。
+        // 2. 回填投资池全路径名称，保证导出与页面展示一致
         fillPoolFullName(list);
-        // 将查询记录转换为模板所需的导出行。
+        // 3. 将查询记录转换为模板所需的导出行
         List<FundPoolAdjustHistoryExportDto> exportRows = buildExportRows(list);
-        // 按基金历史模板生成 Excel 文件。
+        // 4. 按基金历史模板生成 Excel 文件
         return QueryListExportHelper.fillTemplate(
                 "/xlsx/fund_pool_adjust_history_export_template.xlsx",
                 "基金池调整历史",
@@ -72,7 +85,10 @@ public class FundPoolAdjustHistoryService {
     }
 
     /**
-     * 查询调整历史中出现的基金类型选项。
+     * 查询调整历史中出现的基金类型选项
+     *
+     * 执行顺序：
+     * 1. 从基金池历史调整记录中读取已出现的基金类型，供列表筛选
      *
      * @return 基金类型选项列表
      */
@@ -81,7 +97,10 @@ public class FundPoolAdjustHistoryService {
     }
 
     /**
-     * 将页面展示字段转换为 Excel 行。
+     * 将页面展示字段转换为 Excel 行
+     *
+     * 执行顺序：
+     * 1. 逐项格式化入池时间
      *
      * @param list 基金池调整历史记录
      * @return Excel 导出行
@@ -91,7 +110,7 @@ public class FundPoolAdjustHistoryService {
         for (FundPoolAdjustHistoryDto source : list) {
             FundPoolAdjustHistoryExportDto target = new FundPoolAdjustHistoryExportDto();
             target.setAdjusterName(source.getAdjusterName());
-            // 提交时间按页面展示格式写入 Excel。
+            // 提交时间按页面展示格式写入 Excel
             target.setSubmitTime(QueryListExportHelper.formatDateTime(source.getSubmitTime()));
             target.setFundName(source.getFundName());
             target.setFundCode(source.getFundCode());
@@ -99,7 +118,7 @@ public class FundPoolAdjustHistoryService {
             target.setAdjustType(source.getAdjustType());
             target.setAdjustMode(source.getAdjustMode());
             target.setTargetPoolPath(source.getTargetPoolPath());
-            // 审核状态按统一字典转换为导出文案。
+            // 审核状态按统一字典转换为导出文案
             target.setAuditStatusLabel(QueryListExportHelper.auditStatusLabel(source.getAuditStatus()));
             result.add(target);
         }
@@ -107,7 +126,10 @@ public class FundPoolAdjustHistoryService {
     }
 
     /**
-     * 填充投资池全路径名称。
+     * 填充投资池全路径名称
+     *
+     * 执行顺序：
+     * 1. 查询投资池全路径名称映射
      *
      * @param list 查询结果
      */
@@ -115,7 +137,7 @@ public class FundPoolAdjustHistoryService {
         if (list.isEmpty()) {
             return;
         }
-        // 查询投资池全路径名称映射。
+        // 查询投资池全路径名称映射
         Map<Long, String> poolFullNameMap = investmentPoolService.queryPoolFullNameMap();
         for (FundPoolAdjustHistoryDto dto : list) {
             String fullName = poolFullNameMap.get(dto.getTargetPoolId());

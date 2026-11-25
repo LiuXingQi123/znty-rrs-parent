@@ -72,22 +72,28 @@ import java.util.stream.Collectors;
 @Service
 public class CrmwPoolExcelImportService {
 
-    /** 统一证券市场查询组件。 */
+    /** 统一证券市场查询组件 */
     @Resource
     private SecurityMarketService securityMarketService;
 
     /** 导入批次业务类型 */
     private static final String BIZ_TYPE = "crmw_pool_excel";
+
     /** 模板编码 */
     private static final String TEMPLATE_CODE = "crmw_pool_import";
+
     /** 调库记录调整类型 */
     private static final String ADJUST_TYPE_EXCEL = "Excel导入";
+
     /** CRMW 凭证类型 */
     private static final String CRMW_SECURITY_TYPE = "crmw";
+
     /** 管理员用户 ID（放行 excel_importable） */
     private static final String ADMIN_USER_ID = "1";
+
     /** 上传文件大小上限（字节） */
     private static final int MAX_FILE_BYTES = 5 * 1024 * 1024;
+
     /** 单次导入最大数据行数 */
     private static final int MAX_ROWS = 2000;
 
@@ -96,6 +102,7 @@ public class CrmwPoolExcelImportService {
 
     /** 导入批次号序号生成器 */
     private static final AtomicInteger IMP_SEQ = new AtomicInteger(0);
+
     /** 导入明细号序号生成器 */
     private static final AtomicInteger DETL_SEQ = new AtomicInteger(0);
 
@@ -105,12 +112,15 @@ public class CrmwPoolExcelImportService {
     /** CRMW 池 Excel 导入数据访问组件 */
     @Resource
     private CrmwPoolExcelImportMapper crmwPoolExcelImportMapper;
+
     /** 投资池数据访问组件（权限） */
     @Resource
     private InvestmentPoolMapper investmentPoolMapper;
+
     /** CRMW 单笔调库校验/提交 */
     @Resource
     private CrmwPoolAdjustService crmwPoolAdjustService;
+
     /** 附件服务（解析前端原始文件名） */
     @Resource
     private SysAttachmentService sysAttachmentService;
@@ -334,10 +344,11 @@ public class CrmwPoolExcelImportService {
      * @return 导入任务详情
      */
     public CrmwPoolExcelImportDto queryTask(CrmwPoolExcelImportReq req) {
-        // 取得 Excel 导入批次
+        // 1. 按批次号读取并组装导入任务信息
         SysImpTmpBo batch = requireBatch(req == null ? null : req.getImpId());
         // 将保存的导入批次转换成任务详情
         CrmwPoolExcelImportDto dto = toTaskDto(batch);
+        // 2. 请求指定页码时查询本页导入明细
         if (req != null && req.getPageIndex() > 0) {
             dto.setItems(queryItemPage(req));
         }
@@ -348,25 +359,27 @@ public class CrmwPoolExcelImportService {
      * 分页查询 CRMW Excel 导入明细
      *
      * 执行顺序：
-     * 1. 确认导入批次存在
-     * 2. 按校验状态和关键字查询并分页
-     * 3. 将保存的行数据转换成展示对象
+     * 1. 校验批次号并确认导入批次存在
+     * 2. 按校验状态和关键字查询本页导入明细
+     * 3. 转换明细并补齐本页评级主体候选与自选权益人
      *
      * @param req 批次号、校验状态、关键字和分页条件
      * @return 导入明细分页结果
      */
     public PageResult<CrmwPoolExcelImportItemDto> queryItemPage(CrmwPoolExcelImportReq req) {
-        // 检查该值是否已填写
+        // 1. 校验批次号并确认导入批次存在
         if (req == null || isBlank(req.getImpId())) {
             throw new BizException("导入批次号不能为空");
         }
         // 取得 Excel 导入批次
         requireBatch(req.getImpId());
+        // 2. 按校验状态和关键字查询本页导入明细
         PageHelper.startPage(req.getPageIndex(), req.getPageSize());
         List<SysImpTmpDetlBo> list = crmwPoolExcelImportMapper.queryItemPage(
                 // 统一未填或纯空白的值，保留非空文本
                 req.getImpId().trim(), trimToNull(req.getChkRslt()), trimToNull(req.getKeyword()));
         PageInfo<SysImpTmpDetlBo> pageInfo = new PageInfo<>(list);
+        // 3. 转换明细并补齐本页评级主体候选与自选权益人
         List<CrmwPoolExcelImportItemDto> records = new ArrayList<>();
         for (SysImpTmpDetlBo bo : list) {
             // 将保存的导入明细转换成展示对象
@@ -389,6 +402,7 @@ public class CrmwPoolExcelImportService {
     private void initializeRatingCompanies(List<SysImpTmpDetlBo> items) {
         List<String> securityCodes = items.stream().filter(item -> !"2".equals(item.getChkRslt()))
                 .map(SysImpTmpDetlBo::getFld004)
+                // 判断文本是否未填写
                 .filter(code -> !isBlank(code)).map(String::trim).distinct().collect(Collectors.toList());
         if (securityCodes.isEmpty()) {
             return;
@@ -401,6 +415,7 @@ public class CrmwPoolExcelImportService {
             if ("2".equals(item.getChkRslt())) {
                 continue;
             }
+            // 清理文本并将空值统一为空字符串
             String code = data.resolveExcelSecurityCode(trimToEmpty(item.getFld004()));
             SecurityInfoBo security = data.securities.get(code);
             if (security == null) {
@@ -469,6 +484,7 @@ public class CrmwPoolExcelImportService {
             }
             List<RelatedRatingCompanyDto> related = relatedMap.get(code);
             dto.setRelatedRatingCompanies(related);
+            // 判断文本是否未填写
             if (!isBlank(dto.getSelfSelectedRightsHolderCode())) {
                 String selfCode = dto.getSelfSelectedRightsHolderCode();
                 if (!selfMap.containsKey(selfCode)) {
@@ -491,8 +507,7 @@ public class CrmwPoolExcelImportService {
      * 1. 检查请求、导入明细 ID 和当前用户 ID 是否为空
      * 2. 锁定导入批次，确认批次尚未提交，避免与校验、提交等操作交叉执行
      * 3. 按批次号和明细 ID 查询有效导入行，确认该明细属于当前批次
-     * 4. 规范化关联主体及自选权益人代码，空字符串转为 null；复核候选资格并由服务端回填名称，
-     *    编辑时允许暂不选择主体
+     * 4. 规范化关联主体及自选权益人代码，空字符串转为 null；复核候选资格并由服务端回填名称，编辑时允许暂不选择主体
      * 5. 仅更新当前行的主体选择，其他相同证券代码的导入行保留各自选择
      * 6. 清空本批所有行的旧校验结果及批次校验快照，清除校验结果筛选并补齐有效页码，回查任务和明细
      *
@@ -501,33 +516,39 @@ public class CrmwPoolExcelImportService {
      */
     @Transactional(rollbackFor = Exception.class)
     public CrmwPoolExcelImportDto editRatingCompany(CrmwPoolExcelImportReq req) {
+        // 1. 检查请求中的明细 ID 和当前用户
         if (req == null || req.getItemId() == null || isBlank(req.getCurrentUserId())) {
             throw new BizException("导入明细 ID 和当前用户 ID 不能为空");
         }
         // 锁定批次，避免修改与校验、提交同时执行
+        // 2. 锁定批次并确认尚未提交
         SysImpTmpBo batch = requireBatchForUpdate(req.getImpId());
         if ("1".equals(batch.getSaveRslt())) {
             throw new BizException("该批次已提交，不能修改主体选择");
         }
-        // 校验经办人有目标池的导入权限
+        // 3. 校验目标池权限并确认导入行属于当前批次
         validateExcelImportPermission(req.getCurrentUserId().trim(), parsePoolId(batch.getFld004()));
         SysImpTmpDetlBo selection = crmwPoolExcelImportMapper.queryItemById(batch.getImpId(), req.getItemId());
         if (selection == null) {
             throw new BizException("导入明细不存在或不属于当前批次");
         }
-        // 空字符串允许清除关联主体或自选权益人
+        // 4. 规范化本行主体选择并复核候选资格
         selection.setFld012(trimToNull(req.getRelatedCompanyCode()));
         if (req.getGuarantorCode() != null) {
+            // 清理文本并将空白统一为 null
             selection.setFld020(trimToNull(req.getGuarantorCode()));
         }
+        // 清理文本并将空白统一为 null
         selection.setFld014(trimToNull(req.getSelfSelectedRightsHolderCode()));
         // 复核候选资格并从服务端回填名称，允许编辑时暂不选择主体
         resolveImportedRatingCompany(selection, false);
+        // 5. 保存本行选择
         Date now = new Date();
         selection.setUpdtTime(now);
         if (crmwPoolExcelImportMapper.editRatingCompany(selection) == 0) {
             throw new BizException("导入明细不存在或不属于当前批次");
         }
+        // 6. 清空批次旧校验结果并返回更新后的任务和明细
         crmwPoolExcelImportMapper.resetItemCheckResults(batch.getImpId(), now);
         batch.setPassCount(0);
         batch.setFailCount(0);
@@ -555,7 +576,7 @@ public class CrmwPoolExcelImportService {
      */
     @Transactional(rollbackFor = Exception.class)
     public void cancelImport(CrmwPoolExcelImportReq req) {
-        // 检查该值是否已填写
+        // 1. 检查批次号，锁定批次并确认尚未提交
         if (req == null || isBlank(req.getImpId())) {
             throw new BizException("导入批次号不能为空");
         }
@@ -564,6 +585,7 @@ public class CrmwPoolExcelImportService {
         if ("1".equals(batch.getSaveRslt())) {
             throw new BizException("该批次已提交，不能取消");
         }
+        // 2. 依次将批次明细和批次标为删除
         crmwPoolExcelImportMapper.deleteItemsByImpIdSoft(batch.getImpId());
         crmwPoolExcelImportMapper.deleteBatchSoft(batch.getImpId());
     }
@@ -614,8 +636,10 @@ public class CrmwPoolExcelImportService {
 
         Map<String, Set<String>> selections = new HashMap<>();
         for (SysImpTmpDetlBo item : items) {
+            // 判断文本是否未填写，再清理文本并将空值统一为空字符串
             String selected = !isBlank(item.getFld014()) ? trimToEmpty(item.getFld014()) : trimToEmpty(item.getFld012());
             if (!selected.isEmpty()) {
+                // 清理文本并将空值统一为空字符串
                 selections.computeIfAbsent(trimToEmpty(item.getFld004()), key -> new HashSet<>()).add(selected);
             }
         }
@@ -842,10 +866,12 @@ public class CrmwPoolExcelImportService {
         if ("0".equals(batch.getChkRslt()) || isBlank(batch.getResultJson())) {
             throw new BizException("请先完成导入校验");
         }
+        // 从导入批次的 JSON 读取校验明细
         List<CrmwPoolExcelImportCheckItemDto> savedCheckItems = parseCheckItems(batch.getResultJson());
         if (savedCheckItems == null) {
             throw new BizException("校验结果数据不完整，请重新校验");
         }
+        // 从服务端校验结果选择可提交项，页面仅提供主项的流程选择
         List<CrmwPoolExcelImportCheckItemDto> checkItems = filterSubmittableCheckItems(req, savedCheckItems);
         if (checkItems.isEmpty()) {
             throw new BizException("没有可提交的校验结果，请先校验");
@@ -1063,7 +1089,7 @@ public class CrmwPoolExcelImportService {
      * 1. 遍历手工调整项，检查是否有流程无需人工审批即可完成
      *
      * @param checkItems Excel 导入校验结果
-     * @return 有可直接完成的手工项时返回 true
+     * @return true=至少一个手工项可直接生效，需要整批复核，false=没有可直接生效的手工项，无需整批复核
      */
     private boolean needsWholeBatchDirectRecheck(List<CrmwPoolExcelImportCheckItemDto> checkItems) {
         for (CrmwPoolExcelImportCheckItemDto item : checkItems) {
@@ -1210,7 +1236,7 @@ public class CrmwPoolExcelImportService {
      */
     private void fillMappedDisplay(CrmwPoolExcelImportCheckItemDto dto,
                                    Map<String, SecurityInfoDetailDto> infoCache) {
-        // 查询证券资料，复用已缓存的结果
+        // 1. 查询凭证主数据并补齐缺少的名称和市场
         SecurityInfoDetailDto crmw = lookupSecurity(dto.getCrmwScode(), infoCache);
         if (crmw != null) {
             // 检查该值是否已填写
@@ -1224,7 +1250,7 @@ public class CrmwPoolExcelImportService {
                 dto.setCrmwMarket(resolveMarketCodes(crmw));
             }
         }
-        // 查询证券资料，复用已缓存的结果
+        // 2. 查询标的主数据并补齐缺少的名称、类型和市场
         SecurityInfoDetailDto security = lookupSecurity(dto.getSecurityCode(), infoCache);
         if (security != null) {
             // 检查该值是否已填写
@@ -1264,7 +1290,7 @@ public class CrmwPoolExcelImportService {
      * @param infoCache 本次操作共用的证券资料缓存
      */
     private void fillSecurityDisplay(SysImpTmpDetlBo item, Map<String, SecurityInfoDetailDto> infoCache) {
-        // 查询证券资料，复用已缓存的结果
+        // 1. 按凭证代码查询主数据并回填凭证名称、市场和类型
         SecurityInfoDetailDto crmw = lookupSecurity(item.getFld001(), infoCache);
         if (crmw != null) {
             // 取得导入页面显示的证券名称
@@ -1274,7 +1300,7 @@ public class CrmwPoolExcelImportService {
             // 凭证类型缺失时按 crmw 处理
             item.setFld008(resolveCrmwStype(crmw.getSecurityType()));
         }
-        // 查询证券资料，复用已缓存的结果
+        // 2. 按标的代码查询主数据并回填标的名称、类型及市场
         SecurityInfoDetailDto security = lookupSecurity(item.getFld004(), infoCache);
         if (security != null) {
             // 取得导入页面显示的证券名称
@@ -1301,20 +1327,21 @@ public class CrmwPoolExcelImportService {
     private List<String> validateComboMasterData(SysImpTmpDetlBo item,
                                                  Map<String, SecurityInfoDetailDto> infoCache) {
         List<String> reasons = new ArrayList<>();
-        // 查询证券资料，复用已缓存的结果
+        // 1. 检查凭证存在且类型为 CRMW
         SecurityInfoDetailDto crmw = lookupSecurity(item.getFld001(), infoCache);
         if (crmw == null) {
             reasons.add("CRMW凭证不存在");
         } else if (!CRMW_SECURITY_TYPE.equals(crmw.getSecurityType())) {
             reasons.add("所选代码不是 CRMW 凭证");
         }
-        // 查询证券资料，复用已缓存的结果
+        // 2. 检查标的存在且类型不为 CRMW
         SecurityInfoDetailDto security = lookupSecurity(item.getFld004(), infoCache);
         if (security == null) {
             reasons.add("证券不存在");
         } else if (CRMW_SECURITY_TYPE.equals(security.getSecurityType())) {
             reasons.add("调库对象不能是 CRMW 凭证");
         }
+        // 3. 返回累计的失败原因
         return reasons;
     }
 
@@ -1444,6 +1471,7 @@ public class CrmwPoolExcelImportService {
         if (sourceItem != null) {
             dto.setSourceItemId(sourceItem.getId());
             dto.setSourceRowNo(sourceItem.getRowNo());
+            // 判断文本是否未填写
             boolean hasSelfSelected = !isBlank(sourceItem.getFld014());
             dto.setRatingCompanyName(hasSelfSelected ? sourceItem.getFld015() : sourceItem.getFld013());
             dto.setRatingCompanyCode(hasSelfSelected ? sourceItem.getFld014() : sourceItem.getFld012());
@@ -1479,23 +1507,26 @@ public class CrmwPoolExcelImportService {
      * 转换 Excel 导入使用的流程候选
      *
      * 执行顺序：
-     * 1. 复制流程标识、选择状态和匹配原因
-     * 2. 名称为空或看起来是编码时按类型补齐展示名称
-     * 3. 生成候选键
+     * 1. 复制流程标识
+     * 2. 按需要补齐易读的流程名称
+     * 3. 复制流程类型、选择状态及校验原因
+     * 4. 生成 Excel 流程候选键
      *
      * @param fo 共用调库校验返回的流程候选
      * @return Excel 页面使用的流程候选
      */
     private CrmwPoolExcelImportCheckItemDto.FlowOptionDto toFlowOptionDto(AdjustCheckDto.FlowOption fo) {
+        // 1. 复制流程标识
         CrmwPoolExcelImportCheckItemDto.FlowOptionDto opt = new CrmwPoolExcelImportCheckItemDto.FlowOptionDto();
         opt.setFlowId(fo.getFlowId());
         opt.setFlowKey(fo.getFlowKey());
         String name = fo.getFlowName();
-        // 检查该值是否已填写，并判断流程名称是否需要替换为易读名称
+        // 2. 按需要补齐易读的流程名称
         if (isBlank(name) || looksLikeCode(name)) {
             // 用流程类型取得默认展示名称
             name = resolveFlowTypeDisplayName(fo.getFlowType());
         }
+        // 3. 复制流程类型、选择状态及校验原因
         opt.setFlowName(name);
         opt.setFlowType(fo.getFlowType());
         opt.setRecommended(fo.isRecommended());
@@ -1503,7 +1534,7 @@ public class CrmwPoolExcelImportService {
         opt.setSelectable(fo.isSelectable());
         opt.setMatchReasons(fo.getMatchReasons() == null ? new ArrayList<>() : new ArrayList<>(fo.getMatchReasons()));
         opt.setUnmatchReasons(fo.getUnmatchReasons() == null ? new ArrayList<>() : new ArrayList<>(fo.getUnmatchReasons()));
-        // 为 Excel 流程候选生成选择标识
+        // 4. 生成 Excel 流程候选键
         opt.setOptionKey(buildFlowOptionKey(opt));
         return opt;
     }
@@ -1601,6 +1632,7 @@ public class CrmwPoolExcelImportService {
                     item.setFlowKey(flow.getFlowKey());
                     item.setFlowType(flow.getFlowType());
                     item.setFlowName(flow.getFlowName());
+                    // 判断文本是否未填写
                     item.setDirectFlow(flow.getFlowId() == null && isBlank(flow.getFlowKey()));
                 }
             }
@@ -1626,14 +1658,21 @@ public class CrmwPoolExcelImportService {
                 item.getTargetPoolId(), item.getAdjustMode(), item.getItemTag());
     }
 
-    /** 当前导入行核实后的标的和评级主体 */
+    /**
+     * 保存一行 CRMW 导入已核实的评级主体
+     *
+     * 保留标的证券主档和实际采用的主体代码，按本行选择记录评级及相关主体名称
+     */
     private static class RatingCompany {
         /** 标的证券是否 ABS */
         private boolean abs;
+
         /** 实际采用的主体代码 */
         private String companyCode;
+
         /** 标的证券主档 */
         private SecurityInfoBo securityInfo;
+
         /** 评级和关联、自选主体名称 */
         private RatingCompanySelectionReq selection;
     }
@@ -1651,22 +1690,27 @@ public class CrmwPoolExcelImportService {
      * @return 已核实的评级主体及标的证券
      */
     private RatingCompany resolveImportedRatingCompany(SysImpTmpDetlBo item, boolean requireSelection) {
+        // 1. 读取标的证券并拒绝失效标的
         SecurityInfoBo securityInfo = securityPoolAdjustMapper.querySecurityBoByCode(trimToEmpty(item.getFld004()));
         if (securityInfo == null || CRMW_SECURITY_TYPE.equals(securityInfo.getSecurityType())) {
             throw new BizException("标的证券不存在或类型错误，不能选择评级主体");
         }
         boolean abs = CreditBondSpecialInboundRule.isAbs(securityInfo);
         boolean guaranteed = Integer.valueOf(1).equals(securityInfo.getGuarantFlag());
+        // 2. 获取关联候选并核对所选权益人或担保人
         List<RelatedRatingCompanyDto> companies = absIdentityService.findRelated(securityInfo.getWindCode());
         if (companies == null) {
             companies = securityPoolAdjustMapper.queryRelatedRatingCompanyList(securityInfo.getWindCode());
             absIdentityService.rememberRelated(securityInfo.getWindCode(), companies);
         }
+        // 清理文本并将空值统一为空字符串
         String code = abs || guaranteed ? trimToEmpty(item.getFld012()) : "";
+        // 清理文本并将空值统一为空字符串
         String selfCode = trimToEmpty(item.getFld014());
         RelatedRatingCompanyDto selected = null;
         if (companies != null) {
             for (RelatedRatingCompanyDto company : companies) {
+                // 判断文本是否未填写
                 if (isBlank(company.getCompanyCode())) {
                     continue;
                 }
@@ -1679,6 +1723,7 @@ public class CrmwPoolExcelImportService {
         if (!code.isEmpty() && selected == null) {
             throw new BizException("所选担保人/权益人不属于当前证券，请重新选择");
         }
+        // 3. 核对自选权益人，ABS 担保债还需核对所选担保人
         SelfSelectedRightsHolderDto selfSelected = null;
         if (!selfCode.isEmpty()) {
             if (!abs) {
@@ -1694,7 +1739,9 @@ public class CrmwPoolExcelImportService {
             }
         }
         boolean hasRelated = companies != null
+                // 判断文本是否未填写
                 && companies.stream().anyMatch(company -> !isBlank(company.getCompanyCode()));
+        // 清理文本并将空白统一为 null
         String absGuarantorCode = abs && guaranteed ? trimToNull(item.getFld020()) : null;
         if (absGuarantorCode != null && (!hasRelated
                 || companies.stream().noneMatch(company -> absGuarantorCode.equals(company.getCompanyCode())))) {
@@ -1707,6 +1754,7 @@ public class CrmwPoolExcelImportService {
         if (requireSelection && selected == null && selfSelected == null && (abs || (guaranteed && hasRelated))) {
             throw new BizException(abs ? "请选择权益人或自选权益人" : "请选择担保人");
         }
+        // 4. 回填校验后的选择，自选权益人优先作为评级主体
         item.setFld012(selected == null ? null : selected.getCompanyCode());
         item.setFld013(selected == null ? null : selected.getCompanyName());
         item.setFld014(selfSelected == null ? null : selfSelected.getCompanyCode());
@@ -1759,7 +1807,7 @@ public class CrmwPoolExcelImportService {
      * 1. 将未填写来源标记和明确标为手工的调整项视为手工项
      *
      * @param itemTag 调整项来源标记
-     * @return 调整项为手工项时返回 true
+     * @return true=手工项标签或未填写标签，false=其他调库项标签
      */
     private boolean isManualTag(String itemTag) {
         return itemTag == null || itemTag.isEmpty() || ItemType.MANUAL.getCode().equals(itemTag);
@@ -1852,7 +1900,7 @@ public class CrmwPoolExcelImportService {
      * 1. 空名称直接视为需要替换，其余检查是否为不含中文的编码样式
      *
      * @param text 待处理的文本
-     * @return 名称为空或像编码时返回 true
+     * @return true=文本为空或符合编码格式，false=文本不符合编码格式
      */
     private boolean looksLikeCode(String text) {
         if (text == null || text.isEmpty()) {
@@ -1917,6 +1965,7 @@ public class CrmwPoolExcelImportService {
      * @param file 上传的 Excel 文件
      */
     private void validateUploadReq(CrmwPoolExcelImportReq req, MultipartFile file) {
+        // 1. 检查请求、调库方向、目标池和经办人
         if (req == null) {
             throw new BizException("请求参数不能为空");
         }
@@ -1929,6 +1978,7 @@ public class CrmwPoolExcelImportService {
         if (isBlank(req.getCurrentUserId())) {
             throw new BizException("当前用户 ID 不能为空");
         }
+        // 2. 检查上传文件存在且大小未超过 5 MB
         if (file == null || file.isEmpty()) {
             throw new BizException("上传文件不能为空");
         }
@@ -2007,13 +2057,14 @@ public class CrmwPoolExcelImportService {
      * @return 已锁定的导入批次
      */
     private SysImpTmpBo requireBatchForUpdate(String impId) {
+        // 1. 校验批次号并锁定有效的 CRMW 导入批次
         if (isBlank(impId)) {
             throw new BizException("导入批次号不能为空");
         }
         if (crmwPoolExcelImportMapper.queryBatchIdForUpdate(impId.trim()) == null) {
             throw new BizException("导入批次不存在");
         }
-        // 取得锁定后的任务状态
+        // 2. 读取锁定后的批次数据
         return requireBatch(impId);
     }
 
@@ -2076,6 +2127,7 @@ public class CrmwPoolExcelImportService {
      * @return 导入任务详情
      */
     private CrmwPoolExcelImportDto toTaskDto(SysImpTmpBo batch) {
+        // 1. 汇总批次状态、导入选项和基础统计
         CrmwPoolExcelImportDto dto = new CrmwPoolExcelImportDto();
         dto.setImpId(batch.getImpId());
         dto.setBizType(batch.getBizType());
@@ -2090,6 +2142,7 @@ public class CrmwPoolExcelImportService {
         dto.setTotalCount(batch.getTotalCount());
         dto.setPassCount(batch.getPassCount() == null ? 0 : batch.getPassCount());
         dto.setFailCount(batch.getFailCount() == null ? 0 : batch.getFailCount());
+        // 2. 查询待检查明细数量
         dto.setPendingCount(crmwPoolExcelImportMapper.countByChkRslt(batch.getImpId(), "0"));
         dto.setChkRslt(batch.getChkRslt());
         dto.setChkDscr(batch.getChkDscr());
@@ -2097,7 +2150,7 @@ public class CrmwPoolExcelImportService {
         dto.setSaveDscr(batch.getSaveDscr());
         dto.setResultJson(batch.getResultJson());
         dto.setImpTime(batch.getImpTime());
-        // 从导入批次的 JSON 读取校验明细
+        // 3. 读取校验结果，补齐检查状态及通过、失败数量
         List<CrmwPoolExcelImportCheckItemDto> checkItems = parseCheckItems(batch.getResultJson());
         dto.setCheckItems(checkItems == null ? new ArrayList<CrmwPoolExcelImportCheckItemDto>() : checkItems);
         int checkPass = 0;
@@ -2370,7 +2423,7 @@ public class CrmwPoolExcelImportService {
      * 1. 去掉首尾空白，空值或清理后为空时返回 null
      *
      * @param s 待处理的文本
-     * @return 清理后的文本
+     * @return 去掉首尾空白后的文本，输入为空或只有空白时返回 null
      */
     private String trimToNull(String s) {
         if (s == null) {
@@ -2381,13 +2434,13 @@ public class CrmwPoolExcelImportService {
     }
 
     /**
-     * 清理文本并将空值统一为空字符串
+     * 清理文本首尾空白
      *
      * 执行顺序：
-     * 1. 去掉首尾空白，空值使用空字符串
+     * 1. 输入为 null 时使用空字符串，其他输入去掉首尾空白
      *
      * @param s 待处理的文本
-     * @return 清理后的文本
+     * @return 去掉首尾空白后的文本，输入为 null 或只有空白时返回空字符串
      */
     private String trimToEmpty(String s) {
         return s == null ? "" : s.trim();
@@ -2400,7 +2453,7 @@ public class CrmwPoolExcelImportService {
      * 1. 检查文本是否为 null 或去掉首尾空白后为空
      *
      * @param s 待处理的文本
-     * @return 文本未填写时返回 true
+     * @return true=文本为空或只有空白，false=文本含非空白字符
      */
     private boolean isBlank(String s) {
         return s == null || s.trim().isEmpty();

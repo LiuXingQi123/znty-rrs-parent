@@ -66,10 +66,13 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
 
     /** 系统调库操作人 ID */
     private static final String AUTO_ADJUSTER_ID = "0";
+
     /** 系统调库操作人名称 */
     private static final String AUTO_ADJUSTER_NAME = "系统";
+
     /** 任务默认展示名称（名称即口径提示：ABS 债已整体移出本任务） */
     private static final String DEFAULT_TASK_NAME = "在池主体旗下债券自动入池（已排除ABS债）（仅债券）";
+
     /** 解析 param_json 用 */
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
@@ -109,12 +112,15 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
     /** 自动调库查询 Mapper */
     @Resource
     private AutoAdjustMapper autoAdjustMapper;
+
     /** 本轮应排除的 Excel 主体及证券记录 */
     @Resource
     private ExcelPoolExclusionService excelPoolExclusionService;
+
     /** 证券池调库落地 Mapper */
     @Resource
     private SecurityPoolAdjustMapper securityPoolAdjustMapper;
+
     /** 证券池页面和定时任务共用的校验服务 */
     @Resource
     private BatchSecurityCheckService batchSecurityCheckService;
@@ -122,13 +128,23 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
     /** 投资池查询 Mapper */
     @Resource
     private InvestmentPoolMapper investmentPoolMapper;
+
     /** 定时任务配置 Mapper（param_json / 名称） */
     @Resource
     private ScheduledTaskMapper scheduledTaskMapper;
+
     /** 扫描池并集（参数 ∪ 关系配置） */
     @Resource
     private AutoAdjustPoolScopeHelper poolScopeHelper;
 
+    /**
+     * 提供本定时任务的唯一编码
+     *
+     * 执行顺序：
+     * 1. 返回当前任务定义的固定编码
+     *
+     * @return 任务编码
+     */
     @Override
     public String getTaskCode() {
         return TASK_CODE;
@@ -136,6 +152,11 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
 
     /**
      * 向配置页提供本任务扩展参数填写说明（仅 JSON）
+     *
+     * 执行顺序：
+     * 1. 返回当前任务定义的参数说明
+     *
+     * @return 任务参数说明
      */
     @Override
     public String getParamHelp() {
@@ -181,6 +202,7 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
                 TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
             }
             long duration = System.currentTimeMillis() - begin;
+            // 写 WARN 级过程日志并同步控制台
             warnDetail(detail, "任务未完成：" + e.getMessage());
             return ScheduledTaskResult.failure(TASK_CODE, taskName, e.getMessage(), startTime, duration,
                     detail.build());
@@ -231,7 +253,9 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
         if (pairList.isEmpty()) {
             return new AutoInSummary();
         }
+        // 写 INFO 级过程日志并同步控制台
         infoDetail(detail, "扫描范围：有效主体池到债券目标池的映射 " + pairList.size() + " 组");
+        // 写 INFO 级过程日志并同步控制台
         infoDetail(detail, "扫描条件：普通债或 CRMW，未退市、排除 ABS，且尚未在债券目标池"
                 + "；普通主体依据要求距到期至少 " + minDaysToMaturity + " 天，Excel 主体依据跳过该门槛");
         // 2. 读取投资池、池关系和本轮批次信息
@@ -258,12 +282,14 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
             InvestmentPoolBo targetPool = poolMap.get(bondTargetPoolId);
             if (targetPool == null || !PoolStatus.ENABLED.getCode().equals(targetPool.getStatus())) {
                 summary.addSkipped(1);
+                // 记录业务上未处理的债券或映射，不把可预期情况写成任务异常
                 skipDetail(detail, "债券目标池【" + bondTargetPoolId + "】不存在或未启用，映射 "
                         + companyInPoolId + "→" + bondTargetPoolId + " 本轮未处理");
                 continue;
             }
             if (CompanyBondSyncPolicy.isCrmwCombinationPool(targetPool)) {
                 summary.addSkipped(1);
+                // 记录业务上未处理的债券或映射，不把可预期情况写成任务异常
                 skipDetail(detail, "债券目标池【" + bondTargetPoolId
                         + "】是 CRMW 组合池，不能通过普通池状态写入，本轮未处理");
                 continue;
@@ -274,6 +300,7 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
             if (bondList.isEmpty()) {
                 summary.addMapping(companyInPoolId, companyPool == null ? null : companyPool.getPoolName(),
                         bondTargetPoolId, targetPool.getPoolName(), 0, 0, 0);
+                // 写 INFO 级过程日志并同步控制台
                 infoDetail(detail, "主体所在池[" + companyInPoolId + "]→债券写入池["
                         + targetPool.getPoolName() + "](" + bondTargetPoolId + ") 无待入池新债");
                 continue;
@@ -283,6 +310,7 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
             for (ScheduledAdjustCandidateDto bond : bondList) {
                 if (bond == null || !StringUtils.hasText(bond.getSecurityCode())) {
                     mapping.skippedCount++;
+                    // 记录业务上未处理的债券或映射，不把可预期情况写成任务异常
                     skipDetail(detail, "扫描结果缺少证券编码，无法处理");
                     continue;
                 }
@@ -323,6 +351,7 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
                 if (!appliedInbounds.getOrDefault(mapping.targetPool.getId(), Collections.emptySet())
                         .contains(bond.getSecurityCode())) {
                     mapping.skippedCount++;
+                    // 记录业务上未处理的债券或映射，不把可预期情况写成任务异常
                     skipDetail(detail, "证券【" + bond.getSecurityCode() + "】池【" + mapping.targetPool.getPoolName()
                             + "】：无可执行的调入项，本轮未写入目标池");
                 }
@@ -333,6 +362,7 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
                 mapping.skippedCount++;
                 for (AdjustCheckDto.CheckResultItem item : items) {
                     if (!item.isCanAdjust()) {
+                        // 记录业务上未处理的债券或映射，不把可预期情况写成任务异常
                         skipDetail(detail, "证券【" + item.getSecurityCode() + "】池【"
                                 + (item.getPoolName() == null ? item.getTargetPoolId() : item.getPoolName())
                                 + "】：" + String.join("、", item.getFailReasons()));
@@ -343,6 +373,7 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
             }
             for (AdjustCheckDto.CheckResultItem item : items) {
                 if (item.getWarnings() != null) {
+                    // 写 WARN 级过程日志并同步控制台
                     item.getWarnings().forEach(warning -> warnDetail(detail,
                             "证券【" + item.getSecurityCode() + "】池【" + item.getPoolName() + "】：" + warning));
                 }
@@ -354,6 +385,7 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
             summary.addMapping(mapping.sourcePoolId, mapping.sourcePool == null ? null : mapping.sourcePool.getPoolName(),
                     mapping.targetPool.getId(), mapping.targetPool.getPoolName(), mapping.candidateCount,
                     mapping.inboundCount, mapping.skippedCount);
+            // 写 INFO 级过程日志并同步控制台
             infoDetail(detail, "处理结果：主体所在池【" + mapping.sourcePoolId + "】→债券池【"
                     + mapping.targetPool.getPoolName() + "】实际入池 " + mapping.inboundCount + " 条，未处理 "
                     + mapping.skippedCount + " 条");
@@ -363,6 +395,12 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
 
     /**
      * 将通过校验的一组调入和配套调出写入同一事务
+     *
+     * 执行顺序：
+     * 1. 生成主体跟随调整原因，按候选来源补上 Excel 跟随标识和触发主体
+     * 2. 为本组调入和配套调出取得共用批次号
+     * 3. 逐项写入已通过的自动调库日志，调入写生效状态，配套调出删除可调出的在池状态
+     * 4. 返回本组实际调入数量
      *
      * @param bond 触发补债候选
      * @param items 已校验的调库项
@@ -375,6 +413,7 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
     private int applyInboundGroup(ScheduledAdjustCandidateDto bond, List<AdjustCheckDto.CheckResultItem> items,
                                   InboundMapping mapping, String taskName, ScheduledAdjustBatchNoContext batchContext,
                                   Map<Long, Set<String>> appliedInbounds) {
+        // 1. 生成主体跟随调整原因，按候选来源补上 Excel 跟随标识和触发主体
         String reason = ScheduledAdjustLogHelper.appendDetails(ScheduledAdjustLogHelper.taskLabel(taskName) + "【主体跟随】",
                 ScheduledAdjustLogHelper.issuerDetail(bond), "依据池ID：" + mapping.sourcePoolId,
                 ScheduledAdjustLogHelper.poolDetail("主体所在池", mapping.sourcePool, mapping.sourcePoolId));
@@ -384,9 +423,11 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
         if (bond.getTriggerCompanyCode() != null) {
             reason = ScheduledAdjustLogHelper.appendDetails(reason, "联动触发主体：" + bond.getTriggerCompanyCode());
         }
+        // 2. 为本组调入和配套调出取得共用批次号
         String batchNo = batchContext.resolveBondBatchNo(bond.getSecurityCode(), mapping.targetPool.getId(),
                 AdjustMode.IN.getCode());
         int count = 0;
+        // 3. 逐项写入已通过的自动调库日志，调入写生效状态，配套调出删除可调出的在池状态
         for (AdjustCheckDto.CheckResultItem item : items) {
             boolean inbound = AdjustMode.IN.getCode().equals(item.getAdjustMode());
             IpAdjustLogBo log = new IpAdjustLogBo();
@@ -422,24 +463,45 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
                 appliedInbounds.getOrDefault(item.getTargetPoolId(), Collections.emptySet()).remove(item.getSecurityCode());
             }
         }
+        // 4. 返回本组实际调入数量
         return count;
     }
 
-    /** 本轮单个主体池至债券池映射的候选 */
+    /**
+     * 保存本轮新债补入使用的一组池映射
+     *
+     * 关联发行主体所在池和债券目标池，随处理过程累计该映射的候选、入池和跳过数量
+     */
     private static final class InboundMapping {
         /** 发行主体所在池 ID */
         private final Long sourcePoolId;
+
         /** 发行主体所在池 */
         private final InvestmentPoolBo sourcePool;
+
         /** 债券目标池 */
         private final InvestmentPoolBo targetPool;
+
         /** 候选数量 */
         private final int candidateCount;
+
         /** 实际入池数量 */
         private int inboundCount;
+
         /** 未处理数量 */
         private int skippedCount;
 
+        /**
+         * 记录新债补入使用的一组主体池与债券池映射
+         *
+         * 执行顺序：
+         * 1. 保存来源主体池、目标债券池和本组候选数量
+         *
+         * @param sourcePoolId 来源主体池 ID
+         * @param sourcePool 来源主体池配置
+         * @param targetPool 目标债券池配置
+         * @param candidateCount 候选数量
+         */
         private InboundMapping(Long sourcePoolId, InvestmentPoolBo sourcePool, InvestmentPoolBo targetPool,
                                int candidateCount) {
             this.sourcePoolId = sourcePoolId;
@@ -449,13 +511,27 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
         }
     }
 
-    /** 记录候选债券的触发映射，按 Excel 优先级执行后回填各池统计 */
+    /**
+     * 记录一只待补入债券及其触发映射
+     *
+     * 按照 Excel 来源的优先级处理候选，执行结果归入该债券对应的池映射
+     */
     private static final class InboundCandidate {
         /** 待检查的旗下债券 */
         private final ScheduledAdjustCandidateDto bond;
+
         /** 当前债券的来源池和目标池 */
         private final InboundMapping mapping;
 
+        /**
+         * 记录一笔新债补入候选及相应池映射
+         *
+         * 执行顺序：
+         * 1. 将候选债券与本次使用的池映射一起保存
+         *
+         * @param bond 本组待补入的债券
+         * @param mapping 候选所属的主体池与债券池映射
+         */
         private InboundCandidate(ScheduledAdjustCandidateDto bond, InboundMapping mapping) {
             this.bond = bond;
             this.mapping = mapping;
@@ -465,14 +541,18 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
     /**
      * 读取补债任务的完整池映射，供跟随出池检查主体依据
      *
+     * 执行顺序：
+     * 1. 解析现有配置，出池依据只使用池映射
+     * 2. 使用已读的扩展参数合并同池和跨池映射
+     *
      * @param detail 过程日志
      * @return 去重后的主体池和债券目标池映射
      */
     List<long[]> resolveInboundMappings(TaskDetailLog detail) {
         SysScheduledTaskBo config = scheduledTaskMapper.queryTaskByCode(TASK_CODE);
-        // 解析现有配置，出池依据只使用池映射
+        // 1. 解析现有配置，出池依据只使用池映射
         JsonNode params = parseParamObject(config == null ? null : config.getParamJson(), TASK_CODE);
-        // 使用已读的扩展参数合并同池和跨池映射
+        // 2. 使用已读的扩展参数合并同池和跨池映射
         return resolveInboundMappings(params, detail);
     }
 
@@ -512,26 +592,55 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
         return poolScopeHelper.unionSamePoolMappings(mappings, TASK_CODE, RuleType.AUTO_IN.getCode(), detail);
     }
 
-    /** 本轮在池主体旗下债券入池汇总 */
+    /**
+     * 汇总本轮在池主体旗下新债补入结果
+     *
+     * 记录扫描、实际入池和未处理数量，并保留分池映射结果及跳过原因
+     */
     private static final class AutoInSummary {
 
         /** 本轮实际入池总数 */
         private int total;
+
         /** 按跳过原因汇总失败项 */
         private final Map<String, Integer> failures = new LinkedHashMap<>();
+
         /** 本轮扫描到的债券候选数 */
         private int candidateCount;
+
         /** 本轮未处理的债券或映射数量 */
         private int skippedCount;
+
         /** 按主体所在池与债券目标池映射保存入池数量 */
         private final Map<String, MappingSummary> mappingSummaries = new LinkedHashMap<>();
 
-        /** 累加未处理映射数量 */
+        /**
+         * 累加未处理数量
+         *
+         * 执行顺序：
+         * 1. 把本次未处理数量加到本轮任务统计
+         *
+         * @param count 本次累计的处理条数
+         */
         private void addSkipped(int count) {
             skippedCount += count;
         }
 
-        /** 累加一个主体池与债券目标池映射的入池数量 */
+        /**
+         * 记录一组主体池与债券目标池的补入结果
+         *
+         * 执行顺序：
+         * 1. 使用主体池和债券池 ID 记录这组映射的候选、入池和未处理数
+         * 2. 将三类数量分别累计到本轮总计
+         *
+         * @param companyPoolId 主体依据池 ID
+         * @param companyPoolName 主体依据池名称
+         * @param bondPoolId 债券目标池 ID
+         * @param bondPoolName 债券目标池名称
+         * @param candidateCount 本次候选记录数
+         * @param count 本次累计的处理条数
+         * @param skippedCount 本次未处理记录数
+         */
         private void addMapping(Long companyPoolId, String companyPoolName, Long bondPoolId,
                                 String bondPoolName, int candidateCount, int count, int skippedCount) {
             String key = companyPoolId + "-" + bondPoolId;
@@ -542,7 +651,15 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
             total += count;
         }
 
-        /** 构建最近执行结果文案 */
+        /**
+         * 生成自动补债任务的结果说明
+         *
+         * 执行顺序：
+         * 1. 写入候选债券、实际入池和未处理总数，再追加各映射结果
+         * 2. 有校验失败时按数量从多到少附上前五类失败原因
+         *
+         * @return 包含候选数、各映射处理结果及主要失败原因的说明
+         */
         private String buildMessage() {
             StringBuilder message = new StringBuilder("任务完成：扫描候选债券 ")
                     .append(candidateCount).append(" 条，实际入池 ")
@@ -574,25 +691,48 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
         }
     }
 
-    /** 单个主体池与债券目标池映射的入池统计 */
+    /**
+     * 记录一组主体池到债券池的补入结果
+     *
+     * 保留来源主体池和债券目标池名称，供任务日志展示该映射下的候选、成功及未处理数量
+     */
     private static final class MappingSummary {
 
         /** 主体所在池 ID */
         private final Long companyPoolId;
+
         /** 主体所在池名称 */
         private final String companyPoolName;
+
         /** 债券目标池 ID */
         private final Long bondPoolId;
+
         /** 债券目标池名称 */
         private final String bondPoolName;
+
         /** 扫描候选数量 */
         private final int candidateCount;
+
         /** 实际入池数量 */
         private final int count;
+
         /** 未处理数量 */
         private final int skippedCount;
 
-        /** 创建映射统计 */
+        /**
+         * 记录新债补入任务按池映射统计的结果
+         *
+         * 执行顺序：
+         * 1. 保存主体池和债券池信息，以及候选、实际调入和跳过数量
+         *
+         * @param companyPoolId 主体所在池 ID
+         * @param companyPoolName 主体所在池名称
+         * @param bondPoolId 债券目标池 ID
+         * @param bondPoolName 债券目标池名称
+         * @param candidateCount 扫描候选数量
+         * @param count 实际入池数量
+         * @param skippedCount 未处理数量
+         */
         private MappingSummary(Long companyPoolId, String companyPoolName, Long bondPoolId,
                                String bondPoolName, int candidateCount, int count, int skippedCount) {
             this.companyPoolId = companyPoolId;
@@ -607,6 +747,13 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
 
     /**
      * 写 INFO 级过程日志并同步控制台
+     *
+     * 执行顺序：
+     * 1. 将消息写入应用日志的 INFO 级别
+     * 2. 提供任务明细记录器时，将同一条消息写入明细
+     *
+     * @param detail 过程日志
+     * @param line 未处理原因
      */
     private void infoDetail(TaskDetailLog detail, String line) {
         log.info(line);
@@ -617,6 +764,13 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
 
     /**
      * 写 WARN 级过程日志并同步控制台
+     *
+     * 执行顺序：
+     * 1. 将消息写入应用日志的 WARN 级别
+     * 2. 提供任务明细记录器时，将同一条消息写入明细
+     *
+     * @param detail 过程日志
+     * @param line 未处理原因
      */
     private void warnDetail(TaskDetailLog detail, String line) {
         log.warn(line);
@@ -627,6 +781,9 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
 
     /**
      * 记录业务上未处理的债券或映射，不把可预期情况写成任务异常
+     *
+     * 执行顺序：
+     * 1. 向应用日志记录未处理原因，有任务明细记录器时再加上「未处理」写入明细
      *
      * @param detail 过程日志
      * @param line 未处理原因
@@ -640,6 +797,12 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
 
     /**
      * 构建投资池 ID 到池信息的映射，供校验债券写入池是否存在
+     *
+     * 执行顺序：
+     * 1. 查询投资池列表
+     * 2. 构建投资池 ID 到池信息的映射，供校验债券写入池是否存在
+     *
+     * @return 池映射
      */
     private Map<Long, InvestmentPoolBo> buildPoolMap() {
         Map<Long, InvestmentPoolBo> poolMap = new HashMap<>();
@@ -654,6 +817,10 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
 
     /**
      * 将扩展参数读取为 JSON 对象，参数留空时使用空对象
+     *
+     * 执行顺序：
+     * 1. 没有扩展参数时使用空 JSON 对象，有参数时去掉首尾空白并检查对象格式
+     * 2. 解析原文，解析失败时记录任务信息并报错
      *
      * @param raw 扩展参数原文
      * @param taskName 任务展示名称
@@ -679,6 +846,11 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
     /**
      * 读取 poolIds、poolId 和 mappings 中的主体池到债券池映射
      *
+     * 执行顺序：
+     * 1. 读取同池多目标池配置
+     * 2. 读取同池单目标池配置
+     * 3. 读取显式跨池映射
+     *
      * @param root 扩展参数对象
      * @return 每项为主体所在池 ID 和债券写入池 ID 的映射
      */
@@ -691,6 +863,7 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
                 throw new BizException("poolIds 须为数字数组，示例 {\"poolIds\":[15,16]}");
             }
             for (JsonNode item : poolIdsNode) {
+                // 读取 JSON 数字节点为 Long
                 Long id = readNumberNode(item);
                 if (id == null) {
                     throw new BizException("poolIds 元素须为数字，非法值: " + item);
@@ -700,6 +873,7 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
         }
         // 2. 读取同池单目标池配置
         if (root.has("poolId") && !root.get("poolId").isNull()) {
+            // 读取 JSON 数字节点为 Long
             Long id = readNumberNode(root.get("poolId"));
             if (id == null) {
                 throw new BizException("poolId 须为数字，示例 {\"poolId\":15}");
@@ -713,7 +887,9 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
                 if (item == null || item.isNull()) {
                     continue;
                 }
+                // 从 JSON 节点读取 Long 字段
                 Long companyIn = readLong(item, "companyInPoolId");
+                // 从 JSON 节点读取 Long 字段
                 Long bondTarget = readLong(item, "bondTargetPoolId");
                 if (companyIn == null || bondTarget == null) {
                     throw new BizException(
@@ -727,6 +903,12 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
 
     /**
      * 读取 JSON 数字节点为 Long
+     *
+     * 执行顺序：
+     * 1. 仅数字节点转成 Long，节点缺失、为 JSON null 或非数字时返回 null
+     *
+     * @param node 流程节点
+     * @return 节点中的整数值，节点缺失、为 JSON null 或不是数字时返回 null
      */
     private Long readNumberNode(JsonNode node) {
         if (node == null || node.isNull() || !node.isNumber()) {
@@ -737,6 +919,12 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
 
     /**
      * 单测入口：解析扩展参数
+     *
+     * 执行顺序：
+     * 1. 先以本任务编码解析扩展参数，再从 JSON 配置中读取主体池与债券目标池映射
+     *
+     * @param raw 扩展参数原文
+     * @return 每项为主体所在池 ID 和债券写入池 ID 的映射
      */
     List<long[]> parseParamMappings(String raw) {
         // 从参数对象读取池映射
@@ -745,6 +933,13 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
 
     /**
      * 从 JSON 节点读取 Long 字段
+     *
+     * 执行顺序：
+     * 1. 读取指定字段，只有存在且为数字时才取 Long 值
+     *
+     * @param node 流程节点
+     * @param field 字段名
+     * @return 指定字段转换得到的整数值，字段缺失、为 JSON null 或不是数字时返回 null
      */
     private Long readLong(JsonNode node, String field) {
         JsonNode v = node.get(field);

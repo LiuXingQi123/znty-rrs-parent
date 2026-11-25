@@ -25,20 +25,32 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 
-/** 证券 Excel 批量提交和直通落池 */
+/**
+ * 处理 Excel 证券调库的批量提交和直通落池
+ *
+ * {@link SecurityPoolExcelImportService} 提交证券导入或清空目标池时调用本类
+ * 复用 {@link SecurityPoolAdjustService} 复核每组证券、评级主体和流程，准备直通或逐组提交的数据
+ * 可直通的组先批量保存调库日志、审批步骤和证券快照，再更新池状态，需要审批或单独处理材料的组逐组提交
+ * 同一证券重复出现时先写入前一组，让后续组读取已经生效的池状态和 ABS 主体身份
+ */
 @Service
 public class BatchSecurityAdjustSubmitService {
 
+    /** 每批写入证券调库记录的最大条数 */
     private static final int BATCH_SIZE = 200;
 
+    /** 批量写入证券调库日志、步骤、快照和池状态 */
     @Resource
     private BatchSecurityAdjustSubmitMapper batchSecurityAdjustSubmitMapper;
+
+    /** 复用证券调库的提交校验和 ABS 身份处理 */
     @Resource
     private SecurityPoolAdjustService securityPoolAdjustService;
 
     /**
      * 提交已确认的证券 Excel 导入或清空项
      *
+     * 执行顺序：
      * 1. 复核每组主体与流程，生成可批量直通的数据
      * 2. 批量写入日志、步骤和快照
      * 3. 按原顺序应用直通池状态，保留 ABS 身份生效与同步结论
@@ -86,6 +98,11 @@ public class BatchSecurityAdjustSubmitService {
 
     /**
      * 按请求顺序持久化一组互不重叠的直通证券
+     *
+     * 执行顺序：
+     * 1. 逐项新增调库日志列表
+     * 2. 逐项用已回填日志主键生成证券和 ABS 申请快照
+     * 3. 快照先于池状态生效，ABS 每组都保留生效前后的原处理顺序
      *
      * @param groups 待写入的直通组
      * @param results 当前提交结果
@@ -147,6 +164,11 @@ public class BatchSecurityAdjustSubmitService {
     /**
      * 合并普通证券池状态写入，ABS 在身份确认和人工结论之间写入本组池状态
      *
+     * 执行顺序：
+     * 1. 按证券和池组合批量结束旧状态，调入项新增生效状态
+     * 2. 批量落池后按原业务记录 ABS 人工结论
+     * 3. 完成最后一批普通证券状态
+     *
      * @param groups 已保存日志和快照的直通组
      */
     private void applyDirectGroups(List<ExcelSubmitGroup> groups) {
@@ -161,6 +183,7 @@ public class BatchSecurityAdjustSubmitService {
             applyPoolStatuses(ordinaryLogs);
             ordinaryLogs.clear();
             securityPoolAdjustService.approveExcelAbsGroup(group, logs);
+            // 按证券和池组合批量结束旧状态，调入项新增生效状态
             applyPoolStatuses(logs);
             securityPoolAdjustService.recordExcelAbsDecisions(logs);
         }
@@ -171,11 +194,16 @@ public class BatchSecurityAdjustSubmitService {
     /**
      * 按证券和池组合批量结束旧状态，调入项新增生效状态
      *
+     * 执行顺序：
+     * 1. 按证券代码和目标池收集记录，达到分组上限或同一组合重复时先写入当前小批
+     * 2. 循环结束后写入余下的记录，保证同一小批内证券和池的组合互不重复
+     *
      * @param logs 已通过复核的直通日志
      */
     private void applyPoolStatuses(List<IpAdjustLogBo> logs) {
         List<IpAdjustLogBo> chunk = new ArrayList<>();
         Set<List<Object>> keys = new HashSet<>();
+        // 1. 按证券代码和目标池收集记录，达到分组上限或同一组合重复时先写入当前小批
         for (IpAdjustLogBo log : logs) {
             List<Object> key = Arrays.asList(log.getSecurityCode().toUpperCase(Locale.ROOT), log.getTargetPoolId());
             if (chunk.size() == BATCH_SIZE || keys.contains(key)) {
@@ -188,6 +216,7 @@ public class BatchSecurityAdjustSubmitService {
             log.setAdjustLogId(log.getId());
             chunk.add(log);
         }
+        // 2. 循环结束后写入余下的记录，保证同一小批内证券和池的组合互不重复
         if (!chunk.isEmpty()) {
             // 写入最后一个池状态分片
             writePoolStates(chunk);
@@ -196,6 +225,9 @@ public class BatchSecurityAdjustSubmitService {
 
     /**
      * 写入证券与池组合互不重复的一批状态
+     *
+     * 执行顺序：
+     * 1. 证券调入池状态批量写入失败时终止处理
      *
      * @param rows 直通调库日志
      */

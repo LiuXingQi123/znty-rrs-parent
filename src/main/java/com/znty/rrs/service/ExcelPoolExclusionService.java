@@ -19,10 +19,16 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-/** 批量取得并判定定时任务应排除的 Excel 主体和证券记录 */
+/**
+ * 判断定时调库应避开哪些 Excel 人工调整记录
+ *
+ * 按主体或证券、目标池汇总最近一次生效的 Excel 导入或清空决定，提供自动补入和跟随出池等场景使用
+ * 优先按审核时间比较，缺少审核时间时使用创建时间，时间相同时用调库日志 ID 确认先后
+ */
 @Service
 public class ExcelPoolExclusionService {
 
+    /** 批量读取已生效的 Excel 调库流水和受保护池状态 */
     @Resource
     private ExcelPoolExclusionMapper excelPoolExclusionMapper;
 
@@ -80,15 +86,30 @@ public class ExcelPoolExclusionService {
                 .collect(Collectors.toList());
     }
 
-    /** 按主体和目标池保留最近一次已生效的 Excel 决定 */
+    /**
+     * 保存各主体在各目标池的最新生效 Excel 决定
+     *
+     * 优先按审核时间比较，缺少审核时间时使用创建时间，再以日志 ID 区分先后
+     * 供后续判断主体旗下债券能否随主体自动入池或出池
+     */
     static final class CompanyDecisions {
 
+        /** 按审核时间、创建时间回退和日志 ID 比较生效先后 */
         private static final Comparator<IpAdjustLogBo> EFFECTIVE_ORDER = Comparator
                 .comparing(CompanyDecisions::effectiveTime, Comparator.nullsFirst(Comparator.naturalOrder()))
                 .thenComparing(IpAdjustLogBo::getId);
 
+        /** 按主体和投资池记录最近生效的 Excel 调整 */
         private final Map<String, Map<Long, IpAdjustLogBo>> latestActionsByIssuerAndPool = new HashMap<>();
 
+        /**
+         * 汇总 Excel 调库可复用的主体历史结论
+         *
+         * 执行顺序：
+         * 1. 按主体代码和目标池归集已生效的调库记录，每组只保留执行顺序最新的一条
+         *
+         * @param actions 用于判断最新结论的主体调库记录
+         */
         private CompanyDecisions(List<IpAdjustLogBo> actions) {
             for (IpAdjustLogBo action : actions) {
                 Map<Long, IpAdjustLogBo> actionsByPool = latestActionsByIssuerAndPool
@@ -112,7 +133,7 @@ public class ExcelPoolExclusionService {
          * @param sourcePoolId 主体来源池
          * @param targetPoolId 债券目标池
          * @param cutoff 普通债摘牌日截止日期
-         * @return 可继续检查入池的候选
+         * @return 可继续检查入池的候选，候选未传入时返回空列表
          */
         List<ScheduledAdjustCandidateDto> filterInbound(List<ScheduledAdjustCandidateDto> candidates,
                                                         Long sourcePoolId, Long targetPoolId, String cutoff) {
@@ -128,6 +149,7 @@ public class ExcelPoolExclusionService {
                 String issuerCode = bond.getIssuerCode();
                 // 先拦截明确调出主体的来源池和目标池
                 if (hasExcelDecision(issuerCode, sourcePoolId, AdjustMode.OUT)
+                        // 使用主体和目标池的历史结论判断是否保留这条记录
                         || hasExcelDecision(issuerCode, targetPoolId, AdjustMode.OUT)) {
                     continue;
                 }
@@ -212,12 +234,12 @@ public class ExcelPoolExclusionService {
          * 判断该主体在指定池的最新 Excel 决定是否为指定方向
          *
          * 执行顺序：
-         * 1. 查找主体在该池的最新生效流水并比较调整方向
+         * 1. 按主体和池查找最近生效的 Excel 调库日志，再比较该日志记录的调整方向
          *
          * @param issuerCode 主体代码
          * @param poolId 池 ID
          * @param mode 指定的调整方向
-         * @return 是否存在该方向的最新 Excel 决定
+         * @return true=最新生效决定为指定方向，false=没有生效决定或方向不同
          */
         private boolean hasExcelDecision(String issuerCode, Long poolId, AdjustMode mode) {
             Map<Long, IpAdjustLogBo> actionsByPool = latestActionsByIssuerAndPool

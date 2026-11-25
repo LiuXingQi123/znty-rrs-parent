@@ -44,17 +44,23 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * 系统附件业务服务
+ * 管理调库申请和报告使用的系统附件
+ *
+ * 保存上传文件，并按提交项引用的文件索引将报告和材料绑定到对应调库日志
+ * 支持复用已存在的报告库附件及修改时取消绑定，页面下载时读取附件记录和对应文件
  */
 @Service
 public class SysAttachmentService {
 
     /** 调库日志表名称 */
     private static final String ADJUST_LOG_TABLE = "ip_adjust_log";
+
     /** 基金调库日志关联表 */
     private static final String FUND_ADJUST_LOG_TABLE = "ip_adjust_log_fund";
+
     /** 股票调库日志关联表 */
     private static final String STOCK_ADJUST_LOG_TABLE = "ip_adjust_log_stock";
+
     /** 基金日志允许继承的报告和材料附件分类 */
     private static final Set<String> FUND_ATTACHMENT_CATEGORIES = new HashSet<>(Arrays.asList(
             AttachmentCategory.FUND_REPORT_HAND.getCode(), AttachmentCategory.FUND_REPORT_IN.getCode(),
@@ -90,7 +96,11 @@ public class SysAttachmentService {
     private String storagePath;
 
     /**
-     * 初始化附件存储目录。
+     * 初始化附件存储目录
+     *
+     * 执行顺序：
+     * 1. 默认 Windows 路径在 Linux 上运行时自动切换为 Linux 路径（环境变量覆盖时不切换）
+     * 2. 获取正式文件目录
      */
     @PostConstruct
     public void initializeStorage() {
@@ -108,7 +118,10 @@ public class SysAttachmentService {
     }
 
     /**
-     * 创建本次提交的文件上下文（无前端原始文件名列表）。
+     * 创建本次提交的文件上下文（无前端原始文件名列表）
+     *
+     * 执行顺序：
+     * 1. 带入上传文件和上传人，原始文件名列表留空并按默认口径创建附件上下文
      *
      * @param files 本次提交的文件列表
      * @param uploaderId 上传人 ID
@@ -120,11 +133,16 @@ public class SysAttachmentService {
     }
 
     /**
-     * 创建本次提交的文件上下文。
-     * <p>
+     * 创建本次提交的文件上下文
+     *
      * {@code originalFileNameList} 与 {@code files} 同序；公司环境 multipart 中文名可能乱码，
-     * 优先用前端显式传入的原始名落库。
-     * </p>
+     * 优先用前端显式传入的原始名落库
+     *
+     * 执行顺序：
+     * 1. 检查上传人 ID 不能为空
+     * 2. 核对前端原始文件名与本次提交文件的数量
+     * 3. 逐项校验提交文件及已解析的原始文件名
+     * 4. 按下标取原始文件名：列表有效值优先，否则回退 multipart 自带文件名
      *
      * @param files 本次提交的文件列表
      * @param uploaderId 上传人 ID
@@ -147,7 +165,10 @@ public class SysAttachmentService {
     }
 
     /**
-     * 创建整批共享物理文件的提交上下文，各业务记录仍独立绑定附件。
+     * 创建整批共享物理文件的提交上下文，各业务记录仍独立绑定附件
+     *
+     * 执行顺序：
+     * 1. 复用普通提交的文件类型、上传人和原始文件名校验
      *
      * @param files 本次提交的文件列表
      * @param uploaderId 上传人 ID
@@ -163,7 +184,10 @@ public class SysAttachmentService {
     }
 
     /**
-     * 在写业务日志前校验上传索引，只读取上下文，不保存物理文件。
+     * 在写业务日志前校验上传索引，只读取上下文，不保存物理文件
+     *
+     * 执行顺序：
+     * 1. 检查本地文件索引必须通过 multipart 同时上传对应文件
      *
      * @param submissionFiles 本次提交的上传上下文，可为空
      * @param fileIndexes 待绑定的本次上传文件下标
@@ -183,11 +207,14 @@ public class SysAttachmentService {
     }
 
     /**
-     * 解析前端 FormData 字段 {@code originalFileNameListJson}（JSON 数组字符串）。
-     * 空/空白返回 null；非法 JSON 抛业务异常。
+     * 解析前端 FormData 字段 {@code originalFileNameListJson}（JSON 数组字符串）
+     * 空/空白返回 null；非法 JSON 抛业务异常
+     *
+     * 执行顺序：
+     * 1. 字段为空或只含空白时返回 null，有值时解析为文件名列表，格式无效时提示须传 JSON 数组
      *
      * @param originalFileNameListJson 前端传入的原始文件名 JSON 数组
-     * @return 原始文件名列表
+     * @return 解析后的原始文件名列表，未提供文件名 JSON 时返回 null
      */
     public List<String> parseOriginalFileNameListJson(String originalFileNameListJson) {
         if (originalFileNameListJson == null || originalFileNameListJson.trim().isEmpty()) {
@@ -204,7 +231,11 @@ public class SysAttachmentService {
     }
 
     /**
-     * 解析单文件上传的原始文件名（Excel 导入等）：优先取列表首项，否则回退 multipart 文件名。
+     * 解析单文件上传的原始文件名（Excel 导入等）：优先取列表首项，否则回退 multipart 文件名
+     *
+     * 执行顺序：
+     * 1. 检查原始文件名列表数量须与上传文件数量一致
+     * 2. 取得前端原始文件名，缺失时回退到 multipart 文件名
      *
      * @param file 单文件上传内容
      * @param originalFileNameList 前端传入的原始文件名列表
@@ -220,7 +251,10 @@ public class SysAttachmentService {
     }
 
     /**
-     * 将本次提交文件绑定到证券调库日志。
+     * 将本次提交文件绑定到证券调库日志
+     *
+     * 执行顺序：
+     * 1. 使用证券调库日志表绑定原有附件提交入口
      *
      * @param adjustLogId 证券调库日志 ID
      * @param fileIndexes 本次提交文件的索引
@@ -234,7 +268,14 @@ public class SysAttachmentService {
     }
 
     /**
-     * 将本次提交文件绑定到指定业务表记录。
+     * 将本次提交文件绑定到指定业务表记录
+     *
+     * 执行顺序：
+     * 1. 检查绑定附件失败：关联表名和业务记录 ID 不能为空
+     * 2. 限定业务表，防止附件关联到其他模块
+     * 3. 绑定附件失败：附件分类与业务不匹配时终止处理
+     * 4. 检查绑定附件失败：提交文件上下文不能为空
+     * 5. 逐项新增附件
      *
      * @param tableName 附件关联的业务表名
      * @param mainId 业务记录 ID
@@ -250,7 +291,7 @@ public class SysAttachmentService {
         if (tableName == null || tableName.trim().isEmpty() || mainId == null) {
             throw new BizException("绑定附件失败：关联表名和业务记录 ID 不能为空");
         }
-        // 限定业务表，防止附件关联到其他模块。
+        // 限定业务表，防止附件关联到其他模块
         validateAdjustTable(tableName.trim());
         String reportHand = STOCK_ADJUST_LOG_TABLE.equals(tableName.trim()) ? AttachmentCategory.STOCK_REPORT_HAND.getCode()
                 : (FUND_ADJUST_LOG_TABLE.equals(tableName.trim()) ? AttachmentCategory.FUND_REPORT_HAND.getCode() : AttachmentCategory.CREDIT_REPORT_HAND.getCode());
@@ -283,7 +324,10 @@ public class SysAttachmentService {
     }
 
     /**
-     * 将报告库附件复制绑定到证券调库日志。
+     * 将报告库附件复制绑定到证券调库日志
+     *
+     * 执行顺序：
+     * 1. 使用证券调库日志表绑定原有报告库复制入口
      *
      * @param adjustLogId 证券调库日志 ID
      * @param sourceAttachmentIds 报告库来源附件 ID
@@ -297,7 +341,15 @@ public class SysAttachmentService {
     }
 
     /**
-     * 将报告库附件复制绑定到指定业务表记录。
+     * 将报告库附件复制绑定到指定业务表记录
+     *
+     * 执行顺序：
+     * 1. 检查复制报告附件失败：关联表名和业务记录 ID 不能为空
+     * 2. 限定业务表，防止附件关联到其他模块
+     * 3. 复制报告附件失败：附件分类不合法时终止处理
+     * 4. 按ID 列表查询附件列表
+     * 5. 逐项校验复制来源必须为报告库附件
+     * 6. 根据报告库来源和调库附件用途解析落库分类
      *
      * @param tableName 附件关联的业务表名
      * @param mainId 业务记录 ID
@@ -313,7 +365,7 @@ public class SysAttachmentService {
         if (tableName == null || tableName.trim().isEmpty() || mainId == null) {
             throw new BizException("复制报告附件失败：关联表名和业务记录 ID 不能为空");
         }
-        // 限定业务表，防止附件关联到其他模块。
+        // 限定业务表，防止附件关联到其他模块
         validateAdjustTable(tableName.trim());
         if (!AttachmentPurpose.CREDIT_REPORT.getCode().equals(attachmentPurpose) && !AttachmentPurpose.MATERIAL.getCode().equals(attachmentPurpose)) {
             throw new BizException("复制报告附件失败：附件分类不合法");
@@ -349,7 +401,13 @@ public class SysAttachmentService {
     }
 
     /**
-     * 供临时基金转正的后端流程继承同池已通过日志的附件关联，保留原分类并复用物理文件。
+     * 供临时基金转正的后端流程继承同池已通过日志的附件关联，保留原分类并复用物理文件
+     *
+     * 执行顺序：
+     * 1. 限定不同日志之间的关联复制，并校验登记复制操作的经办人
+     * 2. 从后端日志核实来源和目标属于同池且均已通过审批
+     * 3. 先校验全部来源关联和分类，防止部分复制或静默丢弃非法附件
+     * 4. 只新增目标日志的附件关联，沿用原文件标识、路径及分类
      *
      * @param sourceLogId 原已在池记录对应的基金调库日志 ID
      * @param targetLogId 本次代码替换生成的已通过基金调库日志 ID
@@ -357,7 +415,7 @@ public class SysAttachmentService {
      */
     @Transactional(rollbackFor = Exception.class)
     public void copyFundAdjustAttachments(Long sourceLogId, Long targetLogId, String operatorId) {
-        // 限定不同日志之间的关联复制，并校验登记复制操作的经办人
+        // 1. 限定不同日志之间的关联复制，并校验登记复制操作的经办人
         if (sourceLogId == null || targetLogId == null || sourceLogId <= 0 || targetLogId <= 0
                 || sourceLogId.equals(targetLogId)) {
             throw new BizException("基金附件继承失败：来源和目标日志 ID 必须为不同的有效 ID");
@@ -365,7 +423,7 @@ public class SysAttachmentService {
         if (operatorId == null || operatorId.trim().isEmpty()) {
             throw new BizException("基金附件继承失败：经办人 ID 不能为空");
         }
-        // 从后端日志核实来源和目标属于同池且均已通过审批
+        // 2. 从后端日志核实来源和目标属于同池且均已通过审批
         FundAdjustLogBo sourceLog = sysAttachmentMapper.queryFundAdjustLogById(sourceLogId);
         FundAdjustLogBo targetLog = sysAttachmentMapper.queryFundAdjustLogById(targetLogId);
         if (sourceLog == null || targetLog == null || sourceLog.getTargetPoolId() == null
@@ -374,7 +432,7 @@ public class SysAttachmentService {
                 || !AuditStatus.APPROVED.getCode().equals(targetLog.getAuditStatus())) {
             throw new BizException("基金附件继承失败：来源和目标必须是同一投资池的已通过基金日志");
         }
-        // 先校验全部来源关联和分类，防止部分复制或静默丢弃非法附件
+        // 3. 先校验全部来源关联和分类，防止部分复制或静默丢弃非法附件
         List<SysAttachmentBo> attachments = sysAttachmentMapper.queryFundAdjustAttachmentList(sourceLogId);
         for (SysAttachmentBo source : attachments) {
             if (!FUND_ADJUST_LOG_TABLE.equals(source.getTableName()) || !sourceLogId.equals(source.getMainId())
@@ -383,7 +441,7 @@ public class SysAttachmentService {
                 throw new BizException("基金附件继承失败：来源附件关联、分类或物理文件标识无效，附件 ID：" + source.getId());
             }
         }
-        // 只新增目标日志的附件关联，沿用原文件标识、路径及分类
+        // 4. 只新增目标日志的附件关联，沿用原文件标识、路径及分类
         for (SysAttachmentBo source : attachments) {
             SysAttachmentBo copied = new SysAttachmentBo();
             copied.setTableName(FUND_ADJUST_LOG_TABLE);
@@ -405,10 +463,15 @@ public class SysAttachmentService {
     }
 
     /**
-     * 校验报告库来源附件真实存在且与报告限制匹配，适用于债券信评报告和基金报告。
+     * 校验报告库来源附件真实存在且与报告限制匹配，适用于债券信评报告和基金报告
+     *
+     * 执行顺序：
+     * 1. 按ID 列表查询附件列表
+     * 2. 存在无效或已删除的报告附件 ID时终止处理
+     * 3. 逐项校验复制来源必须为报告库附件
      *
      * @param sourceAttachmentIds 报告库附件 ID 列表
-     * @param internalRequired    是否必须来自内部报告库
+     * @param internalRequired 是否必须来自内部报告库
      */
     public void validateCreditReportSources(List<Long> sourceAttachmentIds, boolean internalRequired) {
         if (sourceAttachmentIds == null || sourceAttachmentIds.isEmpty()) {
@@ -431,7 +494,14 @@ public class SysAttachmentService {
     }
 
     /**
-     * 逻辑删除指定调库日志下的附件。
+     * 逻辑删除指定调库日志下的附件
+     *
+     * 执行顺序：
+     * 1. 检查删除附件失败：调库日志 ID 不能为空
+     * 2. 按ID 列表查询附件列表
+     * 3. 删除附件失败：存在无效附件 ID时终止处理
+     * 4. 确认全部指定附件均已逻辑删除
+     * 5. 删除附件失败：附件状态已变化时终止处理
      *
      * @param adjustLogId 调库日志 ID
      * @param attachmentIds 待删除的附件 ID 列表
@@ -463,12 +533,26 @@ public class SysAttachmentService {
         }
     }
 
-    /** 核实选择的股票研究报告来源，报告必须属于当前股票。 */
+    /**
+     * 核实选择的股票研究报告来源，报告必须属于当前股票
+     *
+     * 执行顺序：
+     * 1. 未传入来源附件时结束校验
+     * 2. 校验所选报告附件仍然有效，并按投资池要求核对报告库来源
+     * 3. 查询附件对应的股票报告，报告已删除或不属于当前股票时终止处理
+     *
+     * @param ids 本次选择的股票研究报告来源附件 ID 列表
+     * @param stockCode 当前股票代码，用于定位当前股票
+     * @param internalOnly 是否仅接受内部报告库的股票研究报告附件
+     */
     public void validateStockReportSources(List<Long> ids, String stockCode, boolean internalOnly) {
+        // 1. 没有报告来源附件时结束校验
         if (ids == null || ids.isEmpty()) {
             return;
         }
+        // 2. 先核对来源附件有效性及报告库限制
         validateCreditReportSources(ids, internalOnly);
+        // 3. 逐个确认附件对应的有效股票报告属于当前股票
         List<SysAttachmentBo> sources = sysAttachmentMapper.queryAttachmentListByIds(new ArrayList<>(new LinkedHashSet<>(ids)));
         for (SysAttachmentBo source : sources) {
             if (sysAttachmentMapper.queryMatchingStockReportSourceCount(source.getTableName(), source.getMainId(), stockCode) != 1) {
@@ -477,11 +561,26 @@ public class SysAttachmentService {
         }
     }
 
-    /** 终审或修改后复核已绑定报告，避免删除报告后仍满足报告限制。 */
+    /**
+     * 复核股票调库已绑定的报告是否满足目标池要求
+     *
+     * 用于终审或修改后复核，重新确认报告库附件仍有效并属于当前股票
+     *
+     * 执行顺序：
+     * 1. 检查报告限制配置属于允许的取值
+     * 2. 读取股票调库附件，区分手工上传与报告库来源，并复核报告有效性和股票归属
+     * 3. 按目标池限制确认已有报告，要求内部报告时须存在有效的内部报告库附件
+     *
+     * @param logId 当前股票调库日志 ID
+     * @param stockCode 当前股票代码，用于定位当前股票
+     * @param restriction 目标池报告限制，none=无需报告，any=需要报告，internal=需要内部报告
+     */
     public void validateStockBoundReports(Long logId, String stockCode, String restriction) {
+        // 1. 检查报告限制配置属于允许的取值
         if (restriction != null && !"none".equals(restriction) && !"any".equals(restriction) && !"internal".equals(restriction)) {
             throw new BizException("股票池报告限制配置无效：" + restriction);
         }
+        // 2. 读取股票调库附件，区分手工上传与报告库来源，并复核报告有效性和股票归属
         boolean hasReport = false;
         boolean hasInternal = false;
         for (SysAttachmentBo attachment : sysAttachmentMapper.queryStockAdjustAttachmentList(logId)) {
@@ -498,15 +597,29 @@ public class SysAttachmentService {
                 hasInternal |= internal;
             }
         }
+        // 3. 按目标池限制确认已有报告，要求内部报告时须存在有效的内部报告库附件
         if (("any".equals(restriction) && !hasReport) || ("internal".equals(restriction) && !hasInternal)) {
             throw new BizException("股票日志报告不符合投资池报告限制，调整日志 ID：" + logId);
         }
     }
 
-    /** 删除明确业务表中的附件，禁止不同业务同编号日志之间交叉操作。 */
+    /**
+     * 删除明确业务表中的附件，禁止不同业务同编号日志之间交叉操作
+     *
+     * 执行顺序：
+     * 1. 校验关联表；原债券入口保留原 Mapper 方法
+     * 2. 删除附件失败：调库日志 ID 无效时终止处理
+     * 3. 按ID 列表查询附件列表
+     * 4. 删除附件失败：存在无效附件 ID时终止处理
+     * 5. 删除附件失败：附件状态已变化时终止处理
+     *
+     * @param tableName 附件关联的业务表名
+     * @param adjustLogId 证券调库日志 ID
+     * @param attachmentIds 待删除的附件 ID 列表
+     */
     @Transactional(rollbackFor = Exception.class)
     public void deleteAdjustLogAttachments(String tableName, Long adjustLogId, List<Long> attachmentIds) {
-        // 校验关联表；原债券入口保留原 Mapper 方法。
+        // 校验关联表；原债券入口保留原 Mapper 方法
         validateAdjustTable(tableName);
         if (ADJUST_LOG_TABLE.equals(tableName)) {
             deleteAdjustLogAttachments(adjustLogId, attachmentIds);
@@ -533,7 +646,15 @@ public class SysAttachmentService {
         }
     }
 
-    /** 查询股票日志手工报告，完整限定业务表和附件分类。 */
+    /**
+     * 查询股票日志手工报告，完整限定业务表和附件分类
+     *
+     * 执行顺序：
+     * 1. 检查调库日志 ID 不能为空
+     *
+     * @param adjustLogId 证券调库日志 ID
+     * @return 股票日志手工报告，完整限定业务表和附件分类列表
+     */
     public List<SysAttachmentBo> queryHandStockReportAttachments(Long adjustLogId) {
         if (adjustLogId == null) {
             throw new BizException("调库日志 ID 不能为空");
@@ -541,7 +662,14 @@ public class SysAttachmentService {
         return sysAttachmentMapper.queryHandStockReportAttachments(adjustLogId);
     }
 
-    /** 附件只能绑定已接入的三类调整业务表。 */
+    /**
+     * 附件只能绑定已接入的三类调整业务表
+     *
+     * 执行顺序：
+     * 1. 附件只能绑定已接入的三类调整业务表，条件不满足时终止处理
+     *
+     * @param tableName 附件关联的业务表名
+     */
     private void validateAdjustTable(String tableName) {
         if (!ADJUST_LOG_TABLE.equals(tableName) && !FUND_ADJUST_LOG_TABLE.equals(tableName)
                 && !STOCK_ADJUST_LOG_TABLE.equals(tableName)) {
@@ -550,9 +678,14 @@ public class SysAttachmentService {
     }
 
     /**
-     * 按单个或多个调库日志 ID 查询附件列表。
+     * 按单个或多个调库日志 ID 查询附件列表
+     *
+     * 执行顺序：
+     * 1. 检查调库日志 ID 不能为空
+     * 2. 业务编码仅用于选择独立的附件关联表
      *
      * @param req 单个或多个调库日志 ID
+     * @return 筛选出的列表
      */
     public List<SysAttachmentDto> queryAttachmentList(SysAttachmentReq req) {
         LinkedHashSet<Long> adjustLogIds = new LinkedHashSet<>();
@@ -569,7 +702,7 @@ public class SysAttachmentService {
         if (adjustLogIds.isEmpty()) {
             throw new BizException("调库日志 ID 不能为空");
         }
-        // 业务编码仅用于选择独立的附件关联表。
+        // 业务编码仅用于选择独立的附件关联表
         if (!BusinessDomain.BOND.getCode().equals(req.getBusinessDomain())
                 && !BusinessDomain.FUND.getCode().equals(req.getBusinessDomain())
                 && !BusinessDomain.STOCK.getCode().equals(req.getBusinessDomain())) {
@@ -582,9 +715,13 @@ public class SysAttachmentService {
     }
 
     /**
-     * 查询指定调库记录下手工上传的信评报告附件。
+     * 查询指定调库记录下手工上传的信评报告附件
+     *
+     * 执行顺序：
+     * 1. 检查调库日志 ID 不能为空
      *
      * @param adjustLogId 调库日志 ID
+     * @return 指定调库记录下手工上传的信评报告附件列表
      */
     public List<SysAttachmentBo> queryHandCreditReportAttachments(Long adjustLogId) {
         if (adjustLogId == null) {
@@ -594,11 +731,15 @@ public class SysAttachmentService {
     }
 
     /**
-     * 将手工上传的信评报告附件复制为内部报告库附件（table_name=rrs_report_in，attachment_category=report_in）。
-     * 物理文件信息原样复用，使报告库附件指向同一物理文件、可下载。
+     * 将手工上传的信评报告附件复制为内部报告库附件（table_name=rrs_report_in，attachment_category=report_in）
+     * 物理文件信息原样复用，使报告库附件指向同一物理文件、可下载
+     *
+     * 执行顺序：
+     * 1. 检查绑定报告附件失败：内部报告 ID 不能为空
+     * 2. 逐项新增附件
      *
      * @param reportId 内部报告 ID
-     * @param sources  待复制的手工上传信评报告附件列表
+     * @param sources 待复制的手工上传信评报告附件列表
      */
     public void bindReportFileAttachments(Long reportId, List<SysAttachmentBo> sources) {
         if (sources == null || sources.isEmpty()) {
@@ -626,7 +767,12 @@ public class SysAttachmentService {
     }
 
     /**
-     * 下载附件。
+     * 下载附件
+     *
+     * 执行顺序：
+     * 1. 根据附件相对路径定位存储文件
+     * 2. 校验下载文件路径位于附件存储根目录内
+     * 3. 读取物理文件并返回原始文件名、类型和内容
      *
      * @param req 包含附件 ID 的下载请求
      * @return 附件下载内容
@@ -640,15 +786,15 @@ public class SysAttachmentService {
         if (attachment == null) {
             throw new BizException("附件不存在或已删除，附件 ID：" + id);
         }
-        // 根据附件相对路径定位存储文件
+        // 1. 根据附件相对路径定位存储文件
         Path filePath = resolveStorageRoot().resolve(attachment.getFileName()).normalize();
-        // 校验下载文件路径位于附件存储根目录内
+        // 2. 校验下载文件路径位于附件存储根目录内
         validatePathInRoot(filePath, resolveStorageRoot());
         if (!Files.isRegularFile(filePath)) {
             throw new BizException("附件文件不存在，附件 ID：" + id);
         }
 
-        // 读取物理文件并返回原始文件名、类型和内容
+        // 3. 读取物理文件并返回原始文件名、类型和内容
         try {
             byte[] content = Files.readAllBytes(filePath);
             String contentType = attachment.getContentType() == null || attachment.getContentType().isEmpty()
@@ -661,7 +807,12 @@ public class SysAttachmentService {
     }
 
     /**
-     * 校验提交文件及已解析的原始文件名。
+     * 校验提交文件及已解析的原始文件名
+     *
+     * 执行顺序：
+     * 1. 检查提交附件不能为空
+     * 2. 检查上传文件名称不能为空
+     * 3. 校验原始文件名的扩展名是否属于支持的文件类型
      *
      * @param file 提交的文件
      * @param originalFileName 已解析的原始文件名
@@ -678,11 +829,15 @@ public class SysAttachmentService {
     }
 
     /**
-     * 规范化前端原始文件名列表：null 表示未传；非 null 时数量必须与文件数一致。
+     * 规范化前端原始文件名列表：null 表示未传；非 null 时数量必须与文件数一致
+     *
+     * 执行顺序：
+     * 1. 未传原始文件名列表时直接返回空值
+     * 2. 传入列表时校验名称条数与上传文件数相同
      *
      * @param originalFileNameList 前端传入的原始文件名列表
      * @param fileCount 本次提交的文件数量
-     * @return 规范化后的原始文件名列表
+     * @return 与上传文件数量一致的原始文件名列表，未提供时返回 null
      */
     private List<String> normalizeOriginalFileNameList(List<String> originalFileNameList, int fileCount) {
         if (originalFileNameList == null) {
@@ -695,7 +850,10 @@ public class SysAttachmentService {
     }
 
     /**
-     * 按下标取原始文件名：列表有效值优先，否则回退 multipart 自带文件名。
+     * 按下标取原始文件名：列表有效值优先，否则回退 multipart 自带文件名
+     *
+     * 执行顺序：
+     * 1. 文件为空时返回空值
      *
      * @param file 提交的文件
      * @param originalFileNameList 与文件列表同序的前端原始文件名
@@ -720,7 +878,11 @@ public class SysAttachmentService {
     }
 
     /**
-     * 校验复制来源必须为报告库附件。
+     * 校验复制来源必须为报告库附件
+     *
+     * 执行顺序：
+     * 1. 分别检查附件表名与分类是否对应入库报告或出库报告
+     * 2. 两类都未命中时拒绝复制该附件
      *
      * @param attachment 待复制的来源附件
      */
@@ -736,7 +898,11 @@ public class SysAttachmentService {
     }
 
     /**
-     * 根据报告库来源和调库附件用途解析落库分类。
+     * 根据报告库来源和调库附件用途解析落库分类
+     *
+     * 执行顺序：
+     * 1. 先识别来源是入库还是出库报告，再区分股票、基金和其他调库表
+     * 2. 按报告或其他材料用途确定调库日志附件分类
      *
      * @param source 报告库来源附件
      * @param attachmentPurpose 报告或其他材料用途
@@ -767,7 +933,11 @@ public class SysAttachmentService {
     }
 
     /**
-     * 解析并校验文件类型。
+     * 解析并校验文件类型
+     *
+     * 执行顺序：
+     * 1. 检查上传文件必须包含有效扩展名
+     * 2. 解析并校验文件类型
      *
      * @param fileName 待校验的原始文件名
      * @return 校验通过的文件扩展名
@@ -785,7 +955,15 @@ public class SysAttachmentService {
     }
 
     /**
-     * 保存提交文件并返回存储信息。
+     * 保存提交文件并返回存储信息
+     *
+     * 执行顺序：
+     * 1. 解析并校验文件类型
+     * 2. 获取正式文件目录
+     * 3. 生成不覆盖已有文件的附件名称
+     * 4. 校验目标路径位于根目录内
+     * 5. 数据库事务回滚时删除本次新保存的物理文件
+     * 6. 转换为统一的相对路径
      *
      * @param file 提交的文件
      * @param originalFileName 已解析的原始文件名
@@ -799,19 +977,19 @@ public class SysAttachmentService {
             throw new BizException("上传文件名称不能为空");
         }
         originalFileName = Paths.get(originalFileName).getFileName().toString();
-        // 解析并校验文件类型
+        // 1. 解析并校验文件类型
         String fileType = resolveFileType(originalFileName);
         String dateDirectory = LocalDate.now().format(DATE_DIRECTORY_FORMATTER);
         String newFileNamePrefix = attachmentCategory + "_"
                 + LocalDateTime.now().format(FILE_NAME_TIME_FORMATTER) + "_"
                 + adjustLogId;
-        // 获取正式文件目录
+        // 2. 获取正式文件目录
         Path fileRoot = resolveFileRoot();
         Path targetDirectory = fileRoot.resolve(dateDirectory);
-        // 生成不覆盖已有文件的附件名称
+        // 3. 生成不覆盖已有文件的附件名称
         String newFileName = resolveAvailableFileName(targetDirectory, newFileNamePrefix, fileType);
         Path targetPath = targetDirectory.resolve(newFileName).normalize();
-        // 校验目标路径位于根目录内
+        // 4. 校验目标路径位于根目录内
         validatePathInRoot(targetPath, fileRoot);
         try {
             Files.createDirectories(targetDirectory);
@@ -821,7 +999,7 @@ public class SysAttachmentService {
         } catch (IOException e) {
             throw new BizException("附件保存失败：" + originalFileName);
         }
-        // 数据库事务回滚时删除本次新保存的物理文件
+        // 5. 数据库事务回滚时删除本次新保存的物理文件
         deleteFileAfterRollback(targetPath);
 
         StoredFile storedFile = new StoredFile();
@@ -830,13 +1008,17 @@ public class SysAttachmentService {
         storedFile.fileType = fileType;
         storedFile.fileSize = file.getSize();
         storedFile.contentType = file.getContentType();
-        // 转换为统一的相对路径
+        // 6. 转换为统一的相对路径
         storedFile.relativeFileName = toRelativePath(targetPath);
         return storedFile;
     }
 
     /**
-     * 生成不覆盖已有文件的附件名称。
+     * 生成不覆盖已有文件的附件名称
+     *
+     * 执行顺序：
+     * 1. 用前缀和扩展名生成初始文件名，目标目录已有该文件时逐次追加编号
+     * 2. 返回第一个未被占用的名字
      *
      * @param targetDirectory 文件保存目录
      * @param fileNamePrefix 新文件名的固定前缀
@@ -854,7 +1036,10 @@ public class SysAttachmentService {
     }
 
     /**
-     * 注册事务回滚后的文件清理。
+     * 注册事务回滚后的文件清理
+     *
+     * 执行顺序：
+     * 1. 没有活动的事务同步时直接返回，有事务同步时注册完成回调，仅回滚时清理文件
      *
      * @param filePath 本次新保存的物理文件路径
      */
@@ -864,7 +1049,10 @@ public class SysAttachmentService {
         }
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronizationAdapter() {
             /**
-             * 事务回滚后清理本次新保存的物理文件。
+             * 事务回滚后清理本次新保存的物理文件
+             *
+             * 执行顺序：
+             * 1. 仅在回调收到事务回滚状态时删除本次保存的文件
              *
              * @param status 事务完成状态
              */
@@ -878,13 +1066,23 @@ public class SysAttachmentService {
         });
     }
 
-    /** 获取存储根目录 */
+    /**
+     * 获取存储根目录
+     *
+     * 执行顺序：
+     * 1. 将配置的存储路径转换为绝对路径并规范化
+     *
+     * @return 文件路径
+     */
     private Path resolveStorageRoot() {
         return Paths.get(storagePath).toAbsolutePath().normalize();
     }
 
     /**
-     * 获取正式文件目录。
+     * 获取正式文件目录
+     *
+     * 执行顺序：
+     * 1. 获取存储根目录
      *
      * @return 正式文件存储目录
      */
@@ -894,7 +1092,10 @@ public class SysAttachmentService {
     }
 
     /**
-     * 转换为统一的相对路径。
+     * 转换为统一的相对路径
+     *
+     * 执行顺序：
+     * 1. 将文件绝对路径转成相对于存储根目录的路径，并把分隔符统一为正斜线
      *
      * @param path 待转换的物理文件路径
      * @return 相对于存储根目录的路径
@@ -906,7 +1107,10 @@ public class SysAttachmentService {
     }
 
     /**
-     * 校验目标路径位于指定根目录内。
+     * 校验目标路径位于指定根目录内
+     *
+     * 执行顺序：
+     * 1. 附件路径不合法时终止处理
      *
      * @param path 待校验的目标路径
      * @param root 允许访问的根目录
@@ -918,7 +1122,10 @@ public class SysAttachmentService {
     }
 
     /**
-     * 安静删除文件，清理失败时保留文件供人工排查。
+     * 尝试删除文件并忽略清理时遇到的 IO 异常
+     *
+     * 执行顺序：
+     * 1. 文件存在时尝试删除，发生 IO 异常时结束清理
      *
      * @param path 待删除的物理文件路径
      */
@@ -931,17 +1138,20 @@ public class SysAttachmentService {
     }
 
     /**
-     * 附件下载文件内容。
+     * 附件下载文件内容
      */
     @Getter
     @AllArgsConstructor
     public static class DownloadFile {
         /** 原始文件名 */
         private final String originalFileName;
+
         /** MIME 类型 */
         private final String contentType;
+
         /** 文件大小 */
         private final Long fileSize;
+
         /** 文件内容 */
         private final byte[] content;
     }
@@ -952,17 +1162,24 @@ public class SysAttachmentService {
     public class SubmissionFiles {
         /** multipart 文件列表 */
         private final List<MultipartFile> files;
+
         /** 上传人 ID */
         private final String uploaderId;
+
         /** 与 files 同序的前端原始文件名（可为 null） */
         private final List<String> originalFileNameList;
+
         /** 是否跨业务记录及分类共享本次提交的物理文件 */
         private boolean shareAcrossRecords;
+
         /** 已保存文件缓存，共享模式按下标复用，否则按日志、分类和下标复用 */
         private final Map<String, StoredFile> storedFileMap = new HashMap<>();
 
         /**
-         * 保存本次提交文件及上传人信息。
+         * 保存本次提交文件及上传人信息
+         *
+         * 执行顺序：
+         * 1. 保存文件列表、上传人 ID 以及与文件列表同序的原始文件名
          *
          * @param files 本次提交的文件列表
          * @param uploaderId 上传人 ID
@@ -975,11 +1192,16 @@ public class SysAttachmentService {
         }
 
         /**
-         * 按下标获取并保存文件，根据提交模式复用同一记录或整批的已保存结果。
+         * 保存或复用本次调库提交的上传文件
+         *
+         * 执行顺序：
+         * 1. 校验上传文件下标，根据整批共享模式或日志与附件分类计算缓存键
+         * 2. 已有存储结果时复用，否则解析原始文件名、写文件并缓存存储信息
          *
          * @param fileIndex 文件在本次提交列表中的下标
          * @param attachmentCategory 附件分类编码
          * @param adjustLogId 关联的调库记录 ID
+         * @return 本文件对应的存储路径及文件信息
          */
         StoredFile resolveStoredFile(Integer fileIndex, String attachmentCategory, Long adjustLogId) {
             if (fileIndex == null || fileIndex < 0 || fileIndex >= files.size()) {
@@ -1006,14 +1228,19 @@ public class SysAttachmentService {
     private static class StoredFile {
         /** 原始文件名 */
         private String originalFileName;
+
         /** 新文件名 */
         private String newFileName;
+
         /** 文件类型 */
         private String fileType;
+
         /** 文件大小 */
         private Long fileSize;
+
         /** MIME 类型 */
         private String contentType;
+
         /** 相对存储路径 */
         private String relativeFileName;
     }

@@ -53,14 +53,11 @@ import java.util.stream.Collectors;
 /**
  * 主体下ABS债券自动入库（区分已确认发行人和未确认发行人）（仅债券）
  *
- * ABS 按目标池对账，在同一个池内先处理出池，再处理入池
- *
  * 执行顺序：
- * 1. 批量读取 ABS 主档、四类关联主体、各池生效主体和各池生效 ABS，确定扫描范围
- * 2. 比较应在池与实际在池的证券，筛出已失去主体依据的出池候选
- * 3. 检查出池保护，命中保护时只留提醒，符合条件时写出池记录
- * 4. 筛选仍有主体依据的入池候选，主体未确认时只生成提醒和待确认日志，符合条件的已确认主体债券写入池记录
- * 5. 汇总各池入池、出池、提醒和失败结果
+ * 1. 批量读取 ABS 主档、关联主体和生效池状态，按目标池确定本轮处理范围
+ * 2. 逐池先筛选出池候选，再筛选入池候选，由 {@link AbsCompanySyncService} 核对主体身份和出池保护
+ * 3. 符合条件时更新池状态，需要人工确认时生成提醒，单池失败只回滚该池
+ * 4. 汇总各池的入池、出池、提醒和失败情况
  */
 @Slf4j
 @Service
@@ -129,6 +126,7 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
     @Resource
     private SecurityPoolAdjustMapper securityPoolAdjustMapper;
 
+    /** 读取 ABS 联动入池和出池时要遵守的 Excel 主体决定 */
     @Resource
     private ExcelPoolExclusionService excelPoolExclusionService;
 
@@ -160,13 +158,27 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
     @Resource
     private PlatformTransactionManager transactionManager;
 
-    /** 返回主体下ABS债券自动入库任务编码 */
+    /**
+     * 返回主体下ABS债券自动入库任务编码
+     *
+     * 执行顺序：
+     * 1. 返回当前任务定义的固定编码
+     *
+     * @return 任务编码
+     */
     @Override
     public String getTaskCode() {
         return TASK_CODE;
     }
 
-    /** 返回主体下ABS债券自动入库任务参数说明 */
+    /**
+     * 返回主体下ABS债券自动入库任务参数说明
+     *
+     * 执行顺序：
+     * 1. 返回当前任务定义的参数说明
+     *
+     * @return 任务参数说明
+     */
     @Override
     public String getParamHelp() {
         return PARAM_HELP;
@@ -192,17 +204,21 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
             // 1. 读取任务名与扩展参数，配置表只查一次
             TaskConfig config = loadTaskConfig();
             taskName = config.taskName;
+            // 记录一条 INFO 过程日志，同时写应用日志
             infoDetail(detail, taskName + " 开始");
             // 2. 按池对账 ABS 进出
             AbsSyncSummary summary = ScheduledAdjustLogHelper.runWithTaskName(config.taskName,
+                    // 按池对账 ABS 进出，是整条任务的主干
                     () -> doSync(config, detail));
             long duration = System.currentTimeMillis() - begin;
             String message = summary.buildMessage();
+            // 记录一条 INFO 过程日志，同时写应用日志
             infoDetail(detail, taskName + " 结束，" + message);
             return ScheduledTaskResult.success(TASK_CODE, taskName, message, summary.total(), startTime, duration,
                     detail.build());
         } catch (BizException e) {
             long duration = System.currentTimeMillis() - begin;
+            // 记录一条 WARN 过程日志，同时写应用日志
             warnDetail(detail, taskName + " 失败: " + e.getMessage());
             return ScheduledTaskResult.failure(TASK_CODE, taskName, e.getMessage(), startTime, duration,
                     detail.build());
@@ -235,24 +251,30 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
     private AbsSyncSummary doSync(TaskConfig config, TaskDetailLog detail) {
         // 1. 解析扩展参数并校验开关
         AbsSyncParams params = parseParams(config.paramJson);
+        // 记录一条 INFO 过程日志，同时写应用日志
         infoDetail(detail, "扩展参数：enableIn=" + params.enableIn + "，enableOut=" + params.enableOut
                 + "，enableUnconfirmedIssuerIn=" + params.enableUnconfirmedIssuerIn
                 + "，minDaysToMaturity=" + params.minDaysToMaturity
+                // 把跨池映射拼成「主体池→债券池」的日志文案
                 + "，poolIds=" + params.poolIds + "，mappings=" + joinMappings(params.mappings));
+        // 校验入池与出池开关，两者都关闭时本轮没有可做的事
         checkSwitches(params);
 
         // 2. 装载对账快照与池配置
         AbsSnapshot snapshot = loadSnapshot(detail);
+        // 加载全部投资池，供池存在性校验和跨池调出使用
         Map<Long, InvestmentPoolBo> poolMap = buildPoolMap();
         List<PoolRelationBo> allRelations = securityPoolAdjustMapper.queryAllPoolRelationList();
         AbsSyncContext context = new AbsSyncContext(poolMap, snapshot, allRelations, params,
                 new SimpleDateFormat(DATE_PATTERN).format(new Date()));
+        // 记录一条 INFO 过程日志，同时写应用日志
         infoDetail(detail, "扫描条件：ABS 主档未退市且属 bond 大类；已确认发行人按主档 issuer_code 与池内主体等值匹配；"
                 + "未确认发行人仅在入池与未确认发行人入池匹配开关均开启时按四类关系匹配并生成入池提醒；"
                 + "ABS 主档 " + snapshot.absList.size() + " 条");
 
         // 3. 合并扫描池并生成映射组
         List<long[]> pairs = resolvePairs(params, snapshot, detail);
+        // 记录一条 INFO 过程日志，同时写应用日志
         infoDetail(detail, "有效映射组 " + pairs.size() + " 组");
 
         // 4. 逐池对账
@@ -292,22 +314,25 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
             Set<Long> companyPoolIds = entry.getValue();
             InvestmentPoolBo bondPool = context.poolMap.get(bondPoolId);
             if (bondPool == null) {
+                // 记录一条 WARN 过程日志，同时写应用日志
                 warnDetail(detail, "债券池[" + bondPoolId + "]不存在，跳过映射 "
                         + companyPoolIds + "→" + bondPoolId);
                 continue;
             }
             if (CompanyBondSyncPolicy.isCrmwCombinationPool(bondPool)) {
+                // 记录一条 WARN 过程日志，同时写应用日志
                 warnDetail(detail, "债券池[" + bondPool.getPoolName() + "](" + bondPoolId
                         + ") 为 CRMW 组合池，ABS 不能通过普通池状态写入，跳过该映射");
                 continue;
             }
-            // 3. 组装单池上下文，池内主体与池内 ABS 直接取快照
+            // 1. 组装单池上下文，池内主体与池内 ABS 直接取快照
             PoolContext pool = new PoolContext(bondPool, companyPoolIds, context);
             PoolResult result;
             try {
-                // 4. 单池一个事务，避免一只 ABS 失败拖垮整轮
+                // 2. 单池一个事务，避免一只 ABS 失败拖垮整轮
                 result = template.execute(status -> processPool(pool, context, detail));
             } catch (BizException e) {
+                // 记录一条 WARN 过程日志，同时写应用日志
                 warnDetail(detail, "池[" + bondPool.getPoolName() + "](" + bondPoolId + ") 处理失败已回滚："
                         + e.getMessage());
                 summary.addFailedPool(bondPoolId, bondPool.getPoolName());
@@ -339,17 +364,20 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
      */
     private PoolResult processPool(PoolContext pool, AbsSyncContext context, TaskDetailLog detail) {
         PoolResult result = new PoolResult();
+        // 记录一条 INFO 过程日志，同时写应用日志
         infoDetail(detail, "池[" + pool.bondPool.getPoolName() + "](" + pool.bondPoolId
                 + ") 主体依据池=" + pool.companyPoolIds
                 + "，池内生效主体 " + pool.companySet.size() + " 个，池内生效 ABS " + pool.absInPool.size() + " 只");
 
         // 1. 出池方向先执行，避免先补入再踢出
         if (context.params.enableOut) {
+            // 出池阶段：池内已有 ABS 但已失去留池依据
             outPhase(pool, context, result, detail);
         }
 
         // 2. 入池方向后执行
         if (context.params.enableIn) {
+            // 入池阶段：主档中未在池、且主体依据已命中的 ABS
             inPhase(pool, context, result, detail);
         }
 
@@ -403,6 +431,7 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
         for (String securityCode : pool.absInPool) {
             AbsBondCandidateDto abs = context.snapshot.absMap.get(securityCode);
             if (abs == null) {
+                // 记录一条 WARN 过程日志，同时写应用日志
                 warnDetail(detail, "ABS[" + securityCode + "]在主档中不存在或已退市，保留现状不自动出池");
                 continue;
             }
@@ -443,12 +472,14 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
             if (!absCompanySyncService.allowScheduledSync(candidate, trigger, pool.bondPoolId,
                     pool.bondPool.getPoolName(), false, pool.companyPoolIds.iterator().next(), reads)) {
                 result.reminderCount++;
+                // 记录一条 INFO 过程日志，同时写应用日志
                 infoDetail(detail, "ABS[" + abs.getSecurityCode() + "]存在出池保护依据，已生成或保留规则提醒，本轮不自动出池");
                 continue;
             }
             // 3. 仅本次实际删除生效记录时写出池日志并计数
             int deleted = securityPoolAdjustMapper.deleteUnprotectedPoolStatusSoft(abs.getSecurityCode(), pool.bondPoolId);
             if (deleted == 0) {
+                // 记录一条 WARN 过程日志，同时写应用日志
                 warnDetail(detail, "ABS[" + abs.getSecurityCode() + "]软删失败（可能并发已出池），跳过");
                 continue;
             }
@@ -512,6 +543,7 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
             // 2. 已到期或距到期不足保护天数的 ABS 不再补入
             if (isMaturityTooClose(abs, context.today, context.params.minDaysToMaturity)) {
                 if (context.params.minDaysToMaturity > 0) {
+                    // 记录一条 INFO 过程日志，同时写应用日志
                     infoDetail(detail, "ABS[" + securityCode + "]摘牌日 " + abs.getDelistDate()
                             + "，距到期不足 " + context.params.minDaysToMaturity + " 天，跳过自动入池");
                 }
@@ -574,15 +606,18 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
             if (!absCompanySyncService.allowScheduledSync(candidate, trigger, pool.bondPoolId,
                     pool.bondPool.getPoolName(), true, companyPoolId, reads)) {
                 result.reminderCount++;
+                // 记录一条 INFO 过程日志，同时写应用日志
                 infoDetail(detail, "ABS[" + securityCode + "]主体未确认或存在入池规则提醒，本轮跳过自动入池");
                 continue;
             }
             List<Long> currentPoolIds = poolsByCode.getOrDefault(securityCode, Collections.emptyList());
             if (AutoAdjustRestrictHelper.isInAnyPool(currentPoolIds, inRestrictPoolIds)) {
+                // 记录一条 WARN 过程日志，同时写应用日志
                 warnDetail(detail, "ABS[" + securityCode + "]当前在调入限制池中，跳过");
                 continue;
             }
             if (currentPoolIds.contains(pool.bondPoolId)) {
+                // 记录一条 INFO 过程日志，同时写应用日志
                 infoDetail(detail, "ABS[" + securityCode + "]已在目标池生效，跳过");
                 continue;
             }
@@ -590,6 +625,7 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
                     pool.bondPoolId, context.allRelations);
             if (!relationOutPools.isEmpty() && !Collections.disjoint(relationOutPools,
                     securityPoolAdjustMapper.queryExcelProtectedPoolIds(securityCode))) {
+                // 记录一条 WARN 过程日志，同时写应用日志
                 warnDetail(detail, "ABS[" + securityCode + "]涉及 Excel 导入保护池，跳过本组调库");
                 continue;
             }
@@ -606,6 +642,7 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
             int autoOutCount = AutoAdjustRelationHelper.autoOutCurrentRelationPools(
                     candidate, currentPoolIds, context.poolMap, context.allRelations, securityPoolAdjustMapper);
             if (autoOutCount > 0) {
+                // 记录一条 INFO 过程日志，同时写应用日志
                 infoDetail(detail, "ABS[" + securityCode + "]自动调出关系池 " + autoOutCount + " 个");
             }
         }
@@ -623,7 +660,7 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
      * @param abs ABS 主档
      * @param companySet 池内生效主体
      * @param relationMap ABS 到四类关联主体的映射
-     * @return true 表示仍可留池
+     * @return true=仍有匹配依据，可以留池，false=已无匹配依据，进入后续出池判断
      */
     private boolean shouldStayInPool(AbsBondCandidateDto abs, Set<String> companySet,
                                      Map<String, Set<String>> relationMap) {
@@ -680,7 +717,7 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
      * @param abs ABS 主档
      * @param today 当天日期，格式 yyyyMMdd
      * @param minDays 距到期最小剩余天数
-     * @return true 表示不再补入
+     * @return true=摘牌日不满足补入的剩余天数要求，false=摘牌日未阻断补入
      */
     private boolean isMaturityTooClose(AbsBondCandidateDto abs, String today, int minDays) {
         String delistDate = abs.getDelistDate() == null ? null : abs.getDelistDate().trim();
@@ -712,23 +749,26 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
      * @param context 本轮共享上下文
      * @param abs ABS 主档
      * @param detail 任务过程日志
-     * @return true 表示市场允许入池
+     * @return true=市场满足目标池限制或目标池无限制，false=市场不满足目标池限制
      */
     private boolean marketAllowed(PoolContext pool, AbsSyncContext context, AbsBondCandidateDto abs,
                                   TaskDetailLog detail) {
         String marketCodes = pool.bondPool.getMarketCodes();
+        // 判断池是否配置了市场限制
         if (!hasMarketRestriction(marketCodes)) {
             return true;
         }
         // 1. 市场查询失败时回退主档，避免一只脏数据毁掉整轮
         String market = resolveMarketQuietly(context, abs, detail);
         if (!StringUtils.hasText(market)) {
+            // 记录一条 WARN 过程日志，同时写应用日志
             warnDetail(detail, "ABS[" + abs.getSecurityCode() + "]缺少可用市场，池["
                     + pool.bondPool.getPoolName() + "]配置了市场限制，跳过");
             return false;
         }
         boolean matched = MarketCodeMatchUtil.matchesPoolMarkets(marketCodes, market);
         if (!matched) {
+            // 记录一条 INFO 过程日志，同时写应用日志
             infoDetail(detail, "ABS[" + abs.getSecurityCode() + "]市场=" + market
                     + " 不在池[" + pool.bondPool.getPoolName() + "]允许市场内，跳过");
         }
@@ -759,6 +799,7 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
         try {
             market = securityMarketService.queryMarketCode(securityCode);
         } catch (BizException e) {
+            // 记录一条 WARN 过程日志，同时写应用日志
             warnDetail(detail, "ABS[" + securityCode + "]市场校验异常，回退主档 market：" + e.getMessage());
             market = abs.getMarket() == null ? null : abs.getMarket().trim();
         }
@@ -771,8 +812,11 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
      *
      * market_codes 为 null、空串或空数组时都视为不限制
      *
+     * 执行顺序：
+     * 1. 检查文本
+     *
      * @param marketCodes 池 market_codes JSON 原文
-     * @return true 表示需要按市场过滤
+     * @return true=目标池配置了市场限制，false=目标池未配置市场限制
      */
     private boolean hasMarketRestriction(String marketCodes) {
         return StringUtils.hasText(marketCodes) && !"[]".equals(marketCodes.trim());
@@ -795,6 +839,7 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
      * @param adjustMode 调整方向
      * @param reasonPrefix 原因前缀
      * @param trigger 联动触发主体，没有时为空
+     * @param companyPoolId 主体投资池 ID
      * @return 可直接落库的调库日志对象
      */
     private ScheduledAdjustCandidateDto buildAdjustCandidate(AbsBondCandidateDto abs, PoolContext pool,
@@ -882,12 +927,15 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
         // 3. 各池已生效主体
         Set<Long> protectedStatusIds = excelPoolExclusionService.loadProtectedStatusIds(null, false);
         List<PoolSecurityRowDto> companies = absPoolReconcileMapper.queryEffectiveCompanyPoolRows();
+        // 把「池 → 证券代码」的查询结果按池分组
         fillPoolMap(snapshot.companyPoolMap, companies, Collections.emptySet());
+        // 把「池 → 证券代码」的查询结果按池分组
         fillPoolMap(snapshot.inboundCompanyPoolMap, companies, protectedStatusIds);
 
         // 4. 各池已生效 ABS
         fillPoolMap(snapshot.absPoolMap, absPoolReconcileMapper.queryEffectiveAbsPoolRows(), protectedStatusIds);
 
+        // 记录一条 INFO 过程日志，同时写应用日志
         infoDetail(detail, "快照装载完成：ABS 主档 " + snapshot.absList.size()
                 + " 条，四类关系覆盖 " + snapshot.relationMap.size() + " 只 ABS，"
                 + "主体生效池 " + snapshot.companyPoolMap.size() + " 个，ABS 生效池 " + snapshot.absPoolMap.size() + " 个");
@@ -944,10 +992,11 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
      * 但池内已无生效主体的池永远扫不到
      *
      * 执行顺序：
-     * 1. 并入扩展参数指定的池
-     * 2. 并入关系配置绑定本任务的池，入池与出池两个方向都要
-     * 3. 并入当前已有生效主体的普通池
-     * 4. 并入当前已有 ABS 在池的池，并集为空时本轮失败
+     * 1. 加入扩展参数中的扫描池
+     * 2. 加入关系配置中绑定本任务的调入池与调出池
+     * 3. 加入当前已有生效主体的普通池
+     * 4. 加入当前已有 ABS 在库的池，没有可扫描的池时终止任务
+     * 5. 记录去重后的扫描池范围
      *
      * @param params 扩展参数
      * @param snapshot 对账快照
@@ -956,14 +1005,20 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
      */
     private Set<Long> resolveScanPoolIds(AbsSyncParams params, AbsSnapshot snapshot, TaskDetailLog detail) {
         Set<Long> scanPoolIds = new LinkedHashSet<>();
+        // 1. 加入扩展参数中的扫描池
         scanPoolIds.addAll(params.poolIds);
+        // 2. 加入关系配置中绑定本任务的调入池与调出池
         addAll(scanPoolIds, poolScopeHelper.queryBoundPoolIds(TASK_CODE, RuleType.AUTO_IN.getCode()));
+        // 继续补入绑定本任务的调出池
         addAll(scanPoolIds, poolScopeHelper.queryBoundPoolIds(TASK_CODE, RuleType.AUTO_OUT.getCode()));
+        // 3. 加入当前已有生效主体的普通池
         addAll(scanPoolIds, autoAdjustMapper.queryCompanyCurrentPoolIds());
+        // 4. 加入当前已有 ABS 在库的池，没有可扫描的池时终止任务
         addAll(scanPoolIds, snapshot.absPoolMap.keySet());
         if (scanPoolIds.isEmpty()) {
             throw new BizException(AutoAdjustPoolScopeHelper.EMPTY_POOL_SCOPE_MESSAGE);
         }
+        // 5. 记录去重后的扫描池范围
         infoDetail(detail, "扫描池（参数、关系绑定、已有生效主体、已有 ABS 在池）=" + new ArrayList<>(scanPoolIds));
         return scanPoolIds;
     }
@@ -1009,6 +1064,10 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
     /**
      * 加载全部投资池，供池存在性校验和跨池调出使用
      *
+     * 执行顺序：
+     * 1. 查询投资池列表
+     * 2. 加载全部投资池，供池存在性校验和跨池调出使用
+     *
      * @return 池 ID 到池对象的映射
      */
     private Map<Long, InvestmentPoolBo> buildPoolMap() {
@@ -1027,6 +1086,10 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
      *
      * 任务名缺失时使用默认任务名称，保证过程日志仍然可读
      *
+     * 执行顺序：
+     * 1. 按任务编码查询任务配置
+     * 2. 读取任务名与扩展参数，配置表只查一次
+     *
      * @return 任务配置
      */
     private TaskConfig loadTaskConfig() {
@@ -1040,6 +1103,9 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
 
     /**
      * 校验入池与出池开关，两者都关闭时本轮没有可做的事
+     *
+     * 执行顺序：
+     * 1. 入池与出池开关同时关闭，本任务无事可做时终止处理
      *
      * @param params 扩展参数
      */
@@ -1082,9 +1148,13 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
         readPoolIds(root, params);
         // 2. 读取跨池映射
         readMappings(root, params);
+        // 读取布尔开关，缺失时使用默认值
         params.enableIn = readBoolean(root, "enableIn", false);
+        // 读取布尔开关，缺失时使用默认值
         params.enableOut = readBoolean(root, "enableOut", true);
+        // 读取布尔开关，缺失时使用默认值
         params.enableUnconfirmedIssuerIn = readBoolean(root, "enableUnconfirmedIssuerIn", false);
+        // 读取整数参数，缺失时返回 null 由调用方决定默认值
         Integer minDays = readInt(root, "minDaysToMaturity");
         if (minDays != null) {
             if (minDays < 0) {
@@ -1097,6 +1167,10 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
 
     /**
      * 读取 poolIds，必须是数字数组
+     *
+     * 执行顺序：
+     * 1. 读取可选的 poolIds 字段，缺失时不增加配置
+     * 2. 检查字段为数组且每项为数字，再加入本次扫描范围
      *
      * @param root 参数根节点
      * @param params 解析结果
@@ -1119,6 +1193,10 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
 
     /**
      * 读取 mappings，每项必须同时包含债券池与主体依据池
+     *
+     * 执行顺序：
+     * 1. mappings 缺失时保留原映射，存在时校验为对象数组
+     * 2. 逐项读取债券池和主体依据池 ID，加入有效映射
      *
      * @param root 参数根节点
      * @param params 解析结果
@@ -1147,10 +1225,13 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
     /**
      * 读取布尔开关，缺失时使用默认值
      *
+     * 执行顺序：
+     * 1. 没有配置该字段时使用默认开关，配置值存在时要求为 JSON 布尔值
+     *
      * @param root 参数根节点
      * @param field 字段名
      * @param defaultValue 默认值
-     * @return 开关值
+     * @return true=开关开启，false=开关关闭；未配置时返回传入的默认值
      */
     private boolean readBoolean(JsonNode root, String field, boolean defaultValue) {
         JsonNode node = root.get(field);
@@ -1165,6 +1246,9 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
 
     /**
      * 读取整数参数，缺失时返回 null 由调用方决定默认值
+     *
+     * 执行顺序：
+     * 1. 未配置时返回空值，配置后先检查 JSON 节点为数字再取整数值
      *
      * @param root 参数根节点
      * @param field 字段名
@@ -1183,6 +1267,10 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
 
     /**
      * 把跨池映射拼成「主体池→债券池」的日志文案
+     *
+     * 执行顺序：
+     * 1. 没有映射时输出空列表文案
+     * 2. 按配置顺序用逗号拼接每组主体池和债券池的对应关系
      *
      * @param mappings 跨池映射
      * @return 可直接打日志的文本
@@ -1204,6 +1292,9 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
     /**
      * 把池 ID 批量并入扫描池，跳过空值
      *
+     * 执行顺序：
+     * 1. 有来源集合时逐个合并非空池 ID，由目标集合去重
+     *
      * @param target 扫描池
      * @param source 待并入的池 ID
      */
@@ -1221,6 +1312,9 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
     /**
      * 记录一条 INFO 过程日志，同时写应用日志
      *
+     * 执行顺序：
+     * 1. 先向应用日志写入消息，有任务明细记录器时，再按 INFO 级别记入明细
+     *
      * @param detail 任务过程日志
      * @param line 日志内容
      */
@@ -1234,6 +1328,9 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
     /**
      * 记录一条 WARN 过程日志，同时写应用日志
      *
+     * 执行顺序：
+     * 1. 先向应用日志写入消息，有任务明细记录器时，再按 WARN 级别记入明细
+     *
      * @param detail 任务过程日志
      * @param line 日志内容
      */
@@ -1244,7 +1341,11 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
         }
     }
 
-    /** 任务配置：任务名与扩展参数原文 */
+    /**
+     * 保存本轮 ABS 联动任务的运行配置
+     *
+     * 将任务展示名称和扩展参数原文一起交给任务执行，名称缺省时使用任务编码
+     */
     private static final class TaskConfig {
 
         /** 任务名称，配置缺失时为任务编码 */
@@ -1253,13 +1354,26 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
         /** 扩展参数原文，未配置时为 null */
         private final String paramJson;
 
+        /**
+         * 保存 ABS 自动联动任务的执行配置
+         *
+         * 执行顺序：
+         * 1. 保留任务名称和扩展参数原文
+         *
+         * @param taskName 本轮 ABS 联动任务名称
+         * @param paramJson 任务扩展参数原文
+         */
         private TaskConfig(String taskName, String paramJson) {
             this.taskName = taskName;
             this.paramJson = paramJson;
         }
     }
 
-    /** 扩展参数 */
+    /**
+     * 保存 ABS 联动任务解析后的扫描参数
+     *
+     * 定义扫描池、主体依据池映射、允许执行的调库方向及未确认身份和剩余期限的补入条件
+     */
     static final class AbsSyncParams {
 
         /** 指定扫描池 */
@@ -1281,7 +1395,11 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
         int minDaysToMaturity = DEFAULT_MIN_DAYS_TO_MATURITY;
     }
 
-    /** 本轮跨池共享的上下文与缓存 */
+    /**
+     * 保存本轮 ABS 对账跨池共用的数据
+     *
+     * 多个目标池复用池配置、关系和对账快照，并共用证券市场查询结果和批次提交时间
+     */
     private static final class AbsSyncContext {
 
         /** 全部投资池 */
@@ -1305,6 +1423,18 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
         /** 自动调库批次号上下文，整轮共用一个提交时间 */
         private final ScheduledAdjustBatchNoContext batchNoContext = new ScheduledAdjustBatchNoContext();
 
+        /**
+         * 准备 ABS 自动联动本轮共用的数据
+         *
+         * 执行顺序：
+         * 1. 保存池配置、扫描快照、池关系、解析后的参数和任务日期
+         *
+         * @param poolMap 全部投资池
+         * @param snapshot 对账快照
+         * @param allRelations 池关系
+         * @param params 扩展参数
+         * @param today 当天日期，用于到期判断
+         */
         private AbsSyncContext(Map<Long, InvestmentPoolBo> poolMap, AbsSnapshot snapshot,
                                List<PoolRelationBo> allRelations, AbsSyncParams params, String today) {
             this.poolMap = poolMap;
@@ -1315,7 +1445,11 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
         }
     }
 
-    /** 对账快照，四条批量查询在内存中的索引 */
+    /**
+     * 保存 ABS 主体联动对账的批量查询结果
+     *
+     * 按 ABS 代码索引主档和关联主体，按池索引主体状态和 ABS 在池状态，供逐池判断实际差异
+     */
     private static final class AbsSnapshot {
 
         /** ABS 主档，按代码升序 */
@@ -1329,9 +1463,19 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
 
         /** 池到生效主体 */
         private final Map<Long, Set<String>> companyPoolMap = new HashMap<>();
+
         /** 可触发补债的主体池状态 */
         private final Map<Long, Set<String>> inboundCompanyPoolMap = new HashMap<>();
 
+        /**
+         * 查询可作为 ABS 入池依据的在池主体
+         *
+         * 执行顺序：
+         * 1. 按池 ID 读取本轮入池主体索引，找不到记录时返回空集合
+         *
+         * @param poolId 本次查询或统计的投资池 ID
+         * @return 指定池可作为入池依据的主体代码集合，无记录时为空集合
+         */
         private Set<String> inboundCompaniesOf(Long poolId) {
             return inboundCompanyPoolMap.getOrDefault(poolId, Collections.emptySet());
         }
@@ -1339,18 +1483,38 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
         /** 池到生效 ABS */
         private final Map<Long, Set<String>> absPoolMap = new HashMap<>();
 
-        /** 取某池的生效主体，池内没有时返回空集合 */
+        /**
+         * 查询池中已生效的主体
+         *
+         * 执行顺序：
+         * 1. 从主体在池快照取指定池的主体代码，找不到时返回空集合
+         *
+         * @param poolId 本次查询或统计的投资池 ID
+         * @return 指定池已生效的主体代码集合，无记录时为空集合
+         */
         private Set<String> companiesOf(Long poolId) {
             return companyPoolMap.getOrDefault(poolId, Collections.emptySet());
         }
 
-        /** 取某池的生效 ABS，池内没有时返回空集合 */
+        /**
+         * 查询池中已生效的 ABS
+         *
+         * 执行顺序：
+         * 1. 从 ABS 在池快照取指定池的证券代码，找不到时返回空集合
+         *
+         * @param poolId 本次查询或统计的投资池 ID
+         * @return 指定池已生效的 ABS 证券代码集合，无记录时为空集合
+         */
         private Set<String> absOf(Long poolId) {
             return absPoolMap.getOrDefault(poolId, Collections.emptySet());
         }
     }
 
-    /** 单池上下文 */
+    /**
+     * 准备单个债券目标池的 ABS 联动数据
+     *
+     * 合并各主体依据池中的生效主体和允许触发补入的主体，并保留债券目标池当前在库的 ABS
+     */
     private static final class PoolContext {
 
         /** 债券目标池 */
@@ -1371,6 +1535,18 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
         /** 目标池内已生效的 ABS */
         private final Set<String> absInPool;
 
+        /**
+         * 准备一个债券目标池的 ABS 联动校验数据
+         *
+         * 执行顺序：
+         * 1. 保存债券目标池信息和对应的主体池 ID
+         * 2. 从快照汇总主体池的在库主体和在途调入主体
+         * 3. 从快照取得债券目标池已在库的 ABS
+         *
+         * @param bondPool 债券目标池
+         * @param companyPoolIds 目标池的全部主体依据池
+         * @param context 本轮 ABS 联动上下文，含池状态快照
+         */
         private PoolContext(InvestmentPoolBo bondPool, Set<Long> companyPoolIds, AbsSyncContext context) {
             this.bondPool = bondPool;
             this.bondPoolId = bondPool.getId();
@@ -1384,7 +1560,11 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
         }
     }
 
-    /** 单池处理结果 */
+    /**
+     * 记录一个目标池完成的 ABS 调库及提醒
+     *
+     * 保存实际入池、实际出池和规则提醒数量，供本轮任务按池汇总
+     */
     private static final class PoolResult {
 
         /** 实际入池数 */
@@ -1397,7 +1577,11 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
         private int reminderCount;
     }
 
-    /** 本轮对账汇总 */
+    /**
+     * 汇总本轮 ABS 联动对账结果
+     *
+     * 按名称展示各池的进出池变化，并累计实际调整、生成提醒及处理失败的池数
+     */
     private static final class AbsSyncSummary {
 
         /** 入池总数 */
@@ -1418,7 +1602,17 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
         /** 池 ID 到池名称 */
         private final Map<Long, String> poolNames = new LinkedHashMap<>();
 
-        /** 合并单池结果 */
+        /**
+         * 合并一个池的 ABS 对账结果
+         *
+         * 执行顺序：
+         * 1. 记录目标池名称及实际入池、出池数量
+         * 2. 把该池入池、出池和规则提醒计入本轮总数
+         *
+         * @param poolId 本次查询或统计的投资池 ID
+         * @param poolName 目标池名称
+         * @param result 本目标池本轮的处理结果
+         */
         private void merge(Long poolId, String poolName, PoolResult result) {
             poolNames.put(poolId, poolName);
             poolCounts.put(poolId, new int[]{result.inCount, result.outCount});
@@ -1427,18 +1621,41 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
             reminderTotal += result.reminderCount;
         }
 
-        /** 记录一个已回滚的失败池 */
+        /**
+         * 记录已回滚的目标池
+         *
+         * 执行顺序：
+         * 1. 保存失败池名称，把失败池计数加一
+         *
+         * @param poolId 本次查询或统计的投资池 ID
+         * @param poolName 目标池名称
+         */
         private void addFailedPool(Long poolId, String poolName) {
             poolNames.put(poolId, poolName);
             failedPoolCount++;
         }
 
-        /** 本轮实际处理条数，入池与出池之和 */
+        /**
+         * 计算本轮实际调整的 ABS 数量
+         *
+         * 执行顺序：
+         * 1. 把入池条数和出池条数相加
+         *
+         * @return 实际入池与出池的条数之和
+         */
         private int total() {
             return inTotal + outTotal;
         }
 
-        /** 构建本轮结果文案 */
+        /**
+         * 生成 ABS 对账任务的结果说明
+         *
+         * 执行顺序：
+         * 1. 先写本轮实际入池、出池和触发提醒总数
+         * 2. 有失败池时注明回滚数量，再追加各目标池实际进出池数
+         *
+         * @return 包含进出池、提醒及失败池信息的结果说明
+         */
         private String buildMessage() {
             StringBuilder message = new StringBuilder("本轮自动入池 ")
                     .append(inTotal).append(" 条 ABS、自动出池 ").append(outTotal)

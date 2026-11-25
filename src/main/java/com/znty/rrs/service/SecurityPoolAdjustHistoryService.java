@@ -18,8 +18,10 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 证券池调整历史服务。
- * <p>负责证券池调整操作审计记录的分页查询，以及筛选条件所需的证券类型选项查询。</p>
+ * 查询证券池的调入调出历史
+ *
+ * 提供证券调整日志的分页查询、Excel 导出和证券类型筛选选项
+ * 列表和导出按照相同的查询条件筛选，并展示投资池全路径名称
  */
 @Service
 public class SecurityPoolAdjustHistoryService {
@@ -34,6 +36,14 @@ public class SecurityPoolAdjustHistoryService {
 
     /**
      * 分页查询证券池调整历史列表
+     *
+     * 执行顺序：
+     * 1. 按请求的页码和每页条数开启分页，并用筛选条件查询记录
+     * 2. 填充投资池全路径名称
+     * 3. 将本页记录和查询总条数一起返回
+     *
+     * @param req 与列表查询相同的筛选条件（可不传分页）
+     * @return 查询记录及分页信息
      */
     public PageResult<SecurityPoolAdjustHistoryDto> querySecurityPoolAdjustHistoryPage(SecurityPoolAdjustHistoryReq req) {
         PageHelper.startPage(req.getPageIndex(), req.getPageSize());
@@ -45,27 +55,36 @@ public class SecurityPoolAdjustHistoryService {
     }
 
     /**
-     * 按当前筛选条件导出证券池调整历史。
+     * 按当前筛选条件导出证券池调整历史
+     *
+     * 执行顺序：
+     * 1. 复用列表 SQL 全量查询命中记录
+     * 2. 回填投资池完整路径，保证与页面展示一致
+     * 3. 转换为导出行并按模板生成 Excel
      *
      * @param req 与列表查询相同的筛选条件（可不传分页）
      * @return 可下载的 Excel 文件
      */
     public CommonFileDto exportSecurityPoolAdjustHistoryExcel(SecurityPoolAdjustHistoryReq req) {
-        // 复用列表 SQL 全量查询命中记录
+        // 1. 复用列表 SQL 全量查询命中记录
         List<SecurityPoolAdjustHistoryDto> list = securityPoolAdjustHistoryMapper.querySecurityPoolAdjustHistoryPage(req);
-        // 回填投资池完整路径，保证与页面展示一致
+        // 2. 回填投资池完整路径，保证与页面展示一致
         fillPoolFullName(list);
-        // 转换为导出行并按模板生成 Excel
+        // 3. 转换为导出行并按模板生成 Excel
         return QueryListExportHelper.fillTemplate(
                 "/xlsx/security_pool_adjust_history_export_template.xlsx",
                 "证券池调整历史",
                 "证券池调整历史导出模板不存在",
                 "生成证券池调整历史 Excel 失败：",
+                // 将页面展示字段转换为模板填充数据
                 buildExportRows(list));
     }
 
     /**
-     * 将页面展示字段转换为模板填充数据。
+     * 将页面展示字段转换为模板填充数据
+     *
+     * 执行顺序：
+     * 1. 逐项格式化入池时间
      *
      * @param list 查询结果
      * @return Excel 导出行
@@ -104,7 +123,10 @@ public class SecurityPoolAdjustHistoryService {
     }
 
     /**
-     * 填充投资池全路径名称。
+     * 填充投资池全路径名称
+     *
+     * 执行顺序：
+     * 1. 查询投资池全路径名称映射
      *
      * @param list 查询结果
      */
@@ -124,6 +146,11 @@ public class SecurityPoolAdjustHistoryService {
 
     /**
      * 查询调整历史中出现的证券类型选项
+     *
+     * 执行顺序：
+     * 1. 查询禁投池中出现的证券类型下拉选项（code + name）
+     *
+     * @return 证券类型选项列表
      */
     public List<SecurityTypeOptionDto> querySecurityTypeList() {
         return securityPoolAdjustHistoryMapper.querySecurityTypeList();

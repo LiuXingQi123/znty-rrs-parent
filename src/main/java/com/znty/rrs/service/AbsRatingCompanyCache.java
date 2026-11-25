@@ -14,13 +14,13 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * ABS 评级主体候选的短期复用缓存。
+ * ABS 评级主体候选的短期复用缓存
  *
- * <p>权益人、自选权益人候选在页面查询时一次性返回给前端，后续校验和提交通过
+ * 本类是评级主体候选缓存组件，权益人和自选权益人候选在页面查询时一次性返回给前端，后续校验和提交通过
  * {@code selectedRatingCompany} 原样回传，后端据此复用已查出的名称、代码与内外评，
- * 避免在每一步重复查询候选和评级。缓存只在同一次交互内有效，提交后以数据库申请快照为准。
+ * 避免在每一步重复查询候选和评级。缓存只在同一次交互内有效，提交后以数据库申请快照为准
  *
- * <p>本类只负责候选数据的存取，不涉及 ABS 身份判定、调库校验或审批落档。
+ * 本类只负责候选数据的存取，不涉及 ABS 身份判定、调库校验或审批落档
  */
 @Component
 public class AbsRatingCompanyCache {
@@ -40,8 +40,10 @@ public class AbsRatingCompanyCache {
 
     /**
      * 保存已查询的关联候选供后续选择复用
+     *
      * 执行顺序：
-     * 1. 清理过期候选并按证券保存独立副本
+     * 1. 清理过期候选，复制本次查询的记录并按证券代码缓存
+     *
      * @param securityCode 证券代码
      * @param rows 已查询候选
      */
@@ -61,10 +63,12 @@ public class AbsRatingCompanyCache {
 
     /**
      * 读取本次交互已查询的关联候选
+     *
      * 执行顺序：
-     * 1. 只返回有效期内的数据，接口直调或过期时由原查询入口重新读取
+     * 1. 按证券代码取候选，记录不存在或已过期时返回空值
+     *
      * @param securityCode 证券代码
-     * @return 已查询候选，未查询时返回 null
+     * @return 已查询候选，不存在或已过期时为 {@code null}
      */
     public List<RelatedRatingCompanyDto> findRelated(String securityCode) {
         CandidateEntry<List<RelatedRatingCompanyDto>> entry = relatedCandidates.get(securityCode);
@@ -73,8 +77,11 @@ public class AbsRatingCompanyCache {
 
     /**
      * 查询 ABS 规则提醒需要展示的普通权益人候选
+     *
      * 执行顺序：
-     * 1. 优先复用本次已查出的候选，未查询或已过期时回查数据库并重新缓存
+     * 1. 先查候选缓存，缓存未命中时查库并保存结果
+     * 2. 返回可展示的候选，查询无结果时用空列表
+     *
      * @param securityCode 证券代码
      * @return 普通权益人候选，无数据时返回空集合
      */
@@ -89,8 +96,10 @@ public class AbsRatingCompanyCache {
 
     /**
      * 保存已查询的自选主体及其完整评级数据
+     *
      * 执行顺序：
-     * 1. 清理过期候选，再按主体代码保存独立副本
+     * 1. 清理过期候选，复制查询结果并按主体代码分别缓存
+     *
      * @param rows 当前页或精确查询结果
      */
     public void rememberSelf(List<SelfSelectedRightsHolderDto> rows) {
@@ -105,8 +114,10 @@ public class AbsRatingCompanyCache {
 
     /**
      * 读取已查询的自选主体
+     *
      * 执行顺序：
-     * 1. 按主体代码读取有效期内的候选
+     * 1. 按主体代码取自选候选，记录不存在或已过期时返回空值
+     *
      * @param companyCode 主体代码
      * @return 已查询候选，未查询或已过期时返回 null
      */
@@ -117,8 +128,10 @@ public class AbsRatingCompanyCache {
 
     /**
      * 清理候选交互数据
+     *
      * 执行顺序：
-     * 1. 删除过期项，超出交互容量时清空后由标准查询入口重新读取
+     * 1. 从两份缓存中移除已过期的记录
+     * 2. 某份缓存超过各自的容量上限时清空该缓存
      */
     private void removeExpiredCandidates() {
         long now = System.currentTimeMillis();
@@ -132,13 +145,26 @@ public class AbsRatingCompanyCache {
         }
     }
 
-    /** 候选数据及交互有效期 */
+    /**
+     * 保存在有效期内可复用的评级主体候选
+     *
+     * 将后端查询出的候选和过期时间一起保存，供同一次候选选择再次读取
+     */
     private static final class CandidateEntry<T> {
         /** 已由后端查询的数据 */
         private final T value;
+
         /** 过期时间 */
         private final long expiresAt = System.currentTimeMillis() + CANDIDATE_LIFETIME_MS;
 
+        /**
+         * 为一次候选查询结果建立缓存条目
+         *
+         * 执行顺序：
+         * 1. 保存候选值，由条目的创建时间确定过期时间
+         *
+         * @param value 需要缓存的候选数据
+         */
         private CandidateEntry(T value) {
             this.value = value;
         }

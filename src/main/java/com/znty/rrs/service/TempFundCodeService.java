@@ -31,24 +31,31 @@ import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 管理基金临时代码的查询、新增、转正、取消发行和删除
- * 转正时替换在途申请引用，并处理原临时基金的在池记录
+ * 管理基金临时代码的录入、转正和取消发行
+ *
+ * 提供临时基金和正式基金的检索，支持维护仍处于临时状态的登记记录
+ * 转正时替换在途申请对临时代码的引用，并处理原临时基金的在池记录
  */
 @Service
 public class TempFundCodeService {
     /** 基金临时代码及替换明细访问组件 */
     @Resource
     private TempFundCodeMapper tempFundCodeMapper;
+
     /** 基金主档行锁及基金日志、池状态写入组件 */
     @Resource
     private FundPoolAdjustMapper fundPoolAdjustMapper;
+
     /** 转正后的基金附件关联继承组件 */
     @Resource
     private SysAttachmentService sysAttachmentService;
+
     /** 系统调出操作人 ID */
     private static final String SYSTEM_USER_ID = "0";
+
     /** 系统调出操作人名称 */
     private static final String SYSTEM_USER_NAME = "系统";
+
     /** 与债券临时代码调出一致的业务类型 */
     private static final String TEMP_OUT_TYPE = "临时代码调出";
 

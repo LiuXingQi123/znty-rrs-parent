@@ -16,13 +16,12 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.interceptor.TransactionAspectSupport;
 
 /**
- * 债券类型变更
+ * 债券类型变更（仅债券）
  *
- * 以证券主数据为准同步当前生效池状态及其关联调库日志
- * 1. 查询普通池和 CRMW 池中旧类型与主数据不一致的生效记录
- * 2. 先条件更新池状态，避免覆盖扫描后的并发变更
- * 3. 同步当前池状态关联的日志，再按主数据补齐已审批通过的调库流水类型
- * 4. 任一异常时整轮事务回滚并返回失败结果
+ * 执行顺序：
+ * 1. 按证券主数据查找普通池和 CRMW 池中类型不一致的生效记录
+ * 2. 条件更新池状态，随后同步池状态对应的调库日志
+ * 3. 补齐已审批通过的历史调库流水类型，汇总修改数量，发生异常时整轮回滚
  */
 @Slf4j
 @Service
@@ -34,6 +33,7 @@ public class BondSecurityTypeChangeService implements RrsScheduledTask {
     /** 任务名称 */
     public static final String TASK_NAME = "债券类型变更（仅债券）";
 
+    /** 定时任务页面展示的类型同步范围和数据来源说明 */
     private static final String PARAM_HELP =
             "参数说明：本任务无需扩展参数，请将 param_json 留空\n"
                     + "数据来源：rrs_securityinfo.security_type 为证券主数据最新类型\n"
@@ -45,13 +45,27 @@ public class BondSecurityTypeChangeService implements RrsScheduledTask {
     @Resource
     private BondSecurityMaintenanceMapper bondSecurityMaintenanceMapper;
 
-    /** 返回债券类型变更任务编码 */
+    /**
+     * 返回债券类型变更任务编码
+     *
+     * 执行顺序：
+     * 1. 返回当前任务定义的固定编码
+     *
+     * @return 任务编码
+     */
     @Override
     public String getTaskCode() {
         return TASK_CODE;
     }
 
-    /** 返回债券类型变更任务参数说明 */
+    /**
+     * 返回债券类型变更任务参数说明
+     *
+     * 执行顺序：
+     * 1. 返回当前任务定义的参数说明
+     *
+     * @return 任务参数说明
+     */
     @Override
     public String getParamHelp() {
         return PARAM_HELP;
@@ -114,7 +128,12 @@ public class BondSecurityTypeChangeService implements RrsScheduledTask {
         }
     }
 
-    /** 任务捕获异常并返回失败结果时，将当前数据库事务标记为回滚 */
+    /**
+     * 任务捕获异常并返回失败结果时，将当前数据库事务标记为回滚
+     *
+     * 执行顺序：
+     * 1. 将当前事务标记为只回滚，没有事务时仅记调试日志
+     */
     private void markTransactionRollbackOnly() {
         try {
             TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();

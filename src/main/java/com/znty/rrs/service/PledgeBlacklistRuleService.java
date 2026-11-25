@@ -19,32 +19,39 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * 黑名单质押库三条件校验
+ * 校验质押黑名单库调入和调出的三项主体条件
  *
- * 供人工调库和债券定时同步判断发行主体是否满足黑名单质押库条件
+ * 同一主体在债券禁止库、在重点观察名单或具有近一年认可外评 AA- 及以下时，命中质押黑名单库条件
+ * 人工调库也可以传入本批拟调入调出的池，按本批执行后的主体状态判断目标池能否调整
+ * 外评机构口径由 {@link ExternalRatingAgencyService} 提供
  */
 @Service
 public class PledgeBlacklistRuleService {
 
     /** 债券禁止库 */
     public static final Long FORBIDDEN_POOL_ID = 15L;
+
     /** 黑名单质押库 */
     public static final Long BLACKLIST_POOL_ID = 17L;
+
     /** 重点观察名单 */
     public static final Long KEY_WATCH_POOL_ID = 23L;
 
     /** 自动调库规则查询数据访问组件 */
     @Resource
     private AutoAdjustMapper autoAdjustMapper;
+
     /** 外部评级机构配置服务 */
     @Resource
     private ExternalRatingAgencyService externalRatingAgencyService;
 
     /**
      * ABS 按全部关联主体检查原有黑名单质押库硬条件
+     *
      * 执行顺序：
      * 1. 复用候选主体集合并逐主体执行原三条件
      * 2. 调入要求任一命中，调出要求全部不再命中
+     *
      * @param codes 已查询的 ABS 关联主体及本次自选代码
      * @param adjustMode 调整方向
      * @return 原硬条件不通过的具体原因
@@ -73,7 +80,18 @@ public class PledgeBlacklistRuleService {
         return validateCompanies(codes, adjustMode, code -> evaluate(code, inboundPoolIds, outboundPoolIds));
     }
 
-    /** 按指定入口提供的主体判定汇总 ABS 黑名单质押库资格 */
+    /**
+     * 按指定入口提供的主体判定汇总 ABS 黑名单质押库资格
+     *
+     * 执行顺序：
+     * 1. 没有可识别主体时给出禁止调整原因
+     * 2. 逐个检查关联主体，调入要求至少命中一项，调出时有主体仍命中则拦截
+     *
+     * @param codes 已查询的 ABS 关联主体及本次自选代码
+     * @param adjustMode 调整方向
+     * @param evaluateCompany 按主体代码计算三项条件的函数
+     * @return 未通过校验的具体原因，符合本次调入或调出条件时返回 null
+     */
     String validateCompanies(List<String> codes, String adjustMode, Function<String, Decision> evaluateCompany) {
         if (codes.isEmpty()) {
             return "无法识别 ABS 关联主体，不能调整黑名单质押库";
@@ -91,7 +109,10 @@ public class PledgeBlacklistRuleService {
     }
 
     /**
-     * 按当前已生效池状态判断主体是否应在黑名单质押库。
+     * 按当前已生效池状态判断主体是否应在黑名单质押库
+     *
+     * 执行顺序：
+     * 1. 以已经生效的在池结果判断黑名单三项条件，调入池和调出池的变动集合均留空
      *
      * @param companyCode 发行主体代码
      * @return 黑名单质押库三条件判定结果
@@ -105,16 +126,24 @@ public class PledgeBlacklistRuleService {
      *
      * 首次有主体需要判断时才读取认可评级机构配置
      *
+     * 执行顺序：
+     * 1. 初始化一份本轮使用的判定缓存，供证券循环复用同一主体的计算结果
+     *
      * @return 仅在本轮任务内使用的主体判定结果容器
      */
     ScheduledDecisions scheduledDecisions() {
         return new ScheduledDecisions();
     }
 
-    /** 只在当前任务内保留主体判定，供多组债券候选复用 */
+    /**
+     * 缓存本轮定时任务的黑名单质押库判定
+     *
+     * 共用认可评级机构口径，按主体保存已查询的命中或未命中结果，供多组债券候选复用
+     */
     final class ScheduledDecisions {
         /** 本轮已查询的主体判定，包含未命中结果 */
         private final Map<String, Boolean> decisions = new HashMap<>();
+
         /** 本轮使用的认可评级机构 */
         private List<String> agencyCodes;
 
@@ -155,10 +184,13 @@ public class PledgeBlacklistRuleService {
         }
 
         /**
-         * 读取已批量查询的主体判定结果
+         * 读取本轮批量取得的主体条件判定
+         *
+         * 执行顺序：
+         * 1. 按主体代码读取判定值，只有查到 true 时才判为命中
          *
          * @param companyCode 发行主体代码
-         * @return 本轮已查到该主体命中任一条件时返回 true
+         * @return true=本轮查到主体命中任一条件，false=未命中或未查询到判定
          */
         boolean matches(String companyCode) {
             return Boolean.TRUE.equals(decisions.get(companyCode));
@@ -166,10 +198,15 @@ public class PledgeBlacklistRuleService {
     }
 
     /**
-     * 按一次调整完成后的预期状态判断主体是否应在黑名单质押库。
-     * 调入/调出集合仅对条件池 15、23 生效，调出优先于当前状态，调入优先于调出。
+     * 按一次调整完成后的预期状态判断主体是否应在黑名单质押库
+     * 调入/调出集合仅对条件池 15、23 生效，调出优先于当前状态，调入优先于调出
      *
-     * @param companyCode    发行主体代码
+     * 执行顺序：
+     * 1. 计算本批完成后主体在债券禁止库的预期状态
+     * 2. 计算本批完成后主体在重点观察名单的预期状态
+     * 3. 使用当前有效外部评级机构配置判断低外评条件
+     *
+     * @param companyCode 发行主体代码
      * @param inboundPoolIds 本批预计调入的主体池 ID
      * @param outboundPoolIds 本批预计调出的主体池 ID
      * @return 黑名单质押库三条件判定结果
@@ -177,11 +214,11 @@ public class PledgeBlacklistRuleService {
     public Decision evaluate(String companyCode, Set<Long> inboundPoolIds, Set<Long> outboundPoolIds) {
         Set<Long> inIds = inboundPoolIds == null ? Collections.<Long>emptySet() : inboundPoolIds;
         Set<Long> outIds = outboundPoolIds == null ? Collections.<Long>emptySet() : outboundPoolIds;
-        // 计算本批完成后主体在债券禁止库的预期状态
+        // 1. 计算本批完成后主体在债券禁止库的预期状态
         boolean inForbidden = projectedInPool(companyCode, FORBIDDEN_POOL_ID, inIds, outIds);
-        // 计算本批完成后主体在重点观察名单的预期状态
+        // 2. 计算本批完成后主体在重点观察名单的预期状态
         boolean inKeyWatch = projectedInPool(companyCode, KEY_WATCH_POOL_ID, inIds, outIds);
-        // 使用当前有效外部评级机构配置判断低外评条件
+        // 3. 使用当前有效外部评级机构配置判断低外评条件
         List<String> agencyCodes = externalRatingAgencyService.queryRequiredAgencyCodeList();
         boolean lowOuterRating = autoAdjustMapper.queryCompanyHasLowOuterRating(companyCode, agencyCodes);
         return new Decision(inForbidden, lowOuterRating, inKeyWatch);
@@ -189,6 +226,9 @@ public class PledgeBlacklistRuleService {
 
     /**
      * 使用本次批量数据和本行的调入、调出列表判定三条件
+     *
+     * 执行顺序：
+     * 1. 未配置有效外部评级机构时终止处理
      *
      * @param batch 本次校验数据
      * @param companyCode 主体代码
@@ -210,10 +250,13 @@ public class PledgeBlacklistRuleService {
     }
 
     /**
-     * 返回指定方向不符合黑名单质押库三条件时的失败原因。
+     * 返回指定方向不符合黑名单质押库三条件时的失败原因
      *
-     * @param companyCode    发行主体代码
-     * @param adjustMode     调整方向
+     * 执行顺序：
+     * 1. 使用同一套方向规则生成失败原因
+     *
+     * @param companyCode 发行主体代码
+     * @param adjustMode 调整方向
      * @param inboundPoolIds 本批预计调入的主体池 ID
      * @param outboundPoolIds 本批预计调出的主体池 ID
      * @return 校验失败原因，符合条件时返回 {@code null}
@@ -228,7 +271,17 @@ public class PledgeBlacklistRuleService {
         return validateDecision(decision, adjustMode);
     }
 
-    /** 按已有三条件判定结果生成调入或调出失败原因 */
+    /**
+     * 按已有三条件判定结果生成调入或调出失败原因
+     *
+     * 执行顺序：
+     * 1. 调入时主体三个条件均未命中则返回阻断原因
+     * 2. 调出时主体仍命中条件则列出命中依据，其余情况通过
+     *
+     * @param decision 主体命中质押黑名单库三项条件的结果
+     * @param adjustMode 调整方向
+     * @return 主体不满足调入或调出条件的原因，允许调整时为空
+     */
     String validateDecision(Decision decision, String adjustMode) {
         if (AdjustMode.IN.getCode().equals(adjustMode) && !decision.shouldBeInBlacklist()) {
             return "发行主体未命中黑名单质押库三个条件，不能调入17（黑名单质押库）";
@@ -241,13 +294,16 @@ public class PledgeBlacklistRuleService {
     }
 
     /**
-     * 根据当前在池状态及本批调整方向计算主体在条件池中的预期状态。
+     * 根据当前在池状态及本批调整方向计算主体在条件池中的预期状态
      *
-     * @param companyCode    发行主体代码
-     * @param poolId         条件池 ID
+     * 执行顺序：
+     * 1. 查询主体调入投资池
+     *
+     * @param companyCode 发行主体代码
+     * @param poolId 条件池 ID
      * @param inboundPoolIds 本批预计调入的主体池 ID
      * @param outboundPoolIds 本批预计调出的主体池 ID
-     * @return {@code true}=本批完成后主体在条件池
+     * @return true=按本批调整预计主体仍在条件池，false=按本批调整预计主体不在条件池
      */
     private boolean projectedInPool(String companyCode, Long poolId,
                                     Set<Long> inboundPoolIds, Set<Long> outboundPoolIds) {
@@ -260,21 +316,30 @@ public class PledgeBlacklistRuleService {
         return autoAdjustMapper.queryCompanyInPool(companyCode, poolId);
     }
 
-    /** 三条件判定结果。 */
+    /**
+     * 记录主体命中黑名单质押库的条件
+     *
+     * 保留债券禁止库、认可机构低外评及重点观察名单三项结果，供判断和说明使用
+     */
     public static class Decision {
-        /** 主体是否在债券禁止库。 */
+        /** 主体是否在债券禁止库 */
         private final boolean inForbiddenPool;
-        /** 主体近一年认可机构外评孰低是否为 AA- 及以下。 */
+
+        /** 主体近一年认可机构外评孰低是否为 AA- 及以下 */
         private final boolean lowOuterRating;
-        /** 主体是否在重点观察名单。 */
+
+        /** 主体是否在重点观察名单 */
         private final boolean inKeyWatchPool;
 
         /**
-         * 构建黑名单质押库三条件判定结果。
+         * 构建黑名单质押库三条件判定结果
+         *
+         * 执行顺序：
+         * 1. 记录禁止库、低外评和重点观察名单三项是否命中
          *
          * @param inForbiddenPool 主体是否在债券禁止库
-         * @param lowOuterRating  主体是否命中低外评条件
-         * @param inKeyWatchPool  主体是否在重点观察名单
+         * @param lowOuterRating 主体是否命中低外评条件
+         * @param inKeyWatchPool 主体是否在重点观察名单
          */
         Decision(boolean inForbiddenPool, boolean lowOuterRating, boolean inKeyWatchPool) {
             this.inForbiddenPool = inForbiddenPool;
@@ -283,51 +348,84 @@ public class PledgeBlacklistRuleService {
         }
 
         /**
-         * 判断主体是否应在黑名单质押库。
+         * 判断主体是否应在黑名单质押库
          *
-         * @return {@code true}=三个条件至少命中一个
+         * 执行顺序：
+         * 1. 检查债券禁止库、低外评和重点观察名单三个判定值，任一成立即命中
+         *
+         * @return true=三项条件至少命中一项，false=三项条件均未命中
          */
         public boolean shouldBeInBlacklist() {
             return inForbiddenPool || lowOuterRating || inKeyWatchPool;
         }
 
-        /** @return 主体是否在债券禁止库 */
+        /**
+         * 查询主体是否在债券禁止库
+         *
+         * 执行顺序：
+         * 1. 直接读取判定结果中的债券禁止库标记
+         *
+         * @return true=主体在债券禁止库，false=主体不在债券禁止库
+         */
         public boolean isInForbiddenPool() {
             return inForbiddenPool;
         }
 
-        /** @return 主体是否命中低外评条件 */
+        /**
+         * 查询主体是否命中低外评口径
+         *
+         * 执行顺序：
+         * 1. 直接读取判定结果中的低外评标记
+         *
+         * @return true=主体命中低外评条件，false=主体未命中低外评条件
+         */
         public boolean isLowOuterRating() {
             return lowOuterRating;
         }
 
-        /** @return 主体是否在重点观察名单 */
+        /**
+         * 查询主体是否在重点观察名单
+         *
+         * 执行顺序：
+         * 1. 直接读取判定结果中的重点观察名单标记
+         *
+         * @return true=主体在重点观察名单，false=主体不在重点观察名单
+         */
         public boolean isInKeyWatchPool() {
             return inKeyWatchPool;
         }
 
         /**
-         * 返回已命中的条件说明。
+         * 生成主体已命中的黑名单条件说明
          *
-         * @return 已命中条件的中文描述
+         * 执行顺序：
+         * 1. 按债券禁止库、低外评和重点观察名单的顺序追加命中条件
+         * 2. 三项均未命中时返回无
+         *
+         * @return 命中条件的中文说明，均未命中时返回无
          */
         public String getMatchDescription() {
             StringBuilder result = new StringBuilder();
-            // 追加债券禁止库条件说明
+            // 1. 按债券禁止库、低外评、重点观察名单的顺序收集命中说明
             append(result, inForbiddenPool, "当前在债券禁止库15");
             // 追加低外评条件说明
             append(result, lowOuterRating, "近一年认可外评孰低为AA-及以下");
             // 追加重点观察名单条件说明
             append(result, inKeyWatchPool, "当前在重点观察名单23");
+            // 2. 返回命中说明，没有命中项时返回「无」
             return result.length() == 0 ? "无" : result.toString();
         }
 
         /**
-         * 将已命中的条件追加到描述中。
+         * 将命中的条件追加到已有说明
          *
-         * @param result  条件描述
+         * 执行顺序：
+         * 1. 跳过未命中的条件，已有说明时先加入顿号
+         * 2. 追加本条命中的说明文字
+         *
+         * @param result 条件描述
          * @param matched 是否命中
-         * @param text    条件文案
+         * @param text 条件文案
          */
         private void append(StringBuilder result, boolean matched, String text) {
             if (!matched) {

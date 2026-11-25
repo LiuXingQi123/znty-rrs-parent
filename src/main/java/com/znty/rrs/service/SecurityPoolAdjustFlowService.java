@@ -52,7 +52,10 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * 证券池调库流程服务，负责调库审批步骤处理、流程推进和最终池状态落地。
+ * 处理证券池调库审批和流程流转
+ *
+ * 按申请保存的流程快照校验当前处理人，记录审批动作并推进下一节点
+ * 驳回待修改后可以更新附件和调整意见，审批通过时调用 {@link SecurityPoolAdjustService} 完成复核和池状态更新
  */
 @Service
 public class SecurityPoolAdjustFlowService {
@@ -82,7 +85,10 @@ public class SecurityPoolAdjustFlowService {
     private SecurityPoolAdjustService securityPoolAdjustService;
 
     /**
-     * 提交调库审批处理意见，更新当前步骤并按审批流程推进。
+     * 提交调库审批处理意见，更新当前步骤并按审批流程推进
+     *
+     * 执行顺序：
+     * 1. 带着当前审批请求进入支持附件的处理入口，本次不传新上传文件
      *
      * @param req 审批处理请求
      * @return 审批处理结果
@@ -93,7 +99,10 @@ public class SecurityPoolAdjustFlowService {
     }
 
     /**
-     * 提交调库审批处理意见，并在驳回待修改提交时保存附件变更。
+     * 提交调库审批处理意见，并在驳回待修改提交时保存附件变更
+     *
+     * 执行顺序：
+     * 1. 提交审批意见和上传附件，原始文件名列表缺省时交由附件处理入口解析
      *
      * @param req 审批处理请求
      * @param files 本次提交的本地上传附件
@@ -105,54 +114,83 @@ public class SecurityPoolAdjustFlowService {
     }
 
     /**
-     * 提交调库审批（可带前端原始文件名 JSON 数组，兼容公司环境中文名乱码）。
+     * 提交调库审批（可带前端原始文件名 JSON 数组，兼容公司环境中文名乱码）
+     *
+     * 执行顺序：
+     * 1. 校验审批提交参数
+     * 2. 查询并校验当前待处理步骤
+     * 3. 管理员也是处理人时，优先定位到管理员自己的待处理步骤
+     * 4. 校验当前步骤是否可处理
+     * 5. 驳回待修改重新提交时保存本批次的调整原因和意见
+     * 6. 驳回待修改提交时保存调库记录附件变更
+     * 7. 处理当前步骤并按流程配置推进
+     *
+     * @param req 审批处理请求
+     * @param files 本次提交的本地上传附件
+     * @param originalFileNameListJson 上传文件原始名称列表的 JSON
+     * @return 审批处理结果
      */
     @Transactional(rollbackFor = Exception.class)
     public SecurityPoolAdjustAuditDto submitAdjustAudit(SecurityPoolAdjustAuditReq req, List<MultipartFile> files,
                                                         String originalFileNameListJson) {
-        // 校验审批提交参数
+        // 1. 校验审批提交参数
         validateAuditReq(req);
 
-        // 查询并校验当前待处理步骤
+        // 2. 查询并校验当前待处理步骤
         IpAdjustStepBo step = securityPoolAdjustMapper.queryAdjustStepById(req.getStepId());
-        // 管理员也是处理人时，优先定位到管理员自己的待处理步骤
+        // 3. 管理员也是处理人时，优先定位到管理员自己的待处理步骤
         step = resolveActualProcessStep(req, step);
-        // 校验当前步骤是否可处理
+        // 4. 校验当前步骤是否可处理
         validatePendingStep(req, step);
         // 校验发起人不能参与后续流程操作
         validateSubmitterCannotProcess(req, step);
 
-        // 驳回待修改重新提交时保存本批次的调整原因和意见
+        // 5. 驳回待修改重新提交时保存本批次的调整原因和意见
         applyReasonAdviceChangesForModifySubmit(req, step);
 
         List<String> originalFileNameList =
                 sysAttachmentService.parseOriginalFileNameListJson(originalFileNameListJson);
-        // 驳回待修改提交时保存调库记录附件变更
+        // 6. 驳回待修改提交时保存调库记录附件变更
         applyAttachmentChangesForModifySubmit(req, step, files, originalFileNameList);
 
-        // 处理当前步骤并按流程配置推进
+        // 7. 处理当前步骤并按流程配置推进
         return processAdjustAudit(req, step);
     }
 
     /**
-     * 解析实际处理步骤：管理员本人也在当前节点处理人列表中时，优先处理管理员自己的步骤。
+     * 解析实际处理步骤：管理员本人也在当前节点处理人列表中时，优先处理管理员自己的步骤
+     *
+     * 执行顺序：
+     * 1. 判断字符串是否有有效内容；判断当前操作人是否为管理员
+     * 2. 查询当前节点中管理员自己的待处理步骤
+     *
+     * @param req 审批处理请求
+     * @param step 已校验权限的待处理步骤
+     * @return 待处理的调库审批步骤
      */
     private IpAdjustStepBo resolveActualProcessStep(SecurityPoolAdjustAuditReq req, IpAdjustStepBo step) {
-        // 判断字符串是否有有效内容；判断当前操作人是否为管理员
+        // 1. 判断字符串是否有有效内容；判断当前操作人是否为管理员
         if (step == null || !isAdminOperator(req) || !hasText(req.getHandlerId())) {
             return step;
         }
         if (req.getHandlerId().equals(step.getHandlerId())) {
             return step;
         }
-        // 查询当前节点中管理员自己的待处理步骤
+        // 2. 查询当前节点中管理员自己的待处理步骤
         IpAdjustStepBo adminStep = securityPoolAdjustMapper.queryPendingStepByHandler(
                 step.getAdjustLogId(), step.getAdjustBatchNo(), step.getFlowNodeId(), req.getHandlerId());
         return adminStep != null ? adminStep : step;
     }
 
     /**
-     * 校验审批提交参数。
+     * 校验审批提交参数
+     *
+     * 执行顺序：
+     * 1. 检查流程步骤 ID 不能为空
+     * 2. 审批动作不合法时终止处理
+     * 3. 判断驳回意见是否已填写
+     *
+     * @param req 审批处理请求
      */
     private void validateAuditReq(SecurityPoolAdjustAuditReq req) {
         if (req.getStepId() == null) {
@@ -168,7 +206,14 @@ public class SecurityPoolAdjustFlowService {
     }
 
     /**
-     * 校验当前步骤是否可由当前处理人处理。
+     * 校验当前步骤是否可由当前处理人处理
+     *
+     * 执行顺序：
+     * 1. 判断当前处理人是否可处理该步骤
+     * 2. 补齐调库批次号
+     *
+     * @param req 审批处理请求
+     * @param step 已校验权限的待处理步骤
      */
     private void validatePendingStep(SecurityPoolAdjustAuditReq req, IpAdjustStepBo step) {
         if (step == null) {
@@ -177,11 +222,11 @@ public class SecurityPoolAdjustFlowService {
         if (!StepStatus.PENDING.getCode().equals(step.getStepStatus())) {
             throw new BizException("当前流程步骤已处理，请刷新后重试");
         }
-        // 判断当前处理人是否可处理该步骤
+        // 1. 判断当前处理人是否可处理该步骤
         if ((!hasText(step.getHandlerId()) || !step.getHandlerId().equals(req.getHandlerId())) && !isAdminOperator(req)) {
             throw new BizException("当前用户不是该步骤处理人");
         }
-        // 补齐调库批次号
+        // 2. 补齐调库批次号
         if (!hasText(req.getAdjustBatchNo()) && hasText(step.getAdjustBatchNo())) {
             req.setAdjustBatchNo(step.getAdjustBatchNo());
         }
@@ -191,21 +236,32 @@ public class SecurityPoolAdjustFlowService {
     }
 
     /**
-     * 校验发起人不能参与后续流程操作，管理员除外。
+     * 校验发起人不能参与后续流程操作，管理员除外
+     *
+     * 执行顺序：
+     * 1. 管理员、发起人节点及缺少必要信息的请求跳过本项校验
+     * 2. 按日志 ID 和批次号查询本批调库记录
+     * 3. 当前经办人是原始发起人时拒绝办理后续步骤
+     *
+     * @param req 审批处理请求
+     * @param step 已校验权限的待处理步骤
      */
     private void validateSubmitterCannotProcess(SecurityPoolAdjustAuditReq req, IpAdjustStepBo step) {
+        // 1. 管理员、发起人节点及缺少必要信息的请求跳过本项校验
         if (isAdminOperator(req) || step == null || !hasText(req.getHandlerId())) {
             return;
         }
+        // 判断当前步骤是否为发起人语义节点（发起提交或驳回修改）
         if (isInitiatorSemanticStep(step)) {
             return;
         }
-        // 查询当前批次调库记录，识别原始发起人
+        // 2. 按日志 ID 和批次号查询本批调库记录
         List<IpAdjustLogBo> adjustLogList = securityPoolAdjustMapper.queryAdjustLogListForAudit(
                 step.getAdjustLogId(), step.getAdjustBatchNo());
         if (adjustLogList.isEmpty()) {
             return;
         }
+        // 3. 当前经办人是原始发起人时拒绝办理后续步骤
         for (IpAdjustLogBo log : adjustLogList) {
             if (log != null && req.getHandlerId().equals(log.getAdjusterId())) {
                 throw new BizException("发起人不能参与后续流程操作");
@@ -214,7 +270,12 @@ public class SecurityPoolAdjustFlowService {
     }
 
     /**
-     * 驳回待修改重新提交时，保存当前步骤所属批次的调整原因和意见。
+     * 驳回待修改重新提交时，保存当前步骤所属批次的调整原因和意见
+     *
+     * 执行顺序：
+     * 1. 通过流程语义校验当前操作属于修改后的重新提交
+     * 2. 当前调库批次记录不存在时终止处理
+     * 3. 调库申请状态已发生变化时终止处理
      *
      * @param req 审批请求，未传的文本字段保持原值
      * @param step 已校验权限的待处理步骤
@@ -254,7 +315,18 @@ public class SecurityPoolAdjustFlowService {
     }
 
     /**
-     * 驳回待修改节点提交时保存附件新增、报告附件复制和删除。
+     * 驳回待修改节点提交时保存附件新增、报告附件复制和删除
+     *
+     * 执行顺序：
+     * 1. 仅驳回待修改提交时允许修改附件时终止处理
+     * 2. 创建本次提交的文件上下文（无前端原始文件名列表）
+     * 3. 逐项逻辑删除指定调库日志下的附件
+     * 4. 绑定基金专属分类附件
+     *
+     * @param req 审批处理请求
+     * @param step 已校验权限的待处理步骤
+     * @param files 本次提交的本地上传附件
+     * @param originalFileNameList 与文件列表同序的前端原始文件名
      */
     private void applyAttachmentChangesForModifySubmit(SecurityPoolAdjustAuditReq req, IpAdjustStepBo step,
                                                        List<MultipartFile> files,
@@ -262,6 +334,7 @@ public class SecurityPoolAdjustFlowService {
         if (req.getAttachmentChanges() == null || req.getAttachmentChanges().isEmpty()) {
             return;
         }
+        // 判断当前步骤是否为驳回修改节点
         if (!ProcessAction.APPROVE.getCode().equals(req.getProcessAction()) || !isModifyStep(step)) {
             throw new BizException("仅驳回待修改提交时允许修改附件");
         }
@@ -302,16 +375,29 @@ public class SecurityPoolAdjustFlowService {
     }
 
     /**
-     * 处理审批动作并推进流程。
+     * 处理审批动作并推进流程
+     *
+     * 执行顺序：
+     * 1. 构建实际写入的处理意见
+     * 2. 根据本次处理节点语义解析步骤整体结果
+     * 3. 根据本次处理节点语义解析个人处理动作
+     * 4. 根据本次处理节点语义解析流程路由动作
+     * 5. 构建当前流程版本快照
+     * 6. 推进到下一可处理节点
+     * 7. 构建审批处理返回对象
+     *
+     * @param req 审批处理请求
+     * @param step 已校验权限的待处理步骤
+     * @return 调库审批处理结果
      */
     private SecurityPoolAdjustAuditDto processAdjustAudit(SecurityPoolAdjustAuditReq req, IpAdjustStepBo step) {
-        // 构建实际写入的处理意见
+        // 1. 构建实际写入的处理意见
         String processComment = buildProcessComment(req, step);
-        // 根据本次处理节点语义解析步骤整体结果
+        // 2. 根据本次处理节点语义解析步骤整体结果
         String stepStatus = resolveStepStatusForProcess(step, req.getProcessAction());
-        // 根据本次处理节点语义解析个人处理动作
+        // 3. 根据本次处理节点语义解析个人处理动作
         String processAction = resolveProcessActionForStore(req.getProcessAction(), stepStatus);
-        // 根据本次处理节点语义解析流程路由动作
+        // 4. 根据本次处理节点语义解析流程路由动作
         String routeAction = resolveRouteActionForProcess(step, req.getProcessAction());
         int updated = securityPoolAdjustMapper.editAdjustStepProcess(
                 step.getId(), stepStatus, processAction, processComment);
@@ -330,11 +416,11 @@ public class SecurityPoolAdjustFlowService {
 
         // 查询当前调库记录审核状态
         String currentAuditStatus = queryCurrentAuditStatus(step);
-        // 构建当前流程版本快照
+        // 5. 构建当前流程版本快照
         FlowSnapshot snapshot = buildFlowSnapshot(step.getFlowNodeId());
         FlowNodeBo processingNode = snapshot != null ? snapshot.getNodeMap().get(step.getFlowNodeId()) : null;
 
-        // 推进到下一可处理节点
+        // 6. 推进到下一可处理节点
         FlowAdvanceResult advanceResult = advanceToNextAvailableStep(step, snapshot, processingNode, routeAction);
         if (ProcessAction.REJECT.getCode().equals(req.getProcessAction())) {
             // 根据终止前状态解析驳回终态
@@ -354,12 +440,21 @@ public class SecurityPoolAdjustFlowService {
         }
 
         securityPoolAdjustMapper.editAdjustLogAuditStatus(step.getAdjustLogId(), step.getAdjustBatchNo(), AuditStatus.SUBMITTED.getCode());
-        // 构建审批处理返回对象
+        // 7. 构建审批处理返回对象
         return buildAuditDto(step, AuditStatus.SUBMITTED.getCode(), false, advanceResult.nextStepCreated, "审批已处理，已流转到下一步骤");
     }
 
     /**
-     * 根据审批策略判断当前节点是否已经完成。
+     * 根据审批策略判断当前节点是否已经完成
+     *
+     * 执行顺序：
+     * 1. 全员通过策略下收到通过动作时统计剩余待办，全部处理后才继续
+     * 2. 其他处理结果按流程规则关闭本节点剩余待办并继续
+     *
+     * @param step 已校验权限的待处理步骤
+     * @param processAction 当前处理动作对应的路由动作
+     * @param stepStatus 已写入的步骤状态
+     * @return true=当前审批节点已完成，可以继续流转，false=当前节点仍有待处理步骤
      */
     private boolean completeCurrentApprovalNodeIfNeeded(IpAdjustStepBo step, String processAction, String stepStatus) {
         if (ApprovalStrategy.ALL.getCode().equals(step.getApprovalStrategy()) && ProcessAction.APPROVE.getCode().equals(processAction)) {
@@ -375,7 +470,14 @@ public class SecurityPoolAdjustFlowService {
     }
 
     /**
-     * 根据处理节点语义解析步骤整体结果，修改/发起节点的正向动作展示为提交。
+     * 根据处理节点语义解析步骤整体结果，修改/发起节点的正向动作展示为提交
+     *
+     * 执行顺序：
+     * 1. 判断当前步骤是否是提交语义节点
+     *
+     * @param step 已校验权限的待处理步骤
+     * @param processAction 当前处理动作对应的路由动作
+     * @return 应写入的步骤状态
      */
     private String resolveStepStatusForProcess(IpAdjustStepBo step, String processAction) {
         // 判断当前步骤是否是提交语义节点
@@ -386,7 +488,14 @@ public class SecurityPoolAdjustFlowService {
     }
 
     /**
-     * 根据步骤整体结果解析实际存储的个人处理动作。
+     * 根据步骤整体结果解析实际存储的个人处理动作
+     *
+     * 执行顺序：
+     * 1. 整体步骤为提交时存为提交动作，其他情况下保留个人处理动作
+     *
+     * @param processAction 当前处理动作对应的路由动作
+     * @param stepStatus 已写入的步骤状态
+     * @return 写入当前审批步骤的处理动作代码
      */
     private String resolveProcessActionForStore(String processAction, String stepStatus) {
         if (ProcessAction.SUBMIT.getCode().equals(stepStatus)) {
@@ -396,9 +505,17 @@ public class SecurityPoolAdjustFlowService {
     }
 
     /**
-     * 根据处理节点语义解析流程路由动作。
+     * 根据处理节点语义解析流程路由动作
+     *
+     * 执行顺序：
+     * 1. 修改节点上的通过动作转为重新提交，其他处理动作保持原值
+     *
+     * @param step 已校验权限的待处理步骤
+     * @param processAction 当前处理动作对应的路由动作
+     * @return 用于选择下一条流程连线的路由动作代码
      */
     private String resolveRouteActionForProcess(IpAdjustStepBo step, String processAction) {
+        // 判断当前步骤是否为驳回修改节点
         if (ProcessAction.APPROVE.getCode().equals(processAction) && isModifyStep(step)) {
             return ProcessAction.RESUBMIT.getCode();
         }
@@ -406,7 +523,13 @@ public class SecurityPoolAdjustFlowService {
     }
 
     /**
-     * 判断当前步骤是否是提交语义节点。
+     * 判断当前步骤是否是提交语义节点
+     *
+     * 执行顺序：
+     * 1. 检查当前步骤所在节点是否有发起提交动作的出线
+     *
+     * @param step 已校验权限的待处理步骤
+     * @return true=当前步骤是发起提交步骤，false=当前步骤不是发起提交步骤
      */
     private boolean isSubmitSemanticStep(IpAdjustStepBo step) {
         // 发起提交节点通过 initiator + 出边 route_action=submit 标记
@@ -414,7 +537,13 @@ public class SecurityPoolAdjustFlowService {
     }
 
     /**
-     * 判断当前步骤是否为驳回修改节点。
+     * 判断当前步骤是否为驳回修改节点
+     *
+     * 执行顺序：
+     * 1. 判断当前步骤所属节点是否存在指定流转动作出边
+     *
+     * @param step 已校验权限的待处理步骤
+     * @return true=当前步骤是驳回修改步骤，false=当前步骤不是驳回修改步骤
      */
     private boolean isModifyStep(IpAdjustStepBo step) {
         // 驳回修改节点通过 initiator + 出边 route_action=resubmit 标记
@@ -422,28 +551,55 @@ public class SecurityPoolAdjustFlowService {
     }
 
     /**
-     * 判断当前步骤是否为发起人语义节点（发起提交或驳回修改）。
+     * 判断当前步骤是否为发起人语义节点（发起提交或驳回修改）
+     *
+     * 执行顺序：
+     * 1. 判断当前步骤是否是提交语义节点
+     *
+     * @param step 已校验权限的待处理步骤
+     * @return true=当前步骤是发起提交或驳回修改步骤，false=当前步骤不属于这两类步骤
      */
     private boolean isInitiatorSemanticStep(IpAdjustStepBo step) {
+        // 判断当前步骤是否是提交语义节点，再判断当前步骤是否为驳回修改节点
         return isSubmitSemanticStep(step) || isModifyStep(step);
     }
 
     /**
-     * 判断当前步骤所属节点是否存在指定流转动作出边。
+     * 判断当前步骤所属节点是否存在指定流转动作出边
+     *
+     * 执行顺序：
+     * 1. 根据当前步骤所属节点构建流程快照
+     *
+     * @param step 已校验权限的待处理步骤
+     * @param routeAction 当前处理动作对应的路由动作
+     * @return true=步骤所在节点存在指定动作的出线，false=步骤所在节点没有指定动作的出线
      */
     private boolean isStepWithRouteAction(IpAdjustStepBo step, String routeAction) {
         if (step == null || !ApprovalStrategy.INITIATOR.getCode().equals(step.getApprovalStrategy())) {
             return false;
         }
+        // 根据当前步骤所属节点构建流程快照
         FlowSnapshot snapshot = buildFlowSnapshot(step.getFlowNodeId());
         FlowNodeBo node = snapshot != null ? snapshot.getNodeMap().get(step.getFlowNodeId()) : null;
         return node != null
                 && NodeType.APPROVAL.getCode().equals(node.getNodeType())
+                // 判断节点是否存在指定流转动作出边
                 && hasOutgoingRouteAction(snapshot, node, routeAction);
     }
 
     /**
-     * 推进到下一可处理节点，自动节点直接完成，审批节点创建待处理步骤。
+     * 推进到下一可处理节点，自动节点直接完成，审批节点创建待处理步骤
+     *
+     * 执行顺序：
+     * 1. 按当前审核状态条件查找下一节点
+     * 2. 逐项为审批节点创建待处理步骤
+     * 3. 为 O32 节点的每个处理人建自动处理步骤（非临时代码系统代审，每个处理人都有步骤记录可追溯）
+     *
+     * @param step 已校验权限的待处理步骤
+     * @param snapshot 当前流程版本的快照
+     * @param currentNode 当前流程节点
+     * @param processAction 当前处理动作对应的路由动作
+     * @return 流程结束或创建后续待办的结果
      */
     private FlowAdvanceResult advanceToNextAvailableStep(IpAdjustStepBo step, FlowSnapshot snapshot,
                                                          FlowNodeBo currentNode, String processAction) {
@@ -520,6 +676,7 @@ public class SecurityPoolAdjustFlowService {
      * @param redirectPoolId 可选改判目标池 ID
      */
     private void finishAdjustBatch(IpAdjustStepBo step, Long redirectPoolId) {
+        // 1. 读取批次调库记录并处理空批次
         List<IpAdjustLogBo> logList = securityPoolAdjustMapper.queryAdjustLogListForAudit(
                 step.getAdjustLogId(), step.getAdjustBatchNo());
         if (logList.isEmpty()) {
@@ -534,7 +691,7 @@ public class SecurityPoolAdjustFlowService {
             return;
         }
 
-        // 评级联动改判：调入审批通过时，审核人可改判到主体债入库矩阵允许的其它层级池（上调/降库）
+        // 2. 有改判请求时确定改判目标池及适用日志
         InvestmentPoolBo redirectPool = null;
         List<IpAdjustLogBo> redirectLogs = new ArrayList<>();
         if (redirectPoolId != null) {
@@ -570,7 +727,7 @@ public class SecurityPoolAdjustFlowService {
             }
         }
 
-        // 最终落池前复核锁池、容量、来源池、限制池、当前池状态和冻结期
+        // 3. 复核最终池规则并记录改判结果
         securityPoolAdjustService.recheckBeforeFinalApproval(logList);
         if (redirectPool != null) {
             for (IpAdjustLogBo log : redirectLogs) {
@@ -581,39 +738,52 @@ public class SecurityPoolAdjustFlowService {
                 }
             }
         }
+        // 4. 保存整批审批结果
         int updated = securityPoolAdjustMapper.editActiveAdjustLogAuditStatus(
                 step.getAdjustLogId(), step.getAdjustBatchNo(), AuditStatus.APPROVED.getCode());
         if (updated != logList.size()) {
             throw new BizException("调库申请状态已发生变化，请刷新后重试");
         }
-        // 将复核通过的整批调库日志统一应用到当前池状态
+        // 5. 更新生效池状态，并将符合条件的信评材料保存为内部报告
         securityPoolAdjustService.applyPoolStatusChanges(logList);
         // 审批通过结束后，将手工上传的信评报告沉淀为内部报告
         reportService.addInternalReportsOnFinish(logList);
     }
 
     /**
-     * 根据当前步骤所属节点构建流程快照。
+     * 根据当前步骤所属节点构建流程快照
+     *
+     * 执行顺序：
+     * 1. 查询当前流程步骤对应的流程节点
+     * 2. 查询当前节点所属的流程版本和流程定义
+     * 3. 查询当前流程版本下的节点、连线和连线条件
+     * 4. 构建节点 ID 到节点对象的索引，便于后续通过连线快速定位下一节点
+     * 5. 按审批配置 ID 分组处理人，便于创建待处理步骤
+     * 6. 按连线 ID 分组条件规则，便于按审批动作判断流转方向
+     * 7. 组装流程运行时快照，供本次审批流转复用
+     *
+     * @param flowNodeId 当前流程节点 ID
+     * @return FlowSnapshot，若流程不存在或无活跃版本则返回 null
      */
     private FlowSnapshot buildFlowSnapshot(Long flowNodeId) {
         if (flowNodeId == null) {
             return null;
         }
-        // 查询当前流程步骤对应的流程节点
+        // 1. 查询当前流程步骤对应的流程节点
         FlowNodeBo currentNode = flowMapper.queryFlowNodeById(flowNodeId);
         if (currentNode == null || currentNode.getVersionId() == null) {
             return null;
         }
-        // 查询当前节点所属的流程版本和流程定义
+        // 2. 查询当前节点所属的流程版本和流程定义
         FlowVersionBo version = flowMapper.queryFlowVersionById(currentNode.getVersionId());
         FlowDefinitionBo definition = currentNode.getFlowId() != null ? flowMapper.queryFlowById(currentNode.getFlowId()) : null;
 
-        // 查询当前流程版本下的节点、连线和连线条件
+        // 3. 查询当前流程版本下的节点、连线和连线条件
         List<FlowNodeBo> nodes = flowMapper.queryFlowNodeListByVersionId(currentNode.getVersionId());
         List<FlowEdgeBo> edges = flowMapper.queryFlowEdgeListByVersionId(currentNode.getVersionId());
         List<EdgeCondRuleBo> condRules = flowMapper.queryCondRuleListByVersionId(currentNode.getVersionId());
         Map<Long, FlowNodeBo> nodeMap = new HashMap<>();
-        // 构建节点 ID 到节点对象的索引，便于后续通过连线快速定位下一节点
+        // 4. 构建节点 ID 到节点对象的索引，便于后续通过连线快速定位下一节点
         for (FlowNodeBo node : nodes) {
             nodeMap.put(node.getId(), node);
         }
@@ -629,7 +799,7 @@ public class SecurityPoolAdjustFlowService {
         // 查询并整理节点审批处理人配置
         List<NodeApprovalHandlerBo> handlers = flowMapper.queryApprovalHandlerListByVersionId(currentNode.getVersionId());
         Map<Long, List<NodeApprovalHandlerBo>> approvalHandlerMap = new HashMap<>();
-        // 按审批配置 ID 分组处理人，便于创建待处理步骤
+        // 5. 按审批配置 ID 分组处理人，便于创建待处理步骤
         for (NodeApprovalHandlerBo handler : handlers) {
             List<NodeApprovalHandlerBo> list = approvalHandlerMap.get(handler.getApprovalConfigId());
             if (list == null) {
@@ -640,7 +810,7 @@ public class SecurityPoolAdjustFlowService {
         }
 
         Map<Long, List<EdgeCondRuleBo>> condRuleMap = new HashMap<>();
-        // 按连线 ID 分组条件规则，便于按审批动作判断流转方向
+        // 6. 按连线 ID 分组条件规则，便于按审批动作判断流转方向
         for (EdgeCondRuleBo rule : condRules) {
             List<EdgeCondRuleBo> list = condRuleMap.get(rule.getEdgeId());
             if (list == null) {
@@ -650,24 +820,34 @@ public class SecurityPoolAdjustFlowService {
             list.add(rule);
         }
 
-        // 组装流程运行时快照，供本次审批流转复用
+        // 7. 组装流程运行时快照，供本次审批流转复用
         return new FlowSnapshot(definition, version, nodeMap,
                 edges, approvalConfigMap, approvalHandlerMap, condRuleMap);
     }
 
     /**
-     * 为审批节点创建待处理步骤。
+     * 为审批节点创建待处理步骤
+     *
+     * 执行顺序：
+     * 1. 判断是否需要回到发起人处理
+     * 2. 解析审批节点配置的具体处理人
+     * 3. 只排除本批次真正审核过的人，待办和抢占跳过的人仍可进入下一节点
+     *
+     * @param currentStep 当前待处理的审批步骤
+     * @param node 待判断的流程节点
+     * @param snapshot 当前流程版本的快照
+     * @param now 本次操作时间
      */
     private void createPendingSteps(IpAdjustStepBo currentStep, FlowNodeBo node, FlowSnapshot snapshot, Date now) {
         NodeApprovalConfigBo config = snapshot.getApprovalConfigMap().get(node.getId());
-        // 判断是否需要回到发起人处理
+        // 1. 判断是否需要回到发起人处理
         if (isModifyNode(snapshot, node, config) || isInitiatorNode(snapshot, node, config)) {
             // 创建发起人处理步骤
             createInitiatorPendingStep(currentStep, node, config, now);
             return;
         }
 
-        // 解析审批节点配置的具体处理人
+        // 2. 解析审批节点配置的具体处理人
         List<HandlerTarget> handlers = resolveApprovalHandlers(config, snapshot);
         int sortOrder = node.getSortOrder() != null ? node.getSortOrder() : 1;
         if (handlers.isEmpty()) {
@@ -676,7 +856,7 @@ public class SecurityPoolAdjustFlowService {
                     StepStatus.PENDING.getCode(), null, null, null, null, now);
             return;
         }
-        // 只排除本批次真正审核过的人，待办和抢占跳过的人仍可进入下一节点
+        // 3. 只排除本批次真正审核过的人，待办和抢占跳过的人仍可进入下一节点
         handlers = excludeParticipatedHandlers(currentStep.getAdjustLogId(), currentStep.getAdjustBatchNo(), handlers);
         for (HandlerTarget handler : handlers) {
             // 按处理人创建待处理步骤
@@ -686,22 +866,46 @@ public class SecurityPoolAdjustFlowService {
     }
 
     /**
-     * 为发起人或修改节点创建待处理步骤。
+     * 为发起人或修改节点创建待处理步骤
+     *
+     * 执行顺序：
+     * 1. 查询同批次首条调库记录获取原发起人
+     * 2. 插入发起人待处理步骤
+     *
+     * @param currentStep 当前待处理的审批步骤
+     * @param node 待判断的流程节点
+     * @param config 节点审批配置
+     * @param now 本次操作时间
      */
     private void createInitiatorPendingStep(IpAdjustStepBo currentStep, FlowNodeBo node,
                                             NodeApprovalConfigBo config, Date now) {
-        // 查询同批次首条调库记录获取原发起人
+        // 1. 查询同批次首条调库记录获取原发起人
         IpAdjustLogBo log = queryFirstAdjustLog(currentStep);
         String handlerId = log != null ? log.getAdjusterId() : null;
         String handlerName = log != null ? log.getAdjusterName() : null;
         int sortOrder = node.getSortOrder() != null ? node.getSortOrder() : 1;
-        // 插入发起人待处理步骤
+        // 2. 插入发起人待处理步骤
         insertStepRecord(currentStep.getAdjustLogId(), currentStep.getAdjustBatchNo(), node, config, sortOrder,
                 StepStatus.PENDING.getCode(), handlerId, handlerName, null, null, now);
     }
 
     /**
-     * 插入流程步骤记录。
+     * 插入流程步骤记录
+     *
+     * 执行顺序：
+     * 1. 新增调库审批步骤
+     *
+     * @param adjustLogId 调库日志 ID
+     * @param adjustBatchNo 调库批次号
+     * @param node 待判断的流程节点
+     * @param config 节点审批配置
+     * @param sortOrder 审批步骤排序值
+     * @param stepStatus 已写入的步骤状态
+     * @param handlerId 新步骤处理人 ID
+     * @param handlerName 新步骤处理人名称
+     * @param processAction 当前处理动作对应的路由动作
+     * @param processComment 本步骤的处理意见
+     * @param startTime 增量开始时间；全量模式仅用于参数统一
      */
     private void insertStepRecord(Long adjustLogId, String adjustBatchNo, FlowNodeBo node,
                                   NodeApprovalConfigBo config, int sortOrder,
@@ -727,7 +931,15 @@ public class SecurityPoolAdjustFlowService {
     }
 
     /**
-     * 将审批处理人配置解析为具体人员。
+     * 将审批处理人配置解析为具体人员
+     *
+     * 执行顺序：
+     * 1. 逐项递归收集角色及其子角色 ID
+     * 2. 查询角色字典
+     *
+     * @param config 节点审批配置
+     * @param snapshot 当前流程版本的快照
+     * @return 去重后的候选处理人，未配置审批或处理人时返回空列表
      */
     private List<HandlerTarget> resolveApprovalHandlers(NodeApprovalConfigBo config, FlowSnapshot snapshot) {
         if (config == null || config.getId() == null) {
@@ -766,7 +978,15 @@ public class SecurityPoolAdjustFlowService {
     }
 
     /**
-     * 递归收集角色及其子角色 ID。
+     * 递归收集角色及其子角色 ID
+     *
+     * 执行顺序：
+     * 1. 先将当前角色加入结果
+     * 2. 匹配每条角色记录的父 ID，递归加入各级子角色
+     *
+     * @param roleId 当前角色 ID
+     * @param roleIds 收集到的角色 ID 列表
+     * @param allRoles 全部角色及其父子关系
      */
     private void collectDescendantRoleIds(Long roleId, List<Long> roleIds, List<RoleBo> allRoles) {
         roleIds.add(roleId);
@@ -782,7 +1002,16 @@ public class SecurityPoolAdjustFlowService {
     }
 
     /**
-     * 查找审批通过主路径上的下一节点。
+     * 查找审批通过主路径上的下一节点
+     *
+     * 执行顺序：
+     * 1. 优先按流程连线查找下一节点
+     *
+     * @param snapshot 当前流程版本的快照
+     * @param currentNode 当前流程节点
+     * @param prevNode 前一个节点（用于排除回退边），可为 null
+     * @param processAction 当前处理动作对应的路由动作
+     * @return 匹配的下一流程节点
      */
     private FlowNodeBo findNextNode(FlowSnapshot snapshot, FlowNodeBo currentNode, FlowNodeBo prevNode, String processAction) {
         // 优先按流程连线查找下一节点
@@ -794,7 +1023,18 @@ public class SecurityPoolAdjustFlowService {
     }
 
     /**
-     * 按流程连线查找下一节点，优先排除驳回类连线。
+     * 按流程连线查找下一节点，优先排除驳回类连线
+     *
+     * 执行顺序：
+     * 1. 收集当前节点出线，缺少出线时返回空值
+     * 2. 有前一节点时按需排除回退连线，再尝试直接使用唯一出线
+     * 3. 多条出线按审批动作或条件匹配，均不匹配时报错
+     *
+     * @param snapshot 当前流程版本的快照
+     * @param currentNode 当前流程节点
+     * @param prevNode 前一个节点（用于排除回退边），可为 null
+     * @param processAction 当前处理动作对应的路由动作
+     * @return 下一节点，无出边时返回 null
      */
     private FlowNodeBo findNextNodeOnMainPath(FlowSnapshot snapshot, FlowNodeBo currentNode, FlowNodeBo prevNode, String processAction) {
         List<FlowEdgeBo> outEdges = new ArrayList<>();
@@ -837,7 +1077,15 @@ public class SecurityPoolAdjustFlowService {
     }
 
     /**
-     * 判断条件路由是否匹配当前审批动作。
+     * 判断条件路由是否匹配当前审批动作
+     *
+     * 执行顺序：
+     * 1. 当前没有实现按条件匹配连线，直接返回不匹配
+     *
+     * @param edge 待检查的流程连线
+     * @param snapshot 当前流程版本的快照
+     * @param processAction 当前处理动作对应的路由动作
+     * @return true=条件匹配（当前未实现），false=条件不匹配（当前固定返回）
      */
     private boolean matchesConditionRoute(FlowEdgeBo edge, FlowSnapshot snapshot, String processAction) {
         // 后续如启用条件引擎，在这里统一支持 condLogic 的 AND/OR 和多字段条件判断
@@ -845,7 +1093,14 @@ public class SecurityPoolAdjustFlowService {
     }
 
     /**
-     * 判断连线动作是否匹配当前审批动作。
+     * 判断连线动作是否匹配当前审批动作
+     *
+     * 执行顺序：
+     * 1. 连线、连线动作或当前动作缺失时判为不匹配，均有值时比较动作编码
+     *
+     * @param edge 待检查的流程连线
+     * @param processAction 当前处理动作对应的路由动作
+     * @return true=连线动作匹配当前审批动作，false=连线动作不匹配当前审批动作
      */
     private boolean matchesActionRoute(FlowEdgeBo edge, String processAction) {
         if (edge == null || edge.getRouteAction() == null || processAction == null) {
@@ -855,7 +1110,13 @@ public class SecurityPoolAdjustFlowService {
     }
 
     /**
-     * 根据终止前状态解析驳回终态。
+     * 根据终止前状态解析驳回终态
+     *
+     * 执行顺序：
+     * 1. 驳回待修改的记录终止时记为撤回，其他状态记为审批驳回
+     *
+     * @param currentAuditStatus 驳回前的批次审核状态
+     * @return 最终驳回或撤回状态
      */
     private String resolveTerminalRejectAuditStatus(String currentAuditStatus) {
         if (AuditStatus.REJECT_MODIFY.getCode().equals(currentAuditStatus)) {
@@ -865,29 +1126,67 @@ public class SecurityPoolAdjustFlowService {
     }
 
     /**
-     * 判断是否为自动审批节点（approval_strategy=o32 或 auto）。
+     * 判断是否为自动审批节点（approval_strategy=o32 或 auto）
+     *
+     * 执行顺序：
+     * 1. O32 自动审批策略（临时代码可转人工）
+     *
+     * @param node 待判断的流程节点
+     * @param config 节点审批配置
+     * @return true=节点采用 O32 或系统自动审批，false=节点不采用这两种自动审批策略
      */
     private boolean isAutoApprovalNode(FlowNodeBo node, NodeApprovalConfigBo config) {
+        // O32 自动审批策略（临时代码可转人工），再系统自动审批策略（始终自动通过）
         return isO32ApprovalStrategy(config) || isSystemAutoApprovalStrategy(config);
     }
 
-    /** O32 自动审批策略（临时代码可转人工） */
+    /**
+     * O32 自动审批策略（临时代码可转人工）
+     *
+     * 执行顺序：
+     * 1. 检查是否符合采用 O32 自动审批的条件
+     *
+     * @param config 节点审批配置
+     * @return true=采用 O32 自动审批，false=未采用 O32 自动审批
+     */
     private boolean isO32ApprovalStrategy(NodeApprovalConfigBo config) {
         return config != null && ApprovalStrategy.O32.getCode().equals(config.getApprovalStrategy());
     }
 
-    /** 系统自动审批策略（始终自动通过） */
+    /**
+     * 系统自动审批策略（始终自动通过）
+     *
+     * 执行顺序：
+     * 1. 检查是否符合采用系统自动审批的条件
+     *
+     * @param config 节点审批配置
+     * @return true=采用系统自动审批，false=未采用系统自动审批
+     */
     private boolean isSystemAutoApprovalStrategy(NodeApprovalConfigBo config) {
         return config != null && ApprovalStrategy.AUTO.getCode().equals(config.getApprovalStrategy());
     }
 
     /**
-     * 为 O32 节点的每个处理人建自动处理步骤（非临时代码系统代审，每个处理人都有步骤记录可追溯）。
+     * 为 O32 节点的每个处理人建自动处理步骤（非临时代码系统代审，每个处理人都有步骤记录可追溯）
+     *
+     * 执行顺序：
+     * 1. 解析自动审批节点配置的处理人
+     * 2. 存在候选人时查本批审批步骤，排除已参与处理的人
+     * 3. 没有可记录的处理人时写一条不挂处理人的系统通过步骤
+     * 4. 仍有候选人时为每人写一条系统通过步骤
+     *
+     * @param currentStep 当前待处理的审批步骤
+     * @param node 待判断的流程节点
+     * @param snapshot 当前流程版本的快照
+     * @param now 本次操作时间
      */
     private void createAutoProcessSteps(IpAdjustStepBo currentStep, FlowNodeBo node, FlowSnapshot snapshot, Date now) {
+        // 1. 解析自动审批节点配置的处理人
         NodeApprovalConfigBo config = snapshot.getApprovalConfigMap().get(node.getId());
+        // 将审批处理人配置解析为具体人员
         List<HandlerTarget> handlers = resolveApprovalHandlers(config, snapshot);
         int sortOrder = node.getSortOrder() != null ? node.getSortOrder() : 1;
+        // 2. 存在候选人时查本批审批步骤，排除已参与处理的人
         if (!handlers.isEmpty()) {
             // 自动节点同样排除已参与人；剔光后改为空处理人自动通过，不阻断流转
             List<IpAdjustStepBo> existingSteps = securityPoolAdjustMapper.queryAdjustStepByBatchList(
@@ -895,13 +1194,17 @@ public class SecurityPoolAdjustFlowService {
             Set<String> participated = AdjustStepHandlerExcludeUtil.collectParticipatedHandlerIds(existingSteps);
             handlers = AdjustStepHandlerExcludeUtil.excludeParticipated(handlers, participated, h -> h.handlerId);
         }
+        // 3. 没有可记录的处理人时写一条不挂处理人的系统通过步骤
         if (handlers.isEmpty()) {
+            // 插入流程步骤记录
             insertStepRecord(currentStep.getAdjustLogId(), currentStep.getAdjustBatchNo(), node, config, sortOrder,
                     StepStatus.AUTO_PROCESS.getCode(), null, null,
                     ProcessAction.AUTO_PROCESS.getCode(), "系统自动审批通过", now);
             return;
         }
+        // 4. 仍有候选人时为每人写一条系统通过步骤
         for (HandlerTarget handler : handlers) {
+            // 插入流程步骤记录
             insertStepRecord(currentStep.getAdjustLogId(), currentStep.getAdjustBatchNo(), node, config, sortOrder,
                     StepStatus.AUTO_PROCESS.getCode(), handler.handlerId, handler.handlerName,
                     ProcessAction.AUTO_PROCESS.getCode(), "系统自动审批通过", now);
@@ -909,7 +1212,16 @@ public class SecurityPoolAdjustFlowService {
     }
 
     /**
-     * 排除本批次真正审核过的人；配置非空但剔光时抛业务异常。
+     * 排除本批次真正审核过的人；配置非空但剔光时抛业务异常
+     *
+     * 执行顺序：
+     * 1. 按批次列表查询调库审批步骤
+     * 2. 排除本批次真正审核过的人
+     *
+     * @param adjustLogId 调库日志 ID
+     * @param adjustBatchNo 调库批次号
+     * @param handlers 下一节点配置的候选处理人
+     * @return 排除已参与人员后的可用处理人
      */
     private List<HandlerTarget> excludeParticipatedHandlers(Long adjustLogId, String adjustBatchNo,
                                                             List<HandlerTarget> handlers) {
@@ -925,9 +1237,17 @@ public class SecurityPoolAdjustFlowService {
     }
 
     /**
-     * 判断当前调库的证券是否临时代码。
+     * 判断当前调库的证券是否临时代码
+     *
+     * 执行顺序：
+     * 1. 查询同批次第一条调库记录
+     * 2. 按证券代码查询临时代码数量
+     *
+     * @param step 已校验权限的待处理步骤
+     * @return true=查到有效临时代码登记，false=未查到有效临时代码登记
      */
     private boolean isTemporaryCode(IpAdjustStepBo step) {
+        // 查询同批次第一条调库记录
         IpAdjustLogBo log = queryFirstAdjustLog(step);
         if (log == null || log.getSecurityCode() == null) {
             return false;
@@ -936,7 +1256,15 @@ public class SecurityPoolAdjustFlowService {
     }
 
     /**
-     * 判断是否为发起节点。
+     * 判断是否为发起节点
+     *
+     * 执行顺序：
+     * 1. 判断发起人节点是否存在指定流转动作出边
+     *
+     * @param snapshot 当前流程版本的快照
+     * @param node 待判断的流程节点
+     * @param config 节点审批配置
+     * @return true=节点满足发起人提交条件，false=节点不满足发起人提交条件
      */
     private boolean isInitiatorNode(FlowSnapshot snapshot, FlowNodeBo node, NodeApprovalConfigBo config) {
         // 发起节点通过 approval_strategy=initiator + 出边 route_action=submit 标记
@@ -944,7 +1272,15 @@ public class SecurityPoolAdjustFlowService {
     }
 
     /**
-     * 判断是否为修改节点。
+     * 判断是否为修改节点
+     *
+     * 执行顺序：
+     * 1. 判断发起人节点是否存在指定流转动作出边
+     *
+     * @param snapshot 当前流程版本的快照
+     * @param node 待判断的流程节点
+     * @param config 节点审批配置
+     * @return true=节点满足驳回修改条件，false=节点不满足驳回修改条件
      */
     private boolean isModifyNode(FlowSnapshot snapshot, FlowNodeBo node, NodeApprovalConfigBo config) {
         // 修改节点通过 approval_strategy=initiator + 出边 route_action=resubmit 标记
@@ -952,7 +1288,17 @@ public class SecurityPoolAdjustFlowService {
     }
 
     /**
-     * 判断发起人节点是否存在指定流转动作出边。
+     * 判断发起人节点是否存在指定流转动作出边
+     *
+     * 执行顺序：
+     * 1. 检查快照、节点、配置和动作均存在，且节点采用发起人审批
+     * 2. 检查该节点对应动作的出线是否存在
+     *
+     * @param snapshot 当前流程版本的快照
+     * @param node 待判断的流程节点
+     * @param config 节点审批配置
+     * @param routeAction 当前处理动作对应的路由动作
+     * @return true=节点配置为发起人处理且有指定动作的出线，false=节点配置或出线不满足要求
      */
     private boolean isInitiatorNodeWithRoute(FlowSnapshot snapshot, FlowNodeBo node,
                                              NodeApprovalConfigBo config, String routeAction) {
@@ -963,11 +1309,21 @@ public class SecurityPoolAdjustFlowService {
                 || !ApprovalStrategy.INITIATOR.getCode().equals(config.getApprovalStrategy())) {
             return false;
         }
+        // 判断节点是否存在指定流转动作出边
         return hasOutgoingRouteAction(snapshot, node, routeAction);
     }
 
     /**
-     * 判断节点是否存在指定流转动作出边。
+     * 判断节点是否存在指定流转动作出边
+     *
+     * 执行顺序：
+     * 1. 快照、节点和动作有效时遍历连线
+     * 2. 只有当前节点的出线且动作相同才判为命中
+     *
+     * @param snapshot 当前流程版本的快照
+     * @param node 待判断的流程节点
+     * @param routeAction 当前处理动作对应的路由动作
+     * @return true=节点存在指定动作的出线，false=节点没有指定动作的出线
      */
     private boolean hasOutgoingRouteAction(FlowSnapshot snapshot, FlowNodeBo node, String routeAction) {
         if (snapshot == null || node == null || routeAction == null) {
@@ -982,7 +1338,13 @@ public class SecurityPoolAdjustFlowService {
     }
 
     /**
-     * 查询同批次第一条调库记录。
+     * 查询同批次第一条调库记录
+     *
+     * 执行顺序：
+     * 1. 日志列表为空时返回空值
+     *
+     * @param step 已校验权限的待处理步骤
+     * @return 查询结果中的第一条调库日志，查不到时返回 null
      */
     private IpAdjustLogBo queryFirstAdjustLog(IpAdjustStepBo step) {
         List<IpAdjustLogBo> logList = securityPoolAdjustMapper.queryAdjustLogListForAudit(
@@ -994,7 +1356,13 @@ public class SecurityPoolAdjustFlowService {
     }
 
     /**
-     * 查询当前调库记录审核状态。
+     * 查询当前调库记录审核状态
+     *
+     * 执行顺序：
+     * 1. 查询同批次首条调库记录获取当前审核状态
+     *
+     * @param step 已校验权限的待处理步骤
+     * @return 批次审核状态；批次为空时返回空字符串
      */
     private String queryCurrentAuditStatus(IpAdjustStepBo step) {
         // 查询同批次首条调库记录获取当前审核状态
@@ -1003,7 +1371,17 @@ public class SecurityPoolAdjustFlowService {
     }
 
     /**
-     * 构建审批处理返回对象。
+     * 构建审批处理返回对象
+     *
+     * 执行顺序：
+     * 1. 依次设置调库日志ID、调库批次号、步骤ID、审批状态等字段
+     *
+     * @param step 已校验权限的待处理步骤
+     * @param auditStatus 目标批次审核状态
+     * @param finished 流程是否结束
+     * @param nextStepCreated 是否已创建后续待办
+     * @param message 返回给调用方的处理信息
+     * @return 调库审批处理结果
      */
     private SecurityPoolAdjustAuditDto buildAuditDto(IpAdjustStepBo step, String auditStatus,
                                                      boolean finished, boolean nextStepCreated, String message) {
@@ -1019,21 +1397,40 @@ public class SecurityPoolAdjustFlowService {
     }
 
     /**
-     * 判断字符串是否有有效内容。
+     * 判断字符串是否有有效内容
+     *
+     * 执行顺序：
+     * 1. 检查文本是否为空，去掉首尾空白后判断是否仍有内容
+     *
+     * @param value 待统一空值的文本
+     * @return true=文本含非空白字符，false=文本为空或只有空白
      */
     private boolean hasText(String value) {
         return value != null && !value.trim().isEmpty();
     }
 
     /**
-     * 判断当前操作人是否为管理员。
+     * 判断当前操作人是否为管理员
+     *
+     * 执行顺序：
+     * 1. 请求存在时按经办人 ID 判断是否为管理员，空请求判为 false
+     *
+     * @param req 审批处理请求
+     * @return true=当前处理人是管理员，false=当前处理人不是管理员
      */
     private boolean isAdminOperator(SecurityPoolAdjustAuditReq req) {
         return req != null && AdminUserIdUtil.isAdminUser(req.getHandlerId());
     }
 
     /**
-     * 管理员代办其他处理人的步骤时，在原处理意见后追加代办标识。
+     * 管理员代办其他处理人的步骤时，在原处理意见后追加代办标识
+     *
+     * 执行顺序：
+     * 1. 判断是否为管理员代办其他处理人的步骤
+     *
+     * @param req 审批处理请求
+     * @param step 已校验权限的待处理步骤
+     * @return 按代办情况处理后的意见
      */
     private String buildProcessComment(SecurityPoolAdjustAuditReq req, IpAdjustStepBo step) {
         String comment = req.getProcessComment() != null ? req.getProcessComment().trim() : "";
@@ -1050,7 +1447,7 @@ public class SecurityPoolAdjustFlowService {
     }
 
     /**
-     * 审批处理人。
+     * 审批处理人
      */
     private static class HandlerTarget {
         /** 处理人 ID */
@@ -1059,6 +1456,15 @@ public class SecurityPoolAdjustFlowService {
         /** 处理人名称 */
         final String handlerName;
 
+        /**
+         * 记录可办理证券调库审批的人员
+         *
+         * 执行顺序：
+         * 1. 保存处理人 ID 和姓名
+         *
+         * @param handlerId 处理人 ID
+         * @param handlerName 处理人姓名
+         */
         HandlerTarget(String handlerId, String handlerName) {
             this.handlerId = handlerId;
             this.handlerName = handlerName;
@@ -1066,7 +1472,7 @@ public class SecurityPoolAdjustFlowService {
     }
 
     /**
-     * 流程推进结果。
+     * 流程推进结果
      */
     private static class FlowAdvanceResult {
         /** 流程是否已结束 */

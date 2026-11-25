@@ -12,10 +12,10 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 
 /**
- * 基于 MySQL 命名锁的多实例定时任务互斥服务。
- * <p>
- * 获取与释放锁必须使用同一条 JDBC 连接；连接断开时 MySQL 会自动释放该连接持有的命名锁。
- * </p>
+ * 用 MySQL 命名锁协调多个实例执行同一定时任务
+ *
+ * {@link ScheduledTaskService} 在执行定时任务前按任务编码申请锁，锁已被占用时跳过本次执行
+ * 获取与释放锁使用同一条 JDBC 连接，连接断开时 MySQL 自动释放这条连接持有的命名锁
  */
 @Slf4j
 @Service
@@ -29,14 +29,18 @@ public class JobLockService {
     private DataSource dataSource;
 
     /**
-     * 在 MySQL 命名锁保护下执行任务。
+     * 在 MySQL 命名锁保护下执行任务
+     *
+     * 执行顺序：
+     * 1. 校验锁执行入参
      *
      * @param lockName 锁名称
      * @param waitSeconds 获取锁的最长等待秒数，0 表示立即返回
      * @param task 获取锁成功后执行的任务
-     * @return true=已获取锁并执行任务；false=锁正由其他实例持有
+     * @return true=已获取锁并执行任务，false=锁正由其他实例持有
      */
     public boolean executeWithLock(String lockName, int waitSeconds, Runnable task) {
+        // 校验锁执行入参
         validateParams(lockName, waitSeconds, task);
         try (Connection connection = dataSource.getConnection()) {
             // 使用当前连接获取命名锁，后续释放也必须复用该连接
@@ -54,6 +58,7 @@ public class JobLockService {
             } finally {
                 // 任务结束或异常后释放当前连接持有的命名锁
                 try {
+                    // 在指定连接上释放 MySQL 命名锁
                     releaseLock(connection, lockName);
                 } catch (SQLException e) {
                     log.error("定时任务锁[{}]释放异常", lockName, e);
@@ -71,7 +76,11 @@ public class JobLockService {
     }
 
     /**
-     * 校验锁执行入参。
+     * 校验锁执行入参
+     *
+     * 执行顺序：
+     * 1. 检查锁名非空且不超过 MySQL 长度限制
+     * 2. 确认等待秒数非负且提供了待执行任务
      *
      * @param lockName 锁名称
      * @param waitSeconds 获取锁的最长等待秒数
@@ -93,12 +102,16 @@ public class JobLockService {
     }
 
     /**
-     * 在指定连接上获取 MySQL 命名锁。
+     * 在指定连接上获取 MySQL 命名锁
+     *
+     * 执行顺序：
+     * 1. 用锁名称和等待秒数执行 GET_LOCK
+     * 2. 读取锁状态，无结果或返回 SQL null 时报告获取失败
      *
      * @param connection 当前 JDBC 连接
      * @param lockName 锁名称
      * @param waitSeconds 获取锁的最长等待秒数
-     * @return true=获取成功；false=锁被占用
+     * @return true=获取成功，false=锁被占用
      * @throws SQLException 数据库访问异常
      */
     private boolean acquireLock(Connection connection, String lockName, int waitSeconds) throws SQLException {
@@ -119,7 +132,11 @@ public class JobLockService {
     }
 
     /**
-     * 在指定连接上释放 MySQL 命名锁。
+     * 在指定连接上释放 MySQL 命名锁
+     *
+     * 执行顺序：
+     * 1. 用锁名称执行 RELEASE_LOCK
+     * 2. 检查释放结果，只有返回 1 才算释放成功
      *
      * @param connection 当前 JDBC 连接
      * @param lockName 锁名称

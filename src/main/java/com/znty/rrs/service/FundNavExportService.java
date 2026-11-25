@@ -33,15 +33,24 @@ import org.apache.poi.ss.util.WorkbookUtil;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.stereotype.Service;
 
-/** 基金基础信息查询与逐日净值 Excel 导出服务。 */
+/**
+ * 查询基金基础信息并导出逐日净值 Excel
+ *
+ * 页面先筛选基金，再提交选中的基金代码和要导出的净值日期范围
+ * 按基金组织逐日净值数据，基金名称重复或含非法字符时生成可用且不重名的工作表名
+ */
 @Service
 public class FundNavExportService {
-    /** 基金净值导出数据访问组件。 */
+    /** 基金净值导出数据访问组件 */
     @Resource
     private FundNavExportMapper fundNavExportMapper;
 
     /**
-     * 分页查询基金基础信息。
+     * 分页查询基金基础信息
+     *
+     * 执行顺序：
+     * 1. 按请求的页码和每页条数开启分页，并用筛选条件查询记录
+     * 2. 将本页记录和查询总条数一起返回
      *
      * @param req 基金筛选及分页条件
      * @return 分页基金基础信息列表
@@ -54,13 +63,20 @@ public class FundNavExportService {
     }
 
     /**
-     * 导出所选基金在指定日期范围内的逐日单位净值。
+     * 导出所选基金在指定日期范围内的逐日单位净值
+     *
+     * 执行顺序：
+     * 1. 校验所选基金代码及净值日期范围
+     * 2. 查询选中基金列表
+     * 3. 部分所选基金已失效或基金代码对应的基础信息不唯一时终止处理
+     * 4. 查询基金净值记录列表
+     * 5. 构造 Excel 允许且不重复的工作表名称
      *
      * @param req 所选基金代码及净值日期范围
      * @return 基金净值 Excel 文件信息
      */
     public CommonFileDto exportFundNavExcel(FundNavExportReq req) {
-        // 校验所选基金代码及净值日期范围。
+        // 校验所选基金代码及净值日期范围
         validateExportRequest(req);
         List<FundNavFundDto> funds = fundNavExportMapper.querySelectedFundList(req);
         if (funds.size() != req.getFundCodes().size()) {
@@ -89,7 +105,7 @@ public class FundNavExportService {
             dateFormat.setTimeZone(TimeZone.getTimeZone("GMT+8"));
 
             for (FundNavFundDto fund : funds) {
-                // 基金名称重复或含非法字符时生成合法且唯一的工作表名称。
+                // 基金名称重复或含非法字符时生成合法且唯一的工作表名称
                 String sheetName = buildUniqueSheetName(workbook, fund.getFundName(), fund.getFundCode());
                 Sheet sheet = workbook.createSheet(sheetName);
                 sheet.setColumnWidth(0, 14 * 256);
@@ -140,7 +156,12 @@ public class FundNavExportService {
     }
 
     /**
-     * 校验基金选择和日期范围，并标准化基金代码。
+     * 校验基金选择和日期范围，并标准化基金代码
+     *
+     * 执行顺序：
+     * 1. 去掉空白基金代码并去重，结果为空时终止处理
+     * 2. 按 yyyy-MM-dd 解析净值起止日期，未填写、格式错误或起始日晚于结束日时终止处理
+     * 3. 将清理后的基金代码和规范化日期写回请求
      *
      * @param req 基金代码及净值日期范围条件
      */
@@ -180,7 +201,11 @@ public class FundNavExportService {
     }
 
     /**
-     * 构造 Excel 允许且不重复的工作表名称。
+     * 构造 Excel 允许且不重复的工作表名称
+     *
+     * 执行顺序：
+     * 1. 以基金名称为首选，缺失时用基金代码，替换 Excel 不允许的字符
+     * 2. 名称已被使用时追加基金代码和必要的序号，直到找到可用名称
      *
      * @param workbook 当前 Excel 工作簿
      * @param fundName 基金名称

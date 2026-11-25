@@ -49,10 +49,13 @@ public class AutoAdjustService implements RrsScheduledTask {
 
     /** 系统调库操作人 ID */
     private static final String AUTO_ADJUSTER_ID = "0";
+
     /** 系统调库操作人名称 */
     private static final String AUTO_ADJUSTER_NAME = "系统";
+
     /** 任务默认展示名称 */
     private static final String DEFAULT_TASK_NAME = "到期证券自动出池";
+
     /**
      * 本任务扩展参数说明（配置页按行拆成列表展示）
      */
@@ -75,22 +78,35 @@ public class AutoAdjustService implements RrsScheduledTask {
     /** 自动调库查询 Mapper */
     @Resource
     private AutoAdjustMapper autoAdjustMapper;
+
     /** 证券池调库落地 Mapper */
     @Resource
     private SecurityPoolAdjustMapper securityPoolAdjustMapper;
 
+    /** 读取到期扫描需要排除的 Excel 保护记录 */
     @Resource
     private ExcelPoolExclusionService excelPoolExclusionService;
+
     /** 投资池查询 Mapper */
     @Resource
     private InvestmentPoolMapper investmentPoolMapper;
+
     /** 定时任务配置 Mapper（param_json / 名称） */
     @Resource
     private ScheduledTaskMapper scheduledTaskMapper;
+
     /** 扫描池并集（参数 ∪ 关系配置） */
     @Resource
     private AutoAdjustPoolScopeHelper poolScopeHelper;
 
+    /**
+     * 提供本定时任务的唯一编码
+     *
+     * 执行顺序：
+     * 1. 返回当前任务定义的固定编码
+     *
+     * @return 任务编码
+     */
     @Override
     public String getTaskCode() {
         return TASK_CODE;
@@ -98,13 +114,23 @@ public class AutoAdjustService implements RrsScheduledTask {
 
     /**
      * 向配置页提供本任务扩展参数填写说明（仅 JSON）
+     *
+     * 执行顺序：
+     * 1. 返回当前任务定义的参数说明
+     *
+     * @return 任务参数说明
      */
     @Override
     public String getParamHelp() {
         return PARAM_HELP;
     }
 
-    /** 兼容旧调用入口，内部调用当前定时任务执行方法 */
+    /**
+     * 兼容旧调用入口，内部调用当前定时任务执行方法
+     *
+     * 执行顺序：
+     * 1. 转交 execute 执行当前任务
+     */
     public void executeAutoAdjust() {
         execute();
     }
@@ -141,6 +167,7 @@ public class AutoAdjustService implements RrsScheduledTask {
                     detail.build());
         } catch (BizException e) {
             long duration = System.currentTimeMillis() - begin;
+            // 写 WARN 级过程日志并同步控制台
             warnDetail(detail, "任务未完成：" + e.getMessage());
             return ScheduledTaskResult.failure(TASK_CODE, taskName, e.getMessage(), startTime, duration,
                     detail.build());
@@ -179,6 +206,7 @@ public class AutoAdjustService implements RrsScheduledTask {
         logExecutionRules(detail, maturityRule, maturityOffsetDays);
         List<Long> poolIds = poolScopeHelper.resolveUnionPoolIds(
                 paramJson, TASK_CODE, RuleType.AUTO_OUT.getCode(), detail);
+        // 写 INFO 级过程日志并同步控制台
         infoDetail(detail, "扫描范围：目标池编号 " + poolIds);
         // 2. 读取投资池信息
         Map<Long, InvestmentPoolBo> poolMap = new HashMap<>();
@@ -201,6 +229,7 @@ public class AutoAdjustService implements RrsScheduledTask {
             InvestmentPoolBo pool = poolMap.get(poolId);
             if (pool == null) {
                 summary.addSkipped(1);
+                // 记录一条业务上未处理的原因，不把可预期情况写成任务异常
                 skipDetail(detail, "目标池【" + poolId + "】不存在，本轮未处理");
                 continue;
             }
@@ -213,6 +242,7 @@ public class AutoAdjustService implements RrsScheduledTask {
             int matchedCount = expiredList == null ? 0 : expiredList.size();
             expiredList = ExcelPoolExclusionService.excludeProtectedRows(expiredList, protectedStatusIds);
             int candidateCount = expiredList == null ? 0 : expiredList.size();
+            // 写 INFO 级过程日志并同步控制台
             infoDetail(detail, "扫描结果：池【" + pool.getPoolName() + "】到期命中 "
                     + matchedCount + " 条，Excel 保护跳过 " + (matchedCount - candidateCount) + " 条");
             if (expiredList == null || expiredList.isEmpty()) {
@@ -225,12 +255,14 @@ public class AutoAdjustService implements RrsScheduledTask {
             for (ScheduledAdjustCandidateDto sec : expiredList) {
                 if (sec == null || !StringUtils.hasText(sec.getSecurityCode())) {
                     poolSkippedCount++;
+                    // 记录一条业务上未处理的原因，不把可预期情况写成任务异常
                     skipDetail(detail, "扫描结果缺少证券编码，无法处理");
                     continue;
                 }
                 // 使用候选查询返回的调出限制结果
                 if (sec.isOutRestricted()) {
                     poolSkippedCount++;
+                    // 记录一条业务上未处理的原因，不把可预期情况写成任务异常
                     skipDetail(detail, "证券【" + sec.getSecurityCode() + "】：当前位于调出限制池，本轮不处理");
                     continue;
                 }
@@ -238,6 +270,7 @@ public class AutoAdjustService implements RrsScheduledTask {
                 int deleted = securityPoolAdjustMapper.deleteUnprotectedPoolStatusSoft(sec.getSecurityCode(), poolId);
                 if (deleted == 0) {
                     poolSkippedCount++;
+                    // 记录一条业务上未处理的原因，不把可预期情况写成任务异常
                     skipDetail(detail, "证券【" + sec.getSecurityCode() + "】：当前已不在目标池，本轮不处理");
                     continue;
                 }
@@ -265,6 +298,7 @@ public class AutoAdjustService implements RrsScheduledTask {
             }
             // 8. 分别汇总本池候选、实际出池和未处理数量
             summary.addPool(poolId, pool.getPoolName(), candidateCount, poolCount, poolSkippedCount);
+            // 写 INFO 级过程日志并同步控制台
             infoDetail(detail, "处理结果：池【" + pool.getPoolName() + "】实际出池 "
                     + poolCount + " 条，未处理 " + poolSkippedCount + " 条");
         }
@@ -275,45 +309,72 @@ public class AutoAdjustService implements RrsScheduledTask {
      * 在扫描前打印本任务的查询和出池规则
      *
      * 执行顺序：
-     * 1. 说明扫描池的来源和到期候选的查询条件
-     * 2. 说明如何从到期候选筛出最终出池记录
+     * 1. 说明扩展参数和投资池配置都会影响本轮扫描范围
+     * 2. 写明证券主档及两种到期条件
+     * 3. 区分查到的到期债券和实际能出池的记录
      *
      * @param detail 过程日志
      * @param maturityRule 本轮摘牌日判断说明
      * @param maturityOffsetDays 本轮到期偏移天数
      */
     private void logExecutionRules(TaskDetailLog detail, String maturityRule, int maturityOffsetDays) {
-        // 说明扩展参数和投资池配置都会影响本轮扫描范围
+        // 1. 说明扩展参数和投资池配置都会影响本轮扫描范围
         infoDetail(detail, "扫描范围：合并扩展参数 poolIds 和投资池绑定");
-        // 写明证券主档及两种到期条件
+        // 2. 写明证券主档及两种到期条件
         infoDetail(detail, "扫描条件：扫描 ip_pool_status 中已生效且未删除的债券（含 ABS、CRMW），"
                 + "按证券代码匹配 rrs_securityinfo，证券状态为 D 或" + maturityRule
                 + "（数据库日期，maturityOffsetDays=" + maturityOffsetDays + "）");
-        // 区分查到的到期债券和实际能出池的记录
+        // 3. 区分查到的到期债券和实际能出池的记录
         infoDetail(detail, "最终出池范围：先按在池记录 ID 剔除 Excel 保护项，"
                 + "再跳过缺少证券编码或命中调出限制池的记录，软删除成功才写调库记录并计入实际出池");
     }
 
-    /** 本轮到期证券出池汇总 */
+    /**
+     * 汇总本轮到期证券自动出池结果
+     *
+     * 合计各目标池扫描候选、实际出池和未处理的记录数，供任务返回结果
+     */
     private static final class AutoOutSummary {
 
         /** 本轮实际出池总数 */
         private int total;
+
         /** 本轮扫描到的候选记录数 */
         private int candidateCount;
+
         /** 本轮未处理的记录数 */
         private int skippedCount;
+
         /** 按目标池保存实际出池数量 */
         private final Map<Long, PoolSummary> poolSummaries = new LinkedHashMap<>();
 
-        /** 累加未处理记录数 */
+        /**
+         * 累加未处理记录数
+         *
+         * 执行顺序：
+         * 1. 只有新增未处理数大于零时才计入汇总
+         *
+         * @param count 本次累计的处理条数
+         */
         private void addSkipped(int count) {
             if (count > 0) {
                 skippedCount += count;
             }
         }
 
-        /** 累加目标池出池数量 */
+        /**
+         * 记录一个目标池的出池统计
+         *
+         * 执行顺序：
+         * 1. 按池 ID 保存池名称、候选数、出池数和未处理数
+         * 2. 将该池各项数量加到任务总计
+         *
+         * @param poolId 本次查询或统计的投资池 ID
+         * @param poolName 目标池名称
+         * @param candidates 本池候选记录数
+         * @param count 本次累计的处理条数
+         * @param skipped 本池未处理记录数
+         */
         private void addPool(Long poolId, String poolName, int candidates, int count, int skipped) {
             candidateCount += candidates;
             skippedCount += skipped;
@@ -321,7 +382,15 @@ public class AutoAdjustService implements RrsScheduledTask {
             total += count;
         }
 
-        /** 构建最近执行结果文案 */
+        /**
+         * 生成到期出池任务的结果说明
+         *
+         * 执行顺序：
+         * 1. 先写本轮扫描、实际出池和未处理总数
+         * 2. 有分池结果时按汇总顺序追加明细
+         *
+         * @return 包含本轮总数和分池明细的执行结果
+         */
         private String buildMessage() {
             StringBuilder message = new StringBuilder("任务完成：扫描候选 ")
                     .append(candidateCount).append(" 条，实际出池 ")
@@ -344,21 +413,40 @@ public class AutoAdjustService implements RrsScheduledTask {
         }
     }
 
-    /** 单个目标池出池统计 */
+    /**
+     * 记录单个目标池的到期证券出池结果
+     *
+     * 按池保留扫描候选数、实际出池数和未处理数，供整轮任务汇总
+     */
     private static final class PoolSummary {
 
         /** 目标池 ID */
         private final Long poolId;
+
         /** 目标池名称 */
         private final String poolName;
+
         /** 扫描候选数量 */
         private final int candidateCount;
+
         /** 实际出池数量 */
         private final int count;
+
         /** 未处理数量 */
         private final int skippedCount;
 
-        /** 创建目标池统计 */
+        /**
+         * 记录目标池的到期证券出池统计
+         *
+         * 执行顺序：
+         * 1. 保存目标池信息以及扫描候选、实际出池和未处理数量
+         *
+         * @param poolId 目标池 ID
+         * @param poolName 目标池名称
+         * @param candidateCount 扫描候选数量
+         * @param count 实际出池数量
+         * @param skippedCount 未处理数量
+         */
         private PoolSummary(Long poolId, String poolName, int candidateCount, int count, int skippedCount) {
             this.poolId = poolId;
             this.poolName = poolName;
@@ -382,6 +470,7 @@ public class AutoAdjustService implements RrsScheduledTask {
         SysScheduledTaskBo conf = scheduledTaskMapper.queryTaskByCode(TASK_CODE);
         String paramJson = (conf != null && StringUtils.hasText(conf.getParamJson()))
                 ? conf.getParamJson().trim() : null;
+        // 写 INFO 级过程日志并同步控制台
         infoDetail(detail, "扩展参数 param_json=" + (paramJson == null ? "" : paramJson));
         return paramJson;
     }
@@ -390,6 +479,9 @@ public class AutoAdjustService implements RrsScheduledTask {
      * 解析扩展参数中的扫描池
      *
      * 非法 JSON 或空池列表直接返回业务错误，正式任务入口使用参数池和关系配置的并集
+     *
+     * 执行顺序：
+     * 1. 委托共用解析器读取池 ID，未指定任何扫描池时提示需要配置 poolIds
      *
      * @param raw 扩展参数原文
      * @param taskName 任务展示名称
@@ -405,6 +497,13 @@ public class AutoAdjustService implements RrsScheduledTask {
 
     /**
      * 写 INFO 级过程日志并同步控制台
+     *
+     * 执行顺序：
+     * 1. 将消息写入应用日志的 INFO 级别
+     * 2. 提供任务明细记录器时，将同一条消息写入明细
+     *
+     * @param detail 过程日志
+     * @param line 未处理原因
      */
     private void infoDetail(TaskDetailLog detail, String line) {
         log.info(line);
@@ -415,6 +514,13 @@ public class AutoAdjustService implements RrsScheduledTask {
 
     /**
      * 写 WARN 级过程日志并同步控制台
+     *
+     * 执行顺序：
+     * 1. 将消息写入应用日志的 WARN 级别
+     * 2. 提供任务明细记录器时，将同一条消息写入明细
+     *
+     * @param detail 过程日志
+     * @param line 未处理原因
      */
     private void warnDetail(TaskDetailLog detail, String line) {
         log.warn(line);
@@ -425,6 +531,10 @@ public class AutoAdjustService implements RrsScheduledTask {
 
     /**
      * 记录一条业务上未处理的原因，不把可预期情况写成任务异常
+     *
+     * 执行顺序：
+     * 1. 将未处理原因写入 INFO 应用日志
+     * 2. 提供任务明细记录器时，为同一条原因加上「未处理」后写入明细
      *
      * @param detail 过程日志
      * @param line 未处理原因
@@ -438,6 +548,12 @@ public class AutoAdjustService implements RrsScheduledTask {
 
     /**
      * 单测入口：解析 poolIds
+     *
+     * 执行顺序：
+     * 1. 带入此任务编码，读取扩展参数指定的扫描池 ID
+     *
+     * @param raw 扩展参数原文
+     * @return 池 ID 列表
      */
     List<Long> parsePoolIds(String raw) {
         return parsePoolIds(raw, TASK_CODE);
@@ -445,6 +561,11 @@ public class AutoAdjustService implements RrsScheduledTask {
 
     /**
      * 从库表读取任务展示名称，缺失时使用默认任务名称
+     *
+     * 执行顺序：
+     * 1. 按任务编码查询任务配置
+     *
+     * @return 任务名称
      */
     private String resolveTaskName() {
         try {

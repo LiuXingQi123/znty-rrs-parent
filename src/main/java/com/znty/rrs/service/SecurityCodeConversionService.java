@@ -25,10 +25,12 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 证券代码转换服务。
- * <p>正式主档准备完成后，迁移仍在运行的业务引用，保留旧快照并新增目标代码快照。</p>
- * <p>本服务拥有独立 Mapper 与完整迁移流程，不调用现有临时代码管理、调库或附件 Service，
- * 也不接入现有业务调用链。</p>
+ * 记录并执行证券代码转换
+ *
+ * 正式主档准备完成后，迁移仍在运行的业务引用，保留旧快照并新增目标代码快照
+ *
+ * 本服务拥有独立 Mapper 与完整迁移流程，不调用现有临时代码管理、调库或附件 Service，
+ * 也不接入现有业务调用链
  */
 @Service
 public class SecurityCodeConversionService {
@@ -56,29 +58,39 @@ public class SecurityCodeConversionService {
     private SecurityCodeConversionMapper securityCodeConversionMapper;
 
     /**
-     * 正式证券主档准备完成后，将临时代码的运行态业务引用迁移到正式代码。
-     * <p>本方法强制加入调用方已有事务，正式主档须先准备好，临时主档仍须保留供旧码业务使用。</p>
+     * 正式证券主档准备完成后，将临时代码的运行态业务引用迁移到正式代码
+     *
+     * 本方法强制加入调用方已有事务，正式主档须先准备好，临时主档仍须保留供旧码业务使用
+     *
+     * 执行顺序：
+     * 1. 校验转换请求
+     * 2. 按代码顺序锁定临时及正式证券主数据，避免并发转换按不同顺序取锁
+     * 3. 从锁定结果中定位临时证券主数据
+     * 4. 新快照必须取正式主档，不能使用临时主档或请求中的少量身份字段拼凑
+     * 5. 替换 CRMW 池当前状态中的 CRMW 凭证引用
+     * 6. 迁移收藏、报告与待处理提醒等当前业务引用
+     * 7. 复核所有运行态表已不再引用临时代码
      *
      * @param req 临时及正式证券信息
      */
     @Transactional(propagation = Propagation.MANDATORY, rollbackFor = Exception.class)
     public void replaceTempSecurityCodeReferences(SecurityCodeConversionReq req) {
-        // 校验转换请求
+        // 1. 校验转换请求
         validateConversionReq(req);
         String tempSecurityCode = req.getTempSecurityCode().trim();
         String securityCode = req.getSecurityCode().trim();
-        // 按代码顺序锁定临时及正式证券主数据，避免并发转换按不同顺序取锁
+        // 2. 按代码顺序锁定临时及正式证券主数据，避免并发转换按不同顺序取锁
         List<SecurityCodeConversionBo> securityInfoList = securityCodeConversionMapper
                 .querySecurityInfoListForUpdate(Arrays.asList(tempSecurityCode, securityCode));
         if (securityInfoList == null) {
             securityInfoList = Collections.emptyList();
         }
-        // 从锁定结果中定位临时证券主数据
+        // 3. 从锁定结果中定位临时证券主数据
         SecurityCodeConversionBo tempSecurity = findSecurityInfo(securityInfoList, tempSecurityCode);
         if (tempSecurity == null) {
             throw new BizException("临时证券主数据不存在，tempSecurityCode=" + req.getTempSecurityCode());
         }
-        // 新快照必须取正式主档，不能使用临时主档或请求中的少量身份字段拼凑
+        // 4. 新快照必须取正式主档，不能使用临时主档或请求中的少量身份字段拼凑
         SecurityCodeConversionBo formalSecurity = findSecurityInfo(securityInfoList, securityCode);
         if (formalSecurity == null) {
             throw new BizException("正式证券主数据不存在，请先准备正式主档，securityCode=" + securityCode);
@@ -113,15 +125,24 @@ public class SecurityCodeConversionService {
         replacePoolCrmwReferences(replaceBo);
         // 转换 CRMW 池当前生效的标的证券状态
         convertActivePoolStatusList(replaceBo, true);
-        // 替换 CRMW 池当前状态中的 CRMW 凭证引用
+        // 5. 替换 CRMW 池当前状态中的 CRMW 凭证引用
         replaceCrmwPoolCrmwReferences(replaceBo);
-        // 迁移收藏、报告与待处理提醒等当前业务引用
+        // 6. 迁移收藏、报告与待处理提醒等当前业务引用
         replaceCurrentBusinessReferences(replaceBo);
-        // 复核所有运行态表已不再引用临时代码
+        // 7. 复核所有运行态表已不再引用临时代码
         validateNoRuntimeReference(replaceBo);
     }
 
-    /** 从已锁定的证券主数据中按代码查找记录。 */
+    /**
+     * 从已锁定的证券主数据中按代码查找记录
+     *
+     * 执行顺序：
+     * 1. 依次比较主档代码，忽略首尾空白和大小写，找不到匹配项时返回 null
+     *
+     * @param securityInfoList 证券信息列表
+     * @param securityCode 证券代码
+     * @return 匹配证券代码的主数据，找不到时返回 null
+     */
     private SecurityCodeConversionBo findSecurityInfo(List<SecurityCodeConversionBo> securityInfoList,
                                                        String securityCode) {
         for (SecurityCodeConversionBo securityInfo : securityInfoList) {
@@ -133,7 +154,14 @@ public class SecurityCodeConversionService {
         return null;
     }
 
-    /** 校验正式证券类型存在且属于债券大类。 */
+    /**
+     * 校验正式证券类型存在且属于债券大类
+     *
+     * 执行顺序：
+     * 1. 按证券类型查询所属大类，查询结果不属于债券时提示该类型无效
+     *
+     * @param securityType 页面已知证券类型
+     */
     private void validateFormalSecurityType(String securityType) {
         String categoryType = securityCodeConversionMapper.querySecurityCategoryType(securityType);
         if (!CategoryType.BOND.getCode().equals(categoryType)) {
@@ -142,7 +170,14 @@ public class SecurityCodeConversionService {
         }
     }
 
-    /** 校验当前代码未由原临时代码管理流程负责。 */
+    /**
+     * 校验当前代码未由原临时代码管理流程负责
+     *
+     * 执行顺序：
+     * 1. 加锁查询临时代码的有效登记 ID，存在登记时提示走原临时代码管理流程
+     *
+     * @param tempSecurityCode 临时证券代码
+     */
     private void validateNoActiveTempRegistration(String tempSecurityCode) {
         List<Long> registrationIds = securityCodeConversionMapper
                 .queryActiveTempSecurityRegistrationIdListForUpdate(tempSecurityCode);
@@ -152,7 +187,14 @@ public class SecurityCodeConversionService {
         }
     }
 
-    /** 校验代码转换不会与现有在途调库业务单冲突。 */
+    /**
+     * 校验代码转换不会与现有在途调库业务单冲突
+     *
+     * 执行顺序：
+     * 1. 按池、方向和证券组合统计正式代码的在途冲突，有冲突时终止换码
+     *
+     * @param replaceBo 本次换码记录，包含旧代码、新代码和操作来源
+     */
     private void validateNoPendingAdjustConflict(SecurityCodeConversionBo replaceBo) {
         int conflictCount = securityCodeConversionMapper.queryPendingAdjustLogConflictCount(replaceBo);
         if (conflictCount > 0) {
@@ -161,14 +203,25 @@ public class SecurityCodeConversionService {
         }
     }
 
-    /** 作废包含临时代码且尚未成功提交的证券池、CRMW 池导入草稿。 */
+    /**
+     * 作废包含临时代码且尚未成功提交的证券池、CRMW 池导入草稿
+     *
+     * 执行顺序：
+     * 1. 锁定受影响批次的全部有效明细，整批作废而不是只删除命中行
+     * 2. 校验导入明细没有发生并发提交或取消
+     * 3. 校验导入批次没有发生并发提交或取消
+     * 4. 记录被作废的导入明细
+     * 5. 记录被作废的导入批次
+     *
+     * @param replaceBo 本次换码记录，包含旧代码、新代码和操作来源
+     */
     private void invalidateAffectedImportDrafts(SecurityCodeConversionBo replaceBo) {
         List<Long> batchIds = securityCodeConversionMapper
                 .queryAffectedImportBatchIdListForUpdate(replaceBo);
         if (batchIds == null || batchIds.isEmpty()) {
             return;
         }
-        // 锁定受影响批次的全部有效明细，整批作废而不是只删除命中行
+        // 1. 锁定受影响批次的全部有效明细，整批作废而不是只删除命中行
         List<Long> detailIds = securityCodeConversionMapper
                 .queryAffectedImportDetailIdListForUpdate(batchIds);
         if (detailIds == null) {
@@ -176,49 +229,76 @@ public class SecurityCodeConversionService {
         }
         int detailRows = securityCodeConversionMapper.deleteAffectedImportDetailListSoft(
                 batchIds, replaceBo.getUpdateTime());
-        // 校验导入明细没有发生并发提交或取消
+        // 2. 校验导入明细没有发生并发提交或取消
         validateUpdatedRows("sys_imp_tmp_detl", detailIds.size(), detailRows);
         int batchRows = securityCodeConversionMapper.deleteAffectedImportBatchListSoft(
                 batchIds, replaceBo.getUpdateTime());
-        // 校验导入批次没有发生并发提交或取消
+        // 3. 校验导入批次没有发生并发提交或取消
         validateUpdatedRows("sys_imp_tmp", batchIds.size(), batchRows);
-        // 记录被作废的导入明细
+        // 4. 记录被作废的导入明细
         addReplaceLogList(replaceBo, "sys_imp_tmp_detl", detailIds);
-        // 记录被作废的导入批次
+        // 5. 记录被作废的导入批次
         addReplaceLogList(replaceBo, "sys_imp_tmp", batchIds);
     }
 
-    /** 替换在途调库日志的证券引用，旧证券快照保持不变。 */
+    /**
+     * 替换在途调库日志的证券引用，旧证券快照保持不变
+     *
+     * 执行顺序：
+     * 1. 校验在途日志没有发生并发漂移
+     * 2. 记录在途调库日志替换明细
+     *
+     * @param replaceBo 本次换码记录，包含旧代码、新代码和操作来源
+     * @return 本次迁移或关闭的证券在途调库日志 ID
+     */
     private List<Long> replacePendingSecurityReferences(SecurityCodeConversionBo replaceBo) {
         List<Long> logIds = securityCodeConversionMapper.queryPendingAdjustLogSecurityReferenceIdList(replaceBo);
         if (logIds.isEmpty()) {
             return logIds;
         }
         int updated = securityCodeConversionMapper.editAdjustLogSecurityReference(replaceBo, logIds);
-        // 校验在途日志没有发生并发漂移
+        // 1. 校验在途日志没有发生并发漂移
         validateUpdatedRows("ip_adjust_log.security_code", logIds.size(), updated);
-        // 记录在途调库日志替换明细
+        // 2. 记录在途调库日志替换明细
         addReplaceLogList(replaceBo, "ip_adjust_log", logIds);
 
         return logIds;
     }
 
-    /** 替换在途调库日志的 CRMW 凭证引用，旧凭证快照保持不变。 */
+    /**
+     * 替换在途调库日志的 CRMW 凭证引用，旧凭证快照保持不变
+     *
+     * 执行顺序：
+     * 1. 校验在途 CRMW 日志没有发生并发漂移
+     * 2. 记录在途 CRMW 日志替换明细
+     *
+     * @param replaceBo 本次换码记录，包含旧代码、新代码和操作来源
+     * @return 本次迁移或关闭的 CRMW 在途调库日志 ID
+     */
     private List<Long> replacePendingCrmwReferences(SecurityCodeConversionBo replaceBo) {
         List<Long> logIds = securityCodeConversionMapper.queryPendingAdjustLogCrmwReferenceIdList(replaceBo);
         if (logIds.isEmpty()) {
             return logIds;
         }
         int updated = securityCodeConversionMapper.editAdjustLogCrmwReference(replaceBo, logIds);
-        // 校验在途 CRMW 日志没有发生并发漂移
+        // 1. 校验在途 CRMW 日志没有发生并发漂移
         validateUpdatedRows("ip_adjust_log.crmw_scode", logIds.size(), updated);
-        // 记录在途 CRMW 日志替换明细
+        // 2. 记录在途 CRMW 日志替换明细
         addReplaceLogList(replaceBo, "ip_adjust_log.crmw", logIds);
 
         return logIds;
     }
 
-    /** 按在途日志的最终身份新增主档快照；证券和凭证同时换码时也只生成一份。 */
+    /**
+     * 按在途日志的最终身份新增主档快照；证券和凭证同时换码时也只生成一份
+     *
+     * 执行顺序：
+     * 1. 所有被改码的在途日志都必须仍可读取，避免漏生成快照
+     * 2. 逐项为代码转换生成的调库日志写入完整证券快照
+     *
+     * @param replaceBo 本次换码记录，包含旧代码、新代码和操作来源
+     * @param logIds 日志ID 列表
+     */
     private void addPendingSnapshots(SecurityCodeConversionBo replaceBo, Set<Long> logIds) {
         if (logIds.isEmpty()) {
             return;
@@ -233,7 +313,17 @@ public class SecurityCodeConversionService {
         }
     }
 
-    /** 转换普通池或 CRMW 池当前生效状态。 */
+    /**
+     * 转换普通池或 CRMW 池当前生效状态
+     *
+     * 执行顺序：
+     * 1. 查询生效CRMW投资池状态列表
+     * 2. 查询生效投资池状态列表
+     * 3. 逐项单个池状态执行临时代码出库，正式代码未在同一逻辑池状态时再入库
+     *
+     * @param replaceBo 本次换码记录，包含旧代码、新代码和操作来源
+     * @param crmwPool 是否为 CRMW 池表
+     */
     private void convertActivePoolStatusList(SecurityCodeConversionBo replaceBo, boolean crmwPool) {
         List<SecurityCodeConversionBo> rows = crmwPool
                 ? securityCodeConversionMapper.queryActiveCrmwPoolStatusList(replaceBo)
@@ -244,35 +334,61 @@ public class SecurityCodeConversionService {
         }
     }
 
-    /** 替换普通池当前状态中的 CRMW 凭证引用。 */
+    /**
+     * 替换普通池当前状态中的 CRMW 凭证引用
+     *
+     * 执行顺序：
+     * 1. 校验普通池 CRMW 引用没有发生并发漂移
+     * 2. 记录普通池 CRMW 引用替换明细
+     *
+     * @param replaceBo 本次换码记录，包含旧代码、新代码和操作来源
+     */
     private void replacePoolCrmwReferences(SecurityCodeConversionBo replaceBo) {
         List<Long> ids = securityCodeConversionMapper.queryPoolStatusCrmwReferenceIdList(replaceBo);
         if (ids.isEmpty()) {
             return;
         }
         int updated = securityCodeConversionMapper.editPoolStatusCrmwReference(replaceBo, ids);
-        // 校验普通池 CRMW 引用没有发生并发漂移
+        // 1. 校验普通池 CRMW 引用没有发生并发漂移
         validateUpdatedRows("ip_pool_status.crmw_scode", ids.size(), updated);
-        // 记录普通池 CRMW 引用替换明细
+        // 2. 记录普通池 CRMW 引用替换明细
         addReplaceLogList(replaceBo, "ip_pool_status.crmw", ids);
     }
 
-    /** 替换 CRMW 池当前状态中的 CRMW 凭证引用。 */
+    /**
+     * 替换 CRMW 池当前状态中的 CRMW 凭证引用
+     *
+     * 执行顺序：
+     * 1. 校验 CRMW 池凭证引用没有发生并发漂移
+     * 2. 记录 CRMW 池凭证引用替换明细
+     *
+     * @param replaceBo 本次换码记录，包含旧代码、新代码和操作来源
+     */
     private void replaceCrmwPoolCrmwReferences(SecurityCodeConversionBo replaceBo) {
         List<Long> ids = securityCodeConversionMapper.queryCrmwPoolStatusCrmwReferenceIdList(replaceBo);
         if (ids.isEmpty()) {
             return;
         }
         int updated = securityCodeConversionMapper.editCrmwPoolStatusCrmwReference(replaceBo, ids);
-        // 校验 CRMW 池凭证引用没有发生并发漂移
+        // 1. 校验 CRMW 池凭证引用没有发生并发漂移
         validateUpdatedRows("ip_pool_status_crmw.crmw_scode", ids.size(), updated);
-        // 记录 CRMW 池凭证引用替换明细
+        // 2. 记录 CRMW 池凭证引用替换明细
         addReplaceLogList(replaceBo, "ip_pool_status_crmw.crmw", ids);
     }
 
-    /** 迁移收藏、报告及当前待办引用。 */
+    /**
+     * 迁移收藏、报告及当前待办引用
+     *
+     * 执行顺序：
+     * 1. 合并当前有效个人收藏
+     * 2. 迁移未删除内部报告的证券归属
+     * 3. 迁移未删除外部报告的证券归属
+     * 4. 正式码已存在同池待办时失效旧待办，否则直接迁移待办代码
+     *
+     * @param replaceBo 本次换码记录，包含旧代码、新代码和操作来源
+     */
     private void replaceCurrentBusinessReferences(SecurityCodeConversionBo replaceBo) {
-        // 合并当前有效个人收藏
+        // 1. 合并当前有效个人收藏
         List<Long> favoriteIds = securityCodeConversionMapper
                 .queryActiveMySecurityPoolReferenceIdList(replaceBo);
         if (!favoriteIds.isEmpty()) {
@@ -280,21 +396,21 @@ public class SecurityCodeConversionService {
             // 校验收藏引用没有发生并发漂移并记录替换明细
             validateAndLogReferences(replaceBo, "my_security_pool", favoriteIds, updated);
         }
-        // 迁移未删除内部报告的证券归属
+        // 2. 迁移未删除内部报告的证券归属
         List<Long> inReportIds = securityCodeConversionMapper.queryActiveInReportReferenceIdList(replaceBo);
         if (!inReportIds.isEmpty()) {
             int updated = securityCodeConversionMapper.editActiveInReportReference(replaceBo);
             // 校验内部报告引用没有发生并发漂移并记录替换明细
             validateAndLogReferences(replaceBo, "rrs_report_in", inReportIds, updated);
         }
-        // 迁移未删除外部报告的证券归属
+        // 3. 迁移未删除外部报告的证券归属
         List<Long> outReportIds = securityCodeConversionMapper.queryActiveOutReportReferenceIdList(replaceBo);
         if (!outReportIds.isEmpty()) {
             int updated = securityCodeConversionMapper.editActiveOutReportReference(replaceBo);
             // 校验外部报告引用没有发生并发漂移并记录替换明细
             validateAndLogReferences(replaceBo, "rrs_report_out", outReportIds, updated);
         }
-        // 正式码已存在同池待办时失效旧待办，否则直接迁移待办代码
+        // 4. 正式码已存在同池待办时失效旧待办，否则直接迁移待办代码
         List<Long> alertIds = securityCodeConversionMapper.queryOpenGradeRuleAlertReferenceIdList(replaceBo);
         if (!alertIds.isEmpty()) {
             int updated = securityCodeConversionMapper.editOpenGradeRuleAlertReference(replaceBo);
@@ -303,31 +419,55 @@ public class SecurityCodeConversionService {
         }
     }
 
-    /** 校验并记录一类直接引用替换。 */
+    /**
+     * 校验并记录一类直接引用替换
+     *
+     * 执行顺序：
+     * 1. 校验直接引用没有发生并发漂移
+     * 2. 记录直接引用替换明细
+     *
+     * @param replaceBo 本次换码记录，包含旧代码、新代码和操作来源
+     * @param tableName 附件关联的业务表名
+     * @param ids ID 列表
+     * @param updatedRows 换码更新实际影响的记录数，用来与预期记录数核对
+     */
     private void validateAndLogReferences(SecurityCodeConversionBo replaceBo, String tableName,
                                           List<Long> ids, int updatedRows) {
-        // 校验直接引用没有发生并发漂移
+        // 1. 校验直接引用没有发生并发漂移
         validateUpdatedRows(tableName, ids.size(), updatedRows);
-        // 记录直接引用替换明细
+        // 2. 记录直接引用替换明细
         addReplaceLogList(replaceBo, tableName, ids);
     }
 
     /**
-     * 单个池状态执行临时代码出库，正式代码未在同一逻辑池状态时再入库。
+     * 单个池状态执行临时代码出库，正式代码未在同一逻辑池状态时再入库
+     *
+     * 执行顺序：
+     * 1. 为同一池的一出一入生成同一个可追溯批次号
+     * 2. 构建并写入临时代码调出日志
+     * 3. 校验临时代码调出日志写入成功
+     * 4. 校验调出日志已回填主键
+     * 5. 构建正式代码当前池状态，普通池与 CRMW 池使用同一套独立参数
+     * 6. 校验正式代码池状态已回填主键
+     * 7. 记录新建的正式代码池状态
+     *
+     * @param poolStatus 投资池状态
+     * @param replaceBo 本次换码记录，包含旧代码、新代码和操作来源
+     * @param crmwPool 是否为 CRMW 池表
      */
     private void convertOnePoolStatus(SecurityCodeConversionBo poolStatus,
                                        SecurityCodeConversionBo replaceBo,
                                        boolean crmwPool) {
         Date now = replaceBo.getUpdateTime();
-        // 为同一池的一出一入生成同一个可追溯批次号
+        // 1. 为同一池的一出一入生成同一个可追溯批次号
         String conversionBatchNo = buildConversionBatchNo(crmwPool, now);
-        // 构建并写入临时代码调出日志
+        // 2. 构建并写入临时代码调出日志
         SecurityCodeConversionBo outLog = buildTempOutAdjustLog(
                 poolStatus, replaceBo, now, conversionBatchNo);
         int outLogRows = securityCodeConversionMapper.addAdjustLog(outLog);
-        // 校验临时代码调出日志写入成功
+        // 3. 校验临时代码调出日志写入成功
         validateUpdatedRows("ip_adjust_log.tempOut", 1, outLogRows);
-        // 校验调出日志已回填主键
+        // 4. 校验调出日志已回填主键
         validateGeneratedId("ip_adjust_log.tempOut", outLog.getId());
         // 为调出日志复制原提交快照，原快照不存在时从临时证券主数据补建
         addConversionSnapshot(poolStatus, replaceBo, outLog, crmwPool, false);
@@ -375,7 +515,7 @@ public class SecurityCodeConversionService {
         // 记录新建的正式代码调入日志
         addReplaceLog(replaceBo, "ip_adjust_log.formalIn", inLog.getId());
 
-        // 构建正式代码当前池状态，普通池与 CRMW 池使用同一套独立参数
+        // 5. 构建正式代码当前池状态，普通池与 CRMW 池使用同一套独立参数
         SecurityCodeConversionBo newStatus = buildFormalPoolStatus(
                 poolStatus, replaceBo, inLog, now);
         if (crmwPool) {
@@ -387,15 +527,28 @@ public class SecurityCodeConversionService {
             // 校验普通池正式代码状态写入成功
             validateUpdatedRows("ip_pool_status.formalIn", 1, statusRows);
         }
-        // 校验正式代码池状态已回填主键
+        // 6. 校验正式代码池状态已回填主键
         validateGeneratedId(crmwPool ? "ip_pool_status_crmw.formalIn"
                 : "ip_pool_status.formalIn", newStatus.getId());
-        // 记录新建的正式代码池状态
+        // 7. 记录新建的正式代码池状态
         addReplaceLog(replaceBo, crmwPool ? "ip_pool_status_crmw.formalIn"
                 : "ip_pool_status.formalIn", newStatus.getId());
     }
 
-    /** 为代码转换生成的调库日志写入完整证券快照。 */
+    /**
+     * 为代码转换生成的调库日志写入完整证券快照
+     *
+     * 执行顺序：
+     * 1. 正式代码始终从主档新增；临时出库仅在没有旧快照时从临时主档补建
+     * 2. 每个生成的调库日志必须恰好有一条证券快照
+     * 3. 以调库日志主键记录快照创建留痕
+     *
+     * @param poolStatus 投资池状态
+     * @param replaceBo 本次换码记录，包含旧代码、新代码和操作来源
+     * @param targetLog 目标日志
+     * @param crmwPool 是否为 CRMW 池表
+     * @param formal 是否正式
+     */
     private void addConversionSnapshot(SecurityCodeConversionBo poolStatus,
                                        SecurityCodeConversionBo replaceBo,
                                        SecurityCodeConversionBo targetLog,
@@ -411,23 +564,33 @@ public class SecurityCodeConversionService {
                     poolStatus.getAdjustLogId(), targetLog.getId(), targetLog.getAdjusterId(),
                     formal, replaceBo, replaceBo.getUpdateTime());
         }
-        // 正式代码始终从主档新增；临时出库仅在没有旧快照时从临时主档补建
+        // 1. 正式代码始终从主档新增；临时出库仅在没有旧快照时从临时主档补建
         if (formal || inserted == 0) {
             inserted = crmwPool
                     ? securityCodeConversionMapper.addCrmwSecuritySnapshotFromMaster(targetLog, replaceBo.getUpdateTime())
                     : securityCodeConversionMapper.addSecuritySnapshotFromMaster(targetLog.getId(),
                             targetLog.getAdjusterId(), targetLog.getSecurityCode(), replaceBo.getUpdateTime());
         }
-        // 每个生成的调库日志必须恰好有一条证券快照
+        // 2. 每个生成的调库日志必须恰好有一条证券快照
         validateUpdatedRows(crmwPool ? "ip_adjust_security_snapshot_crmw"
                 : "ip_adjust_security_snapshot", 1, inserted);
-        // 以调库日志主键记录快照创建留痕
+        // 3. 以调库日志主键记录快照创建留痕
         addReplaceLog(replaceBo, crmwPool
                 ? "ip_adjust_security_snapshot_crmw.adjustLogId"
                 : "ip_adjust_security_snapshot.adjustLogId", targetLog.getId());
     }
 
-    /** 将原入池日志的有效附件关联复制到正式代码调入日志。 */
+    /**
+     * 将原入池日志的有效附件关联复制到正式代码调入日志
+     *
+     * 执行顺序：
+     * 1. 校验附件关联完整复制
+     * 2. 记录被复制的源附件主键
+     *
+     * @param poolStatus 投资池状态
+     * @param replaceBo 本次换码记录，包含旧代码、新代码和操作来源
+     * @param inLog 调入日志
+     */
     private void copyFormalInAttachments(SecurityCodeConversionBo poolStatus,
                                          SecurityCodeConversionBo replaceBo,
                                          SecurityCodeConversionBo inLog) {
@@ -441,13 +604,23 @@ public class SecurityCodeConversionService {
         }
         int inserted = securityCodeConversionMapper.addFormalInAttachmentList(
                 poolStatus.getAdjustLogId(), inLog.getId(), replaceBo.getUpdateTime());
-        // 校验附件关联完整复制
+        // 1. 校验附件关联完整复制
         validateUpdatedRows("sys_attachment.formalIn", attachmentIds.size(), inserted);
-        // 记录被复制的源附件主键
+        // 2. 记录被复制的源附件主键
         addReplaceLogList(replaceBo, "sys_attachment.copyToFormalIn", attachmentIds);
     }
 
-    /** 生成带业务前缀的代码转换调库批次号。 */
+    /**
+     * 生成带业务前缀的代码转换调库批次号
+     *
+     * 执行顺序：
+     * 1. 普通池使用 BOND 前缀，CRMW 组合池使用 CRMW 前缀
+     * 2. 拼接毫秒时间和八位随机字符生成换码批次号
+     *
+     * @param crmwPool 是否为 CRMW 池表
+     * @param now 本次操作时间
+     * @return 换码批次号
+     */
     private String buildConversionBatchNo(boolean crmwPool, Date now) {
         String prefix = crmwPool ? "CRMW" : "BOND";
         String timeText = new SimpleDateFormat("yyyyMMddHHmmssSSS").format(now);
@@ -455,7 +628,18 @@ public class SecurityCodeConversionService {
         return prefix + timeText + randomText;
     }
 
-    /** 构建临时代码调出日志。 */
+    /**
+     * 构建临时代码调出日志
+     *
+     * 执行顺序：
+     * 1. 组装临时代码调出原因
+     *
+     * @param poolStatus 投资池状态
+     * @param replaceBo 本次换码记录，包含旧代码、新代码和操作来源
+     * @param now 本次操作时间
+     * @param conversionBatchNo 换码批次号
+     * @return 证券代码转换记录
+     */
     private SecurityCodeConversionBo buildTempOutAdjustLog(SecurityCodeConversionBo poolStatus,
                                                  SecurityCodeConversionBo replaceBo,
                                                  Date now,
@@ -490,7 +674,18 @@ public class SecurityCodeConversionService {
         return log;
     }
 
-    /** 构建正式代码调入日志。 */
+    /**
+     * 构建正式代码调入日志
+     *
+     * 执行顺序：
+     * 1. 构建保留原原因的正式代码调入说明
+     *
+     * @param poolStatus 投资池状态
+     * @param replaceBo 本次换码记录，包含旧代码、新代码和操作来源
+     * @param now 本次操作时间
+     * @param conversionBatchNo 换码批次号
+     * @return 证券代码转换记录
+     */
     private SecurityCodeConversionBo buildFormalInAdjustLog(SecurityCodeConversionBo poolStatus,
                                                   SecurityCodeConversionBo replaceBo,
                                                   Date now,
@@ -530,7 +725,18 @@ public class SecurityCodeConversionService {
         return log;
     }
 
-    /** 构建普通池或 CRMW 池正式代码状态。 */
+    /**
+     * 构建普通池或 CRMW 池正式代码状态
+     *
+     * 执行顺序：
+     * 1. 构建保留原原因的正式代码调入说明
+     *
+     * @param oldStatus 旧状态
+     * @param replaceBo 本次换码记录，包含旧代码、新代码和操作来源
+     * @param inLog 调入日志
+     * @param now 本次操作时间
+     * @return 证券代码转换记录
+     */
     private SecurityCodeConversionBo buildFormalPoolStatus(SecurityCodeConversionBo oldStatus,
                                                  SecurityCodeConversionBo replaceBo,
                                                  SecurityCodeConversionBo inLog,
@@ -570,7 +776,16 @@ public class SecurityCodeConversionService {
         return status;
     }
 
-    /** 在原在池原因后补充代码转换信息。 */
+    /**
+     * 在原在池原因后补充代码转换信息
+     *
+     * 执行顺序：
+     * 1. 在原原因后补充代码映射
+     *
+     * @param poolStatus 投资池状态
+     * @param replaceBo 本次换码记录，包含旧代码、新代码和操作来源
+     * @return 正式调入原因
+     */
     private String buildFormalInReason(SecurityCodeConversionBo poolStatus, SecurityCodeConversionBo replaceBo) {
         String baseReason = poolStatus.getAdjustReason() == null
                 || poolStatus.getAdjustReason().trim().isEmpty()
@@ -580,7 +795,16 @@ public class SecurityCodeConversionService {
                 "代码替换：" + poolStatus.getSecurityCode() + "→" + replaceBo.getSecurityCode());
     }
 
-    /** 在业务原因后追加全角括号明细。 */
+    /**
+     * 在业务原因后追加全角括号明细
+     *
+     * 执行顺序：
+     * 1. 在基础原因之后添加全角括号，括号内按原顺序拼接各条明细
+     *
+     * @param baseReason 待追加换码明细的基础调整原因
+     * @param details 明细
+     * @return 原因明细
+     */
     private String appendReasonDetails(String baseReason, String... details) {
         StringBuilder builder = new StringBuilder(baseReason).append('（');
         for (int index = 0; index < details.length; index++) {
@@ -592,18 +816,30 @@ public class SecurityCodeConversionService {
         return builder.append('）').toString();
     }
 
-    /** 构建迁移及替换日志公共参数。 */
+    /**
+     * 构建迁移及替换日志公共参数
+     *
+     * 执行顺序：
+     * 1. 解析临时证券展示名称
+     * 2. 解析临时证券市场
+     * 3. 解析正式证券全称和简称，兼容调用方只提供 securityName
+     *
+     * @param tempSecurity 临时证券
+     * @param req 临时及正式证券信息
+     * @return 证券代码转换记录
+     */
     private SecurityCodeConversionBo buildReplaceBo(SecurityCodeConversionBo tempSecurity,
                                                SecurityCodeConversionReq req) {
         SecurityCodeConversionBo bo = new SecurityCodeConversionBo();
         bo.setTempSecurityCode(req.getTempSecurityCode().trim());
-        // 解析临时证券展示名称
+        // 1. 解析临时证券展示名称
         bo.setTempSecurityName(resolveSecurityName(tempSecurity));
-        // 解析临时证券市场
+        // 2. 解析临时证券市场
         bo.setTempSecurityMarket(req.getTempSecurityMarket().trim());
         bo.setTempSecurityType(tempSecurity.getSecurityType());
-        // 解析正式证券全称和简称，兼容调用方只提供 securityName
+        // 3. 解析正式证券全称和简称，兼容调用方只提供 securityName
         bo.setFullName(resolveFormalFullName(req));
+        // 解析正式证券简称
         bo.setShortName(resolveFormalShortName(req));
         bo.setSecurityName(bo.getShortName());
         bo.setSecurityCode(req.getSecurityCode().trim());
@@ -616,59 +852,101 @@ public class SecurityCodeConversionService {
         return bo;
     }
 
-    /** 解析正式证券全称。 */
+    /**
+     * 解析正式证券全称
+     *
+     * 执行顺序：
+     * 1. 正式全称有内容时去掉首尾空白后使用，否则返回去掉首尾空白的通用名称
+     *
+     * @param req 临时及正式证券信息
+     * @return 正式全称
+     */
     private String resolveFormalFullName(SecurityCodeConversionReq req) {
+        // 判断字符串是否有值
         if (hasText(req.getSecurityFullName())) {
             return req.getSecurityFullName().trim();
         }
         return req.getSecurityName().trim();
     }
 
-    /** 解析正式证券简称。 */
+    /**
+     * 解析正式证券简称
+     *
+     * 执行顺序：
+     * 1. 正式简称有内容时去掉首尾空白后使用，否则返回去掉首尾空白的通用名称
+     *
+     * @param req 临时及正式证券信息
+     * @return 正式简称
+     */
     private String resolveFormalShortName(SecurityCodeConversionReq req) {
+        // 判断字符串是否有值
         if (hasText(req.getSecurityShortName())) {
             return req.getSecurityShortName().trim();
         }
         return req.getSecurityName().trim();
     }
 
-    /** 解析证券展示名称。 */
+    /**
+     * 解析证券展示名称
+     *
+     * 执行顺序：
+     * 1. 优先使用证券简称
+     * 2. 证券简称为空时使用证券全称
+     *
+     * @param security 证券
+     * @return 证券名称
+     */
     private String resolveSecurityName(SecurityCodeConversionBo security) {
-        // 优先使用证券简称
+        // 1. 优先使用证券简称
         if (hasText(security.getShortName())) {
             return security.getShortName().trim();
         }
-        // 证券简称为空时使用证券全称
+        // 2. 证券简称为空时使用证券全称
         if (hasText(security.getFullName())) {
             return security.getFullName().trim();
         }
         return security.getWindCode();
     }
 
-    /** 校验转换请求。 */
+    /**
+     * 校验转换请求
+     *
+     * 执行顺序：
+     * 1. 校验临时代码
+     * 2. 校验正式代码
+     * 3. 校验明确提供的临时市场
+     * 4. 校验正式市场
+     * 5. 校验正式类型
+     * 6. 校验操作来源
+     * 7. 校验操作来源枚举
+     *
+     * @param req 临时及正式证券信息
+     */
     private void validateConversionReq(SecurityCodeConversionReq req) {
         if (req == null) {
             throw new BizException("证券代码转换请求不能为空");
         }
-        // 校验临时代码
+        // 1. 校验临时代码
         validateRequired(req.getTempSecurityCode(), "临时证券代码不能为空");
-        // 校验正式代码
+        // 2. 校验正式代码
         validateRequired(req.getSecurityCode(), "正式证券代码不能为空");
+        // 判断字符串是否有值
         if (!hasText(req.getSecurityName())
+                // 判断字符串是否有值
                 && (!hasText(req.getSecurityFullName()) || !hasText(req.getSecurityShortName()))) {
             throw new BizException("正式证券名称不能为空，须提供 securityName，或同时提供全称和简称");
         }
-        // 校验明确提供的临时市场
+        // 3. 校验明确提供的临时市场
         validateRequired(req.getTempSecurityMarket(), "临时证券市场不能为空");
         if (!MarketCode.isValid(req.getTempSecurityMarket().trim())
                 || MarketCode.UNKNOWN.getCode().equals(req.getTempSecurityMarket().trim())) {
             throw new BizException("临时证券市场不合法，tempSecurityMarket=" + req.getTempSecurityMarket());
         }
-        // 校验正式市场
+        // 4. 校验正式市场
         validateRequired(req.getSecurityMarket(), "正式证券市场不能为空");
-        // 校验正式类型
+        // 5. 校验正式类型
         validateRequired(req.getSecurityType(), "正式证券类型不能为空");
-        // 校验操作来源
+        // 6. 校验操作来源
         validateRequired(req.getOprtSource(), "操作来源不能为空");
         if (req.getTempSecurityCode().trim().equalsIgnoreCase(req.getSecurityCode().trim())) {
             throw new BizException("正式证券代码不能与临时代码相同");
@@ -683,13 +961,21 @@ public class SecurityCodeConversionService {
         if (MarketCode.COMPANY.getCode().equals(req.getSecurityMarket().trim())) {
             throw new BizException("债券正式证券市场不能为主体市场");
         }
-        // 校验操作来源枚举
+        // 7. 校验操作来源枚举
         if (!isValidOprtSource(req.getOprtSource().trim())) {
             throw new BizException("操作来源不合法，oprtSource=" + req.getOprtSource());
         }
     }
 
-    /** 校验必填字符串。 */
+    /**
+     * 校验必填字符串
+     *
+     * 执行顺序：
+     * 1. 判断必填字符串是否有值
+     *
+     * @param value 待统一空值的文本
+     * @param message 返回给调用方的处理信息
+     */
     private void validateRequired(String value, String message) {
         // 判断必填字符串是否有值
         if (!hasText(value)) {
@@ -697,7 +983,15 @@ public class SecurityCodeConversionService {
         }
     }
 
-    /** 判断操作来源是否合法。 */
+    /**
+     * 判断操作来源是否合法
+     *
+     * 执行顺序：
+     * 1. 依次比较各操作来源的枚举编码，找到匹配时返回 true
+     *
+     * @param value 待统一空值的文本
+     * @return true=操作来源在允许范围内，false=操作来源不在允许范围内
+     */
     private boolean isValidOprtSource(String value) {
         for (TempOprtSource item : TempOprtSource.values()) {
             if (item.getCode().equals(value)) {
@@ -707,12 +1001,29 @@ public class SecurityCodeConversionService {
         return false;
     }
 
-    /** 判断字符串是否有值。 */
+    /**
+     * 判断字符串是否有值
+     *
+     * 执行顺序：
+     * 1. 检查文本是否为空，去掉首尾空白后判断是否仍有内容
+     *
+     * @param value 待统一空值的文本
+     * @return true=文本含非空白字符，false=文本为空或只有空白
+     */
     private boolean hasText(String value) {
         return value != null && !value.trim().isEmpty();
     }
 
-    /** 校验批量更新影响行数。 */
+    /**
+     * 校验批量更新影响行数
+     *
+     * 执行顺序：
+     * 1. 校验批量更新影响行数，条件不满足时终止处理
+     *
+     * @param target 目标
+     * @param expected 建表脚本定义的预期表结构
+     * @param actual 实际
+     */
     private void validateUpdatedRows(String target, int expected, int actual) {
         if (expected != actual) {
             throw new BizException("证券代码转换期间数据已变化，target=" + target
@@ -720,14 +1031,29 @@ public class SecurityCodeConversionService {
         }
     }
 
-    /** 校验新增记录已回填主键。 */
+    /**
+     * 校验新增记录已回填主键
+     *
+     * 执行顺序：
+     * 1. 校验新增记录已回填主键，条件不满足时终止处理
+     *
+     * @param target 目标
+     * @param id 登记主键
+     */
     private void validateGeneratedId(String target, Long id) {
         if (id == null) {
             throw new BizException("证券代码转换新增记录未回填主键，target=" + target);
         }
     }
 
-    /** 复核运行态引用已全部迁移。 */
+    /**
+     * 复核运行态引用已全部迁移
+     *
+     * 执行顺序：
+     * 1. 统计迁移后仍引用临时代码的运行数据，数量大于 0 时抛出异常
+     *
+     * @param replaceBo 本次换码记录，包含旧代码、新代码和操作来源
+     */
     private void validateNoRuntimeReference(SecurityCodeConversionBo replaceBo) {
         int count = securityCodeConversionMapper.queryRuntimeReferenceCount(replaceBo);
         if (count > 0) {
@@ -736,7 +1062,17 @@ public class SecurityCodeConversionService {
         }
     }
 
-    /** 写入一条替换日志。 */
+    /**
+     * 写入一条替换日志
+     *
+     * 执行顺序：
+     * 1. 新增证券代码换码日志
+     * 2. 校验转换日志写入成功
+     *
+     * @param replaceBo 本次换码记录，包含旧代码、新代码和操作来源
+     * @param tableName 附件关联的业务表名
+     * @param recordId 原业务主键
+     */
     private void addReplaceLog(SecurityCodeConversionBo replaceBo, String tableName, Long recordId) {
         replaceBo.setReplaceTableName(tableName);
         replaceBo.setReplaceRecordId(recordId);
@@ -745,7 +1081,16 @@ public class SecurityCodeConversionService {
         validateUpdatedRows("rrs_temp_security_code_update_log", 1, inserted);
     }
 
-    /** 批量写入替换日志。 */
+    /**
+     * 批量写入替换日志
+     *
+     * 执行顺序：
+     * 1. 逐项写入一条替换日志
+     *
+     * @param replaceBo 本次换码记录，包含旧代码、新代码和操作来源
+     * @param tableName 附件关联的业务表名
+     * @param recordIds 记录ID 列表
+     */
     private void addReplaceLogList(SecurityCodeConversionBo replaceBo,
                                    String tableName,
                                    List<Long> recordIds) {

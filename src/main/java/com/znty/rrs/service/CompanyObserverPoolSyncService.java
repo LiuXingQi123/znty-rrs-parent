@@ -39,53 +39,73 @@ import org.springframework.transaction.interceptor.TransactionAspectSupport;
 import org.springframework.util.StringUtils;
 
 /**
- * 主体观察名单同步
+ * 主体观察名单同步（仅主体）
  *
- * 根据主体观察名单同步观察池、重点观察名单及关系池
- * 1. 按观察类型把主体调入对应目标池，类型变更、类型1、空值或名单移除时退出原对应池
- * 2. 旗下债券由独立任务根据已生效的主体池状态同步
- * 3. 先调出不符合观察类型的主体，再调入符合观察类型的主体
- * 4. 调入、调出限制池或关系校验不通过时整轮回滚，弹性禁投池命中只记录警告
- * 5. 发行主体编码为空的脏数据只跳过并记录数量，不阻断本轮同步
+ * 执行顺序：
+ * 1. 读取观察名单和目标池配置，按观察类型确定每个主体应在的池，缺少主体编码的记录跳过并计数
+ * 2. 先调出不再匹配的主体，再调入当前匹配的主体，按池关系处理配套调整
+ * 3. 命中弹性禁投只记录警告，调入调出限制或池关系校验不通过时整轮回滚
+ * 4. 汇总本轮主体进出池，旗下债券由独立任务按生效主体状态同步
  */
 @Slf4j
 @Service
 public class CompanyObserverPoolSyncService implements RrsScheduledTask {
     /** 定时任务编码 */
     public static final String TASK_CODE = "company_observer_pool_sync";
+
     /** 任务名称 */
     public static final String TASK_NAME = "主体观察名单同步（仅主体）";
+
     /** 扩展参数 JSON 解析器 */
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+
     /** 批量预读编码上限，避免为每个主体单独查询或生成过长的 IN 条件 */
     private static final int QUERY_BATCH_SIZE = 1000;
+
     /** 过程日志中发行主体编码为空记录的示例条数上限，避免脏数据多时刷屏 */
     private static final int MISSING_ISSUER_SAMPLE_SIZE = 5;
 
     /** AIS 观察名单查询 */
     @Resource
     private CompanyObserverMapper companyObserverMapper;
+
     /** 调库日志及普通池状态写入 */
     @Resource
     private SecurityPoolAdjustMapper securityPoolAdjustMapper;
 
+    /** 读取观察名单同步应遵守的 Excel 入池保护记录 */
     @Resource
     private ExcelPoolExclusionService excelPoolExclusionService;
 
     /** 投资池配置查询 */
     @Resource
     private InvestmentPoolMapper investmentPoolMapper;
+
     /** 定时任务扩展参数查询 */
     @Resource
     private ScheduledTaskMapper scheduledTaskMapper;
 
-    /** 返回主体观察名单同步任务编码 */
+    /**
+     * 返回主体观察名单同步任务编码
+     *
+     * 执行顺序：
+     * 1. 返回当前任务定义的固定编码
+     *
+     * @return 任务编码
+     */
     @Override
     public String getTaskCode() {
         return TASK_CODE;
     }
 
-    /** 返回主体观察名单同步的参数说明和业务规则 */
+    /**
+     * 返回主体观察名单同步的参数说明和业务规则
+     *
+     * 执行顺序：
+     * 1. 返回当前任务定义的参数说明
+     *
+     * @return 任务参数说明
+     */
     @Override
     public String getParamHelp() {
         return "1. 参数格式：JSON 对象，默认配置 <code>{\"observePoolId\":16,\"keyObservePoolId\":23}</code>\n"
@@ -145,6 +165,14 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
     /**
      * 查询观察名单，按先出后入顺序同步主体及关系池
      *
+     * 执行顺序：
+     * 1. 读取观察池、重点观察名单的目标池配置
+     * 2. 校验目标池，查询联动池和互斥池所需的投资池信息
+     * 3. 查询观察名单，校验主体信息和观察类型
+     * 4. 合并观察名单主体、目标池内主体
+     * 5. 批量读取本轮主体所在池，后续业务循环不再查询数据库
+     * 6. 先调出不符合观察类型的主体，再调入符合观察类型的主体
+     * 7. 汇总各池的主体进出池数量
      *
      * @param detail 任务过程日志
      * @return 本轮同步结果
@@ -166,7 +194,7 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
         int missingIssuerCount = 0;
         List<String> missingIssuerSamples = new ArrayList<>();
         for (ScheduledAdjustCandidateDto company : companyObserverMapper.queryCurrentCompanyList(poolIds)) {
-            // 4.1 发行主体编码为空时只记录警告并跳过，避免单条脏数据导致整轮任务失败
+            // 发行主体编码为空时只记录警告并跳过，避免单条脏数据导致整轮任务失败
             if (!StringUtils.hasText(company.getSecurityCode())) {
                 missingIssuerCount++;
                 if (missingIssuerSamples.size() < MISSING_ISSUER_SAMPLE_SIZE) {
@@ -194,18 +222,18 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
                 + (missingIssuerCount > 0 ? "，跳过发行主体编码为空记录 " + missingIssuerCount + " 条" : ""));
         // 5. 查询关系池配置，准备主体批次和进出池统计
         SyncContext context = new SyncContext(pools, poolIds, securityPoolAdjustMapper.queryAllPoolRelationList(), detail);
-        // 5.1 批量读取本轮主体所在池，后续业务循环不再查询数据库
+        // 批量读取本轮主体所在池，后续业务循环不再查询数据库
         loadSyncData(new ArrayList<>(companies.keySet()), context);
         // 6. 先调出不符合观察类型的主体，再调入符合观察类型的主体
         for (boolean inbound : new boolean[]{false, true}) {
             for (ScheduledAdjustCandidateDto company : companies.values()) {
                 CompanyObserverDto observer = observers.get(company.getSecurityCode());
                 Long desiredPoolId = observer == null ? null : observerPools.get(observer.getObserverType());
-                // 6.1 确定本主体计划调入的目标池和联动池，用于来源池、调入互斥池校验
+                // 确定本主体计划调入的目标池和联动池，用于来源池、调入互斥池校验
                 context.requestInPoolIds = resolveRequestInPoolIds(desiredPoolId, context);
                 for (Long poolId : poolIds) {
                     if (inbound == poolId.equals(desiredPoolId)) {
-                        // 6.2 同步目标池及其调入、调出联动池
+                        // 同步目标池及其调入、调出联动池
                         syncSourcePool(company, observer, pools.get(poolId), inbound, context);
                     }
                 }
@@ -215,7 +243,16 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
         return buildSyncResult(context, missingIssuerCount);
     }
 
-    /** 按编码分批预读本轮主体池状态，数据仅在当前任务事务内使用 */
+    /**
+     * 按编码分批预读本轮主体池状态，数据仅在当前任务事务内使用
+     *
+     * 执行顺序：
+     * 1. 批量取得本轮主体已生效的 Excel 入池保护记录
+     * 2. 分批读取主体在池状态，写入任务上下文并记录读取次数
+     *
+     * @param companyCodes 主体代码列表
+     * @param context 本轮同步共用数据，用于记录主体在池状态、Excel 保护池和查询明细
+     */
     private void loadSyncData(List<String> companyCodes, SyncContext context) {
         List<String> codes = companyCodes;
         Set<Long> protectedStatusIds = codes.isEmpty() ? Collections.emptySet()
@@ -236,18 +273,48 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
         context.detail.line("批量预读完成：主体池状态查询" + statusQueryCount + "次，每批最多" + QUERY_BATCH_SIZE + "个编码");
     }
 
-    /** 取得本轮实时所在池的副本，避免原始来源池快照被后续调库覆盖 */
+    /**
+     * 取得本轮实时所在池的副本，避免原始来源池快照被后续调库覆盖
+     *
+     * 执行顺序：
+     * 1. 按证券代码读取本轮已记录的池集合，没有记录时初始化为空，再复制为列表返回
+     *
+     * @param securityCode 证券代码
+     * @param context 本轮同步共用数据，包含按主体代码整理的当前在池状态
+     * @return 当前投资池ID 列表
+     */
     private List<Long> getCurrentPoolIds(String securityCode, SyncContext context) {
         return new ArrayList<>(context.currentPoolIds.computeIfAbsent(securityCode, key -> new LinkedHashSet<>()));
     }
 
-    /** 直接读取本轮预分组的关系池，不在每次主体校验时遍历全量配置 */
+    /**
+     * 直接读取本轮预分组的关系池，不在每次主体校验时遍历全量配置
+     *
+     * 执行顺序：
+     * 1. 按来源池和关系类型从本轮索引取目标池 ID，无对应配置时返回空列表
+     *
+     * @param poolId 目标投资池 ID
+     * @param relationType 关系类型常量（RelationType.IN_RESTRICT.getCode() / RelationType.OUT_RESTRICT.getCode() 等）
+     * @param context 本轮同步共用数据，包含按池和关系类型整理的关联池 ID
+     * @return 关系投资池ID 列表
+     */
     private List<Long> resolveRelationPoolIds(Long poolId, String relationType, SyncContext context) {
         return context.relationPoolIds.getOrDefault(poolId, Collections.emptyMap())
                 .getOrDefault(relationType, Collections.emptyList());
     }
 
-    /** 汇总各投资池的主体进出池数量 */
+    /**
+     * 汇总各投资池的主体进出池数量
+     *
+     * 执行顺序：
+     * 1. 按投资池统计主体和债券的实际进出池数量
+     * 2. 执行结果中标注被跳过的发行主体编码为空记录，便于回查数据
+     * 3. 生成本轮任务的汇总说明
+     *
+     * @param context 本轮同步共用数据，包含投资池名称和逐池同步统计
+     * @param missingIssuerCount 因缺少发行主体代码而跳过的记录数
+     * @return 本轮同步的入池、出池及跳过数量汇总
+     */
     private SyncResult buildSyncResult(SyncContext context, int missingIssuerCount) {
         // 1. 按投资池统计主体和债券的实际进出池数量
         SyncResult result = new SyncResult();
@@ -273,7 +340,17 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
         return result;
     }
 
-    /** 查询本主体计划调入的目标池和调入联动池 */
+    /**
+     * 查询本主体计划调入的目标池和调入联动池
+     *
+     * 执行顺序：
+     * 1. 有目标池时先将该池纳入拟调入范围
+     * 2. 从本轮已整理的关系配置补入调入联动池，无目标池时返回空集合
+     *
+     * @param desiredPoolId ID
+     * @param context 本轮同步共用数据，包含目标池的调入联动关系
+     * @return 本主体计划调入的目标池和调入联动池集合
+     */
     private Set<Long> resolveRequestInPoolIds(Long desiredPoolId, SyncContext context) {
         // 1. 确定观察类型对应的目标池
         Set<Long> poolIds = new LinkedHashSet<>();
@@ -285,7 +362,18 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
         return poolIds;
     }
 
-    /** 读取并校验观察池、重点观察名单的目标池参数 */
+    /**
+     * 读取并校验观察池、重点观察名单的目标池参数
+     *
+     * 执行顺序：
+     * 1. 查询本任务保存的扩展参数
+     * 2. 校验JSON格式和参数名称
+     * 3. 读取观察类型对应的目标池
+     * 4. 读取重点观察类型对应的目标池
+     * 5. 校验至少配置一类目标池，且两类目标池不同
+     *
+     * @return 按观察类型索引的目标池 ID
+     */
     private Map<String, Long> queryObserverPoolMappings() {
         // 1. 查询本任务保存的扩展参数
         SysScheduledTaskBo task = scheduledTaskMapper.queryTaskByCode(TASK_CODE);
@@ -310,7 +398,7 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
         Map<String, Long> result = new LinkedHashMap<>();
         // 3. 读取观察类型对应的目标池
         appendObserverPoolMapping(result, root, "observePoolId", CompanyObserverType.OBSERVE.getCode());
-        // 3.1 读取重点观察类型对应的目标池
+        // 读取重点观察类型对应的目标池
         appendObserverPoolMapping(result, root, "keyObservePoolId", CompanyObserverType.KEY_OBSERVE.getCode());
         // 4. 校验至少配置一类目标池，且两类目标池不同
         if (result.isEmpty()) {
@@ -322,7 +410,19 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
         return result;
     }
 
-    /** 校验并保存单个观察类型对应的目标池 ID */
+    /**
+     * 校验并保存单个观察类型对应的目标池 ID
+     *
+     * 执行顺序：
+     * 1. 省略或为空的目标池不加入本轮同步范围
+     * 2. 校验目标池ID为Long范围内的正整数
+     * 3. 保存观察类型与目标池的对应关系
+     *
+     * @param mappings 按文本索引的ID
+     * @param root 参数根节点
+     * @param field 字段名
+     * @param observerType 观察名单类型
+     */
     private void appendObserverPoolMapping(Map<String, Long> mappings, JsonNode root, String field, String observerType) {
         // 1. 省略或为空的目标池不加入本轮同步范围
         JsonNode value = root.get(field);
@@ -337,7 +437,16 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
         mappings.put(observerType, value.longValue());
     }
 
-    /** 查询投资池，校验本任务目标池是否可用 */
+    /**
+     * 查询投资池，校验本任务目标池是否可用
+     *
+     * 执行顺序：
+     * 1. 查询投资池信息，供目标池、联动池和互斥池使用
+     * 2. 校验目标池已启用、未删除，且支持主体进出池
+     *
+     * @param poolIds 待处理的投资池 ID 列表
+     * @return 必填投资池映射
+     */
     private Map<Long, InvestmentPoolBo> queryRequiredPools(List<Long> poolIds) {
         // 1. 查询投资池信息，供目标池、联动池和互斥池使用
         Map<Long, InvestmentPoolBo> pools = new LinkedHashMap<>();
@@ -355,7 +464,14 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
         return pools;
     }
 
-    /** 查询观察名单，校验主体信息、观察类型及主体是否重复 */
+    /**
+     * 查询观察名单，校验主体信息、观察类型及主体是否重复
+     *
+     * 执行顺序：
+     * 1. 逐项查询主体观察名单列表
+     *
+     * @return 按主体代码索引的有效观察名单记录
+     */
     private Map<String, CompanyObserverDto> queryValidatedObservers() {
         Map<String, CompanyObserverDto> result = new LinkedHashMap<>();
         for (CompanyObserverDto observer : companyObserverMapper.queryCompanyObserverList()) {
@@ -381,7 +497,21 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
         return result;
     }
 
-    /** 同步观察类型对应的目标池及调入、调出联动池 */
+    /**
+     * 同步观察类型对应的目标池及调入、调出联动池
+     *
+     * 执行顺序：
+     * 1. 同一主体、目标池及调整方向只处理一次
+     * 2. 生成主体和关系池共用的调库批次及调整原因
+     * 3. 同步主体在目标池中的状态
+     * 4. 调入时补齐联动池，调出时仅在目标池实际出池后联动调出
+     *
+     * @param company 入池候选（含命中标记与孰低外评）
+     * @param observer 观察名单
+     * @param pool 目标投资池
+     * @param inbound 是否为调入
+     * @param context 本轮同步共用数据，包含已处理组合、批次号和 Excel 保护池
+     */
     private void syncSourcePool(ScheduledAdjustCandidateDto company, CompanyObserverDto observer,
                                 InvestmentPoolBo pool, boolean inbound, SyncContext context) {
         String mode = inbound ? AdjustMode.IN.getCode() : AdjustMode.OUT.getCode();
@@ -401,17 +531,33 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
         // 4. 调入时补齐联动池，调出时仅在目标池实际出池后联动调出
         if ((inbound || changed) && !context.protectedPools.getOrDefault(companyCode, Collections.emptySet())
                 .contains(pool.getId())) {
-            // 4.1 按调入、调出联动池配置同步主体
+            // 按调入、调出联动池配置同步主体
             syncLinkedPools(company, pool, inbound, batchNo, reason, context);
         }
     }
 
-    /** 按调入、调出联动池配置，同批同步主体 */
+    /**
+     * 按调入、调出联动池配置，同批同步主体
+     *
+     * 执行顺序：
+     * 1. 按调整方向查询调入联动池或调出联动池
+     * 2. 直接读取本轮预分组的关系池，不在每次主体校验时遍历全量配置
+     * 3. 逐项追加明细
+     * 4. 同步主体进出池，返回是否发生实际调整
+     *
+     * @param company 入池候选（含命中标记与孰低外评）
+     * @param sourcePool 来源投资池
+     * @param inbound 是否为调入
+     * @param batchNo 当前调库批次号
+     * @param reason 本次校验产生的原因或提示
+     * @param context 本轮同步共用数据，包含池关系、池索引和已处理组合
+     */
     private void syncLinkedPools(ScheduledAdjustCandidateDto company, InvestmentPoolBo sourcePool,
                                  boolean inbound, String batchNo, String reason, SyncContext context) {
         String mode = inbound ? AdjustMode.IN.getCode() : AdjustMode.OUT.getCode();
         // 1. 按调整方向查询调入联动池或调出联动池
         String relationType = inbound ? RelationType.IN_LINKED.getCode() : RelationType.OUT_LINKED.getCode();
+        // 直接读取本轮预分组的关系池，不在每次主体校验时遍历全量配置
         List<Long> linkedPoolIds = resolveRelationPoolIds(sourcePool.getId(), relationType, context);
         context.detail.line("联动扫描：源池=" + sourcePool.getPoolName() + "，方向=" + mode + "，配置池=" + linkedPoolIds);
         for (Long linkedPoolId : linkedPoolIds) {
@@ -434,7 +580,23 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
         }
     }
 
-    /** 同步主体进出池，返回是否发生实际调整 */
+    /**
+     * 同步主体进出池，返回是否发生实际调整
+     *
+     * 执行顺序：
+     * 1. 先取得主体及其当前在池、原始在池和保护范围
+     * 2. 根据目标方向和当前状态决定是否写池记录，调入时同步互斥关系
+     * 3. 返回目标池的主体状态是否实际发生变化
+     *
+     * @param company 入池候选（含命中标记与孰低外评）
+     * @param pool 目标投资池
+     * @param inbound 是否为调入
+     * @param batchNo 当前调库批次号
+     * @param reason 本次校验产生的原因或提示
+     * @param linked 是否关联
+     * @param context 本轮同步共用数据，包含主体状态、保护池、池关系及处理统计
+     * @return true=实际更新了主体在池状态，false=未更新主体在池状态
+     */
     private boolean syncCompany(ScheduledAdjustCandidateDto company, InvestmentPoolBo pool,
                                         boolean inbound, String batchNo, String reason, boolean linked,
                                         SyncContext context) {
@@ -468,7 +630,20 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
         return changed;
     }
 
-    /** 根据调入互斥池和反向调入限制池配置，调出主体及债券 */
+    /**
+     * 根据调入互斥池和反向调入限制池配置，调出主体及债券
+     *
+     * 执行顺序：
+     * 1. 查询调入互斥池，以及将本次调入池配置为调入限制池的投资池
+     * 2. 逐项追加明细
+     * 3. 校验关系池，写入主体或债券的调库记录和池状态
+     *
+     * @param item 明细
+     * @param inboundPool 入池投资池
+     * @param batchNo 当前调库批次号
+     * @param reason 本次校验产生的原因或提示
+     * @param context 本轮同步共用数据，包含调入触发的关系池、当前在池状态和处理统计
+     */
     private void syncInboundMutexPools(ScheduledAdjustCandidateDto item, InvestmentPoolBo inboundPool,
                                        String batchNo, String reason, SyncContext context) {
         // 1. 查询调入互斥池，以及将本次调入池配置为调入限制池的投资池
@@ -499,7 +674,25 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
         }
     }
 
-    /** 校验关系池，写入主体或债券的调库记录和池状态 */
+    /**
+     * 校验关系池，写入主体或债券的调库记录和池状态
+     *
+     * 执行顺序：
+     * 1. 校验来源池、调入调出限制池、调出互斥池、调入调出弹性禁投池
+     * 2. 写入审批通过的主体或债券调库记录
+     * 3. 调入时新增池状态，调出时软删除池状态
+     * 4. 写入成功后立即维护本轮实时状态，后续联动、互斥及限制校验读取最新结果
+     *
+     * @param item 明细
+     * @param pool 目标投资池
+     * @param inbound 是否为调入
+     * @param batchNo 当前调库批次号
+     * @param reason 本次校验产生的原因或提示
+     * @param adjustType 调库来源
+     * @param currentPools 当前投资池列表
+     * @param context 本轮同步共用数据，提供池关系校验、统一提交时间和生效状态缓存
+     * @return 本次调库日志
+     */
     private IpAdjustLogBo applyChange(ScheduledAdjustCandidateDto item, InvestmentPoolBo pool, boolean inbound,
                                       String batchNo, String reason, String adjustType, List<Long> currentPools,
                                       SyncContext context) {
@@ -532,7 +725,7 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
         if (changed != 1) {
             throw new BizException("主体[" + item.getSecurityCode() + "]" + mode + "池状态写入条数异常：" + changed);
         }
-        // 3.1 写入成功后立即维护本轮实时状态，后续联动、互斥及限制校验读取最新结果
+        // 写入成功后立即维护本轮实时状态，后续联动、互斥及限制校验读取最新结果
         Set<Long> currentPoolIds = context.currentPoolIds.computeIfAbsent(item.getSecurityCode(), key -> new LinkedHashSet<>());
         if (inbound) {
             currentPoolIds.add(pool.getId());
@@ -543,11 +736,26 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
         return adjustLog;
     }
 
-    /** 来源池、调入调出限制池、调出互斥池、调入调出弹性禁投池的相关校验 */
+    /**
+     * 来源池、调入调出限制池、调出互斥池、调入调出弹性禁投池的相关校验
+     *
+     * 执行顺序：
+     * 1. 来源池校验：调入时须满足至少一个配置的来源池
+     * 2. 调入、调出限制池校验：命中对应方向的限制池时不允许调整
+     * 3. 调出互斥池校验：仍在调出互斥池时不允许调出
+     * 4. 调入、调出弹性禁投池校验：命中时记录主体警告
+     *
+     * @param item 明细
+     * @param pool 目标投资池
+     * @param inbound 是否为调入
+     * @param currentPools 当前投资池列表
+     * @param context 本轮同步共用数据，包含调库前的池状态、本次拟调入池和池关系
+     */
     private void validatePoolRelations(ScheduledAdjustCandidateDto item, InvestmentPoolBo pool, boolean inbound,
                                        List<Long> currentPools, SyncContext context) {
         // 1. 来源池校验：调入时须满足至少一个配置的来源池
         if (inbound) {
+            // 直接读取本轮预分组的关系池，不在每次主体校验时遍历全量配置
             List<Long> sourcePools = resolveRelationPoolIds(pool.getId(), RelationType.SOURCE.getCode(), context);
             List<Long> originalPools = context.originalPools.get(item.getSecurityCode());
             if (!sourcePools.isEmpty() && !AutoAdjustRestrictHelper.isInAnyPool(currentPools, sourcePools)
@@ -558,6 +766,7 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
         }
         // 2. 调入、调出限制池校验：命中对应方向的限制池时不允许调整
         String restrictType = inbound ? RelationType.IN_RESTRICT.getCode() : RelationType.OUT_RESTRICT.getCode();
+        // 直接读取本轮预分组的关系池，不在每次主体校验时遍历全量配置
         List<Long> restrictPools = resolveRelationPoolIds(pool.getId(), restrictType, context);
         if (AutoAdjustRestrictHelper.isInAnyPool(currentPools, restrictPools)) {
             throw new BizException("主体[" + item.getSecurityCode() + "]命中" + pool.getPoolName()
@@ -565,6 +774,7 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
         }
         // 3. 调出互斥池校验：仍在调出互斥池时不允许调出
         if (!inbound) {
+            // 直接读取本轮预分组的关系池，不在每次主体校验时遍历全量配置
             List<Long> outMutexPools = resolveRelationPoolIds(pool.getId(), RelationType.OUT_MUTEX.getCode(), context);
             if (AutoAdjustRestrictHelper.isInAnyPool(currentPools, outMutexPools)) {
                 throw new BizException("主体[" + item.getSecurityCode() + "]命中" + pool.getPoolName() + "的调出互斥池：" + outMutexPools);
@@ -572,6 +782,7 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
         }
         // 4. 调入、调出弹性禁投池校验：命中时记录主体警告
         String softType = inbound ? RelationType.IN_SOFT_RESTRICT.getCode() : RelationType.OUT_SOFT_RESTRICT.getCode();
+        // 直接读取本轮预分组的关系池，不在每次主体校验时遍历全量配置
         List<Long> softPools = resolveRelationPoolIds(pool.getId(), softType, context);
         if (AutoAdjustRestrictHelper.isInAnyPool(currentPools, softPools)) {
             context.detail.line("WARN", "主体[" + item.getSecurityCode() + "]命中" + pool.getPoolName()
@@ -579,7 +790,12 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
         }
     }
 
-    /** 执行失败时回滚本轮调库记录和池状态 */
+    /**
+     * 执行失败时回滚本轮调库记录和池状态
+     *
+     * 执行顺序：
+     * 1. 将当前事务标记为只回滚，没有事务时仅记调试日志
+     */
     private void markTransactionRollbackOnly() {
         try {
             // 1. 标记本轮事务回滚，撤销已写入的调库记录和池状态
@@ -589,32 +805,59 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
         }
     }
 
-    /** 本轮任务的投资池配置、主体批次和进出池统计 */
+    /**
+     * 保存本轮观察池同步共用的数据
+     *
+     * 预先整理池关系和 Excel 保护范围，记录主体原有及本轮变更后的池状态，供来源和互斥校验复用
+     * 同一主体、目标池和方向只处理一次，批次和统计随本轮同步维护
+     */
     private static final class SyncContext {
         /** 全量池配置 */
         private final Map<Long, InvestmentPoolBo> pools;
+
         /** 按投资池和关系类型分组的有效关系 */
         private final Map<Long, Map<String, List<Long>>> relationPoolIds = new LinkedHashMap<>();
+
         /** 各池调入后须配套调出的互斥池及反向限制池 */
         private final Map<Long, List<Long>> inboundAutoOutPoolIds = new LinkedHashMap<>();
+
         /** 本轮实时池状态，数据库写入成功后同步更新 */
         private final Map<String, Set<Long>> protectedPools = new LinkedHashMap<>();
 
+        /** 按主体代码保存本轮实时在池的投资池 ID */
         private final Map<String, Set<Long>> currentPoolIds = new LinkedHashMap<>();
+
         /** 按主体、原目标池和调整方向分组的调库批次 */
         private final ScheduledAdjustBatchNoContext batches = new ScheduledAdjustBatchNoContext();
+
         /** 已处理的主体、目标池及方向，避免重复联动 */
         private final Set<String> processed = new LinkedHashSet<>();
+
         /** 每个调整对象本轮首次读取的在池状态，用于先出后入时保留来源池依据 */
         private final Map<String, List<Long>> originalPools = new LinkedHashMap<>();
+
         /** 当前主体同批计划调入的目标池和联动池 */
         private Set<Long> requestInPoolIds = new LinkedHashSet<>();
+
         /** 各投资池的实际调整数量 */
         private final Map<Long, SyncSummary> summaries = new LinkedHashMap<>();
+
         /** 本轮过程日志 */
         private final TaskDetailLog detail;
 
-        /** 初始化一轮同步上下文 */
+        /**
+         * 初始化一轮同步上下文
+         *
+         * 执行顺序：
+         * 1. 保存投资池配置和本轮任务的日志记录器
+         * 2. 按目标池和关系类型整理可用的关联池配置，并为各池计算调入后应自动调出的关系池
+         * 3. 为本轮扫描的每个池初始化统计
+         *
+         * @param pools 按池 ID 整理的投资池配置
+         * @param poolIds 本轮需要初始化统计的池 ID
+         * @param relations 可用于本轮计算的投资池关系
+         * @param detail 本轮任务的过程日志记录器
+         */
         private SyncContext(Map<Long, InvestmentPoolBo> pools, List<Long> poolIds,
                             List<PoolRelationBo> relations, TaskDetailLog detail) {
             // 1. 保存本轮使用的投资池、关系池配置和过程日志
@@ -640,20 +883,31 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
         }
     }
 
-    /** 一轮同步的结果摘要 */
+    /**
+     * 记录一轮观察池同步的执行摘要
+     *
+     * 将来源池及联动池的实际变化条数与按目标池汇总的说明一起返回
+     */
     private static final class SyncResult {
         /** 包含源池及联动池实际变化的总条数 */
         private int affectedCount;
+
         /** 按实际目标池汇总的说明 */
         private String message;
     }
 
-    /** 单个目标池的主体及关系池实际调整数量 */
+    /**
+     * 记录单个投资池在观察池同步任务中的主体调库数量
+     *
+     * 分别累计主体调入、主体调出及由调入互斥或反向限制触发的出池，供任务汇总
+     */
     private static final class SyncSummary {
         /** 主体入池数 */
         private int companyIn;
+
         /** 主体出池数 */
         private int companyOut;
+
         /** 主体因调入互斥池、反向调入限制池配置产生的出池数 */
         private int relationOut;
     }

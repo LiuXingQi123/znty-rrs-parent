@@ -15,7 +15,10 @@ import java.util.Map;
 import java.util.regex.Pattern;
 
 /**
- * 公共文件服务：classpath 模板下载等
+ * 提供业务页面的公共模板文件下载
+ *
+ * 页面用模板编码选择文件，本类只从已登记的应用资源中读取模板
+ * 返回下载文件名及文件内容，模板编码不合法或文件缺失时返回业务错误
  */
 @Service
 public class CommonFileService {
@@ -38,8 +41,17 @@ public class CommonFileService {
 
     /**
      * 按模板编码下载 classpath 下模板文件（Base64）
+     *
+     * 执行顺序：
+     * 1. 检查模板编码是否缺失，去掉首尾空白、转成小写后校验格式
+     * 2. 用模板编码查找已登记的文件，未登记或文件不存在时提示错误
+     * 3. 读取模板内容，返回文件名、类型、大小和 Base64 内容，读取失败时提示原因
+     *
+     * @param req 模板下载请求，包含页面选择的模板编码
+     * @return 模板文件名、内容类型、字节数和 Base64 内容
      */
     public CommonFileDto downloadTemplate(CommonFileReq req) {
+        // 1. 校验并规范化模板编码
         if (req == null || req.getTemplateCode() == null || req.getTemplateCode().trim().isEmpty()) {
             throw new BizException("模板编码不能为空");
         }
@@ -47,6 +59,7 @@ public class CommonFileService {
         if (!TEMPLATE_CODE_PATTERN.matcher(code).matches()) {
             throw new BizException("模板编码不合法");
         }
+        // 2. 从已登记的路径定位模板文件
         String path = TEMPLATE_PATH_MAP.get(code);
         if (path == null) {
             throw new BizException("未知模板编码：" + code);
@@ -55,6 +68,7 @@ public class CommonFileService {
         if (!resource.exists()) {
             throw new BizException("模板文件不存在：" + code);
         }
+        // 3. 读取文件并组装下载结果
         try (InputStream in = resource.getInputStream()) {
             byte[] bytes = StreamUtils.copyToByteArray(in);
             CommonFileDto dto = new CommonFileDto();

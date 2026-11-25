@@ -63,14 +63,31 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 
-/** 单券页面和批量服务共用的证券准入条件与流程判定 */
+/**
+ * 为单券和批量调库提供共用的证券准入规则
+ *
+ * 本类是证券调库规则校验服务，核对证券类型、市场、在途申请和池状态等条件，再判断调入调出限制及可用的审批流程
+ * 单券入口由 {@link SecurityPoolAdjustService} 调用，批量入口可以复用 {@link BatchSecurityCheckService} 已加载的查询结果
+ */
 @Service
 class SecurityPoolCheckRules {
 
+    /** 证券存在未结束调库流程时使用的校验提示 */
     static final String PENDING_PROCESS_FAILURE = "证券存在进行中的调库流程";
+
+    /** 证券已在目标池时使用的重复调入提示 */
     static final String ALREADY_IN_POOL_FAILURE = "证券已在目标投资池中";
 
-    /** 判断 Excel 导入仍需拦截的业务校验结果 */
+    /**
+     * 判断 Excel 导入仍需拦截的业务校验结果
+     *
+     * 执行顺序：
+     * 1. 检查失败原因中是否包含在途流程或已在池问题
+     *
+     * @param item 当前主项
+     * @param pendingProcessFailure 在途流程失败
+     * @return true=校验结果中有 Excel 导入必须阻断的问题，false=没有 Excel 导入必须阻断的问题
+     */
     static boolean hasExcelBlockingFailure(AdjustCheckDto.CheckResultItem item, String pendingProcessFailure) {
         return item.getFailReasons() != null && item.getFailReasons().stream().anyMatch(reason ->
                 reason.startsWith(pendingProcessFailure) || ALREADY_IN_POOL_FAILURE.equals(reason));
@@ -84,16 +101,22 @@ class SecurityPoolCheckRules {
 
     /** 简易入库的历史回看天数 */
     static final int SIMPLE_INBOUND_HISTORY_DAYS = 180;
+
     /** 白名单入库流程 */
     private static final String FLOW_KEY_WHITELIST_INBOUND = "bond:whitelist-inbound";
+
     /** 是否启用白名单入库流程 */
     private static final boolean WHITELIST_FLOW_ENABLED = false;
+
     /** 白名单资格对应的池 ID */
     private static final Set<Long> WHITELIST_POOL_IDS = Collections.emptySet();
+
     /** 标准入库升级流程 */
     private static final String FLOW_KEY_STANDARD_UPGRADE = "bond:standard-upgrade";
+
     /** 标准入库降级流程 */
     private static final String FLOW_KEY_STANDARD_DOWNGRADE = "bond:standard-downgrade";
+
     /** 特殊入库流程 */
     private static final String FLOW_KEY_SPECIAL_INBOUND = "bond:special-inbound";
 
@@ -125,10 +148,27 @@ class SecurityPoolCheckRules {
     @Resource
     private RatingDowngradeChecker ratingDowngradeChecker;
 
+    /**
+     * 创建由 Spring 注入依赖和配置的证券调库规则组件
+     */
     SecurityPoolCheckRules() {
     }
 
-    /** 由已有单券依赖组装判定器，供直接构造服务的调用方使用 */
+    /**
+     * 供调用方用已有的单券依赖构造校验组件
+     *
+     * 执行顺序：
+     * 1. 将调用方给出的依赖和 CRMW 开关与近期信评要求的默认值一并交给完整构造器
+     *
+     * @param securityPoolAdjustMapper 证券调库数据查询组件
+     * @param securityMarketService 证券市场关系查询服务
+     * @param flowMapper 流程配置查询组件
+     * @param creditBondGradeRuleMapper 信用债评级矩阵查询组件
+     * @param absIdentityService ABS 主体身份校验服务
+     * @param pledgeBlacklistRuleService 黑名单质押库规则服务
+     * @param ratingDowngradeChecker 发行主体及担保人评级下调校验组件
+     * @param crmwUsePoolStatus 是否认可普通池状态中的 CRMW 作为快速入库来源
+     */
     SecurityPoolCheckRules(SecurityPoolAdjustMapper securityPoolAdjustMapper,
                            SecurityMarketService securityMarketService,
                            FlowMapper flowMapper,
@@ -142,7 +182,22 @@ class SecurityPoolCheckRules {
                 BusinessSwitches.SIMPLE_INBOUND_RECENT_REPORT_REQUIRED);
     }
 
-    /** 由完整参数组装判定器 */
+    /**
+     * 用指定依赖和业务开关创建证券调库校验组件
+     *
+     * 执行顺序：
+     * 1. 保存用于查询和校验的依赖，并保留 CRMW 池状态和近期信评要求的开关
+     *
+     * @param securityPoolAdjustMapper 证券调库数据查询组件
+     * @param securityMarketService 证券市场关系查询服务
+     * @param flowMapper 流程配置查询组件
+     * @param creditBondGradeRuleMapper 信用债评级矩阵查询组件
+     * @param absIdentityService ABS 主体身份校验服务
+     * @param pledgeBlacklistRuleService 黑名单质押库规则服务
+     * @param ratingDowngradeChecker 发行主体及担保人评级下调校验组件
+     * @param crmwUsePoolStatus 是否认可普通池状态中的 CRMW 作为快速入库来源
+     * @param simpleInboundRecentReportRequired 信用债简易入库是否要求同发行人近 180 天有有效信评报告
+     */
     SecurityPoolCheckRules(SecurityPoolAdjustMapper securityPoolAdjustMapper,
                            SecurityMarketService securityMarketService,
                            FlowMapper flowMapper,
@@ -163,13 +218,26 @@ class SecurityPoolCheckRules {
         this.simpleInboundRecentReportRequired = simpleInboundRecentReportRequired;
     }
 
-    /** 设置信用债简易入库是否强制要求有效信评报告 */
+    /**
+     * 设置信用债简易入库是否强制要求有效信评报告
+     *
+     * 执行顺序：
+     * 1. 将传入开关保存为本规则组件的新配置，供后续简易入库校验读取
+     *
+     * @param simpleInboundRecentReportRequired 信用债简易入库是否要求同发行人近 180 天有有效信评报告
+     */
     void setSimpleInboundRecentReportRequired(boolean simpleInboundRecentReportRequired) {
         this.simpleInboundRecentReportRequired = simpleInboundRecentReportRequired;
     }
 
     /**
-     * 规范化主体内评分档编码：null / 空白视为无内评。
+     * 规范化主体内评分档编码：null / 空白视为无内评
+     *
+     * 执行顺序：
+     * 1. 档级代码为空时返回空值
+     *
+     * @param gradeCode 档级代码
+     * @return 去掉首尾空白后的档级代码，输入为空或只有空白时返回 null
      */
     private String normalizeGradeCode(String gradeCode) {
         if (gradeCode == null) {
@@ -180,23 +248,30 @@ class SecurityPoolCheckRules {
     }
 
     /**
-     * 判断指定流程是否为直通（无人工审批节点）。
+     * 判断指定流程是否为直通（无人工审批节点）
      *
      * 说明：单券提交路径内部直接使用 {@link #isDirectFlow(FlowSnapshot)}，
      * 本方法不在本类其它业务步骤中调用；主要供「证券池批量调整」在整批提交前做直通预检
-     * （{@code needsWholeBatchDirectRecheck}），复用与单券一致的直通判定口径，避免批量侧再拷贝流程快照逻辑。
+     * （{@code needsWholeBatchDirectRecheck}），复用与单券一致的直通判定口径，避免批量侧再拷贝流程快照逻辑
      *
      * 判定规则：flowId 与 flowKey 均为空时按「无审批直通」处理；仅有 key 时解析活跃流程定义再判断；
-     * 解析不到定义时返回 false（按非直通走后续提交校验）。
+     * 解析不到定义时返回 false（按非直通走后续提交校验）
      *
-     * @param flowId  流程定义 ID，可为 null
+     * 执行顺序：
+     * 1. 未配置流程 ID 和编码时按无需审批处理
+     * 2. 只配置流程编码时查询启用定义，未找到定义时判为不可直通
+     * 3. 加载对应版本和节点等流程快照，判断是否可以直通
+     *
+     * @param flowId 流程定义 ID，可为 null
      * @param flowKey 流程 Key，可为 null/空
-     * @return true=直通或无流程
+     * @return true=无需人工审批即可完成，包括未配置流程，false=未找到可直接完成的流程
      */
     boolean isDirectAdjustFlow(Long flowId, String flowKey) {
+        // 1. 未配置流程 ID 和编码时按无需审批处理
         if (flowId == null && (flowKey == null || flowKey.isEmpty())) {
             return true;
         }
+        // 2. 只配置流程编码时查询启用定义，未找到定义时判为不可直通
         Long resolvedId = flowId;
         if (resolvedId == null) {
             FlowDefinitionBo definition = flowMapper.queryActiveFlowByKey(flowKey);
@@ -206,11 +281,21 @@ class SecurityPoolCheckRules {
             // 配置了 key 但解析不到定义时，按非直通走后续提交校验
             return false;
         }
+        // 3. 加载对应版本和节点等流程快照，判断是否可以直通
         FlowSnapshot snapshot = buildFlowSnapshot(resolvedId);
         return snapshot != null && isDirectFlow(snapshot);
     }
 
-    /** 将目标池列表转换为顶级投资池组 ID 集合。 */
+    /**
+     * 将目标池列表转换为顶级投资池组 ID 集合
+     *
+     * 执行顺序：
+     * 1. 逐项沿父级关系查找目标池所属的顶级投资池
+     *
+     * @param poolIds 需要转换的池 ID 列表
+     * @param poolMap 已加载的投资池集合
+     * @return 非空根池 ID 集合
+     */
     Set<Long> resolvePoolGroupIds(List<Long> poolIds, Map<Long, InvestmentPoolBo> poolMap) {
         Set<Long> result = new HashSet<>();
         if (poolIds == null) {
@@ -225,7 +310,16 @@ class SecurityPoolCheckRules {
         return result;
     }
 
-    /** 沿父级关系查找目标池所属的顶级投资池。 */
+    /**
+     * 沿父级关系查找目标池所属的顶级投资池
+     *
+     * 执行顺序：
+     * 1. 从当前池向上追溯父池，遇到根池、缺失记录或已访问池时结束
+     *
+     * @param poolId 当前限制池 ID
+     * @param poolMap 已加载的投资池集合
+     * @return 停止时的池 ID
+     */
     static Long resolveRootPoolId(Long poolId, Map<Long, InvestmentPoolBo> poolMap) {
         Long currentId = poolId;
         Set<Long> visited = new HashSet<>();
@@ -239,15 +333,29 @@ class SecurityPoolCheckRules {
         return currentId;
     }
 
-    /** 将空字符串归一化为空值，避免重复提交比较受空串表现影响。 */
+    /**
+     * 将空字符串归一化为空值，避免重复提交比较受空串表现影响
+     *
+     * 执行顺序：
+     * 1. 输入为 null 或去空白后为空时返回 null，其余文本保持原样
+     *
+     * @param value 待统一空值的文本
+     * @return 原文本，空字符串转换为 null
+     */
     String emptyToNull(String value) {
         return value == null || value.trim().isEmpty() ? null : value;
     }
 
     /**
-     * 为指定流程 ID 构建运行时快照（定义 + 活跃版本 + 节点索引 + 连线列表）。
+     * 为指定流程 ID 构建运行时快照（定义 + 活跃版本 + 节点索引 + 连线列表）
      *
-     * 节点按 DB ID 建立索引，供遍历连线时快速查找目标节点。
+     * 节点按 DB ID 建立索引，供遍历连线时快速查找目标节点
+     *
+     * 执行顺序：
+     * 1. 查询该流程的所有版本（ORDER BY ver_num DESC），取第一个 status='active' 的版本
+     * 2. 加载该版本的节点和连线
+     * 3. 节点按 DB ID 建立索引，供后续边遍历快速查找目标节点
+     * 4. 加载该版本的审批节点配置，按 nodeId 建立索引
      *
      * @param flowId 流程定义 ID
      * @return FlowSnapshot，若流程不存在或无活跃版本则返回 null
@@ -258,7 +366,7 @@ class SecurityPoolCheckRules {
             return null;
         }
 
-        // 查询该流程的所有版本（ORDER BY ver_num DESC），取第一个 status='active' 的版本
+        // 1. 查询该流程的所有版本（ORDER BY ver_num DESC），取第一个 status='active' 的版本
         List<FlowVersionBo> versions = flowMapper.queryFlowVersionByFlowIdList(flowId, null);
         FlowVersionBo activeVersion = null;
         for (FlowVersionBo v : versions) {
@@ -271,17 +379,17 @@ class SecurityPoolCheckRules {
             return null;
         }
 
-        // 加载该版本的节点和连线
+        // 2. 加载该版本的节点和连线
         List<FlowNodeBo> nodes = flowMapper.queryFlowNodeListByVersionId(activeVersion.getId());
         List<FlowEdgeBo> edges = flowMapper.queryFlowEdgeListByVersionId(activeVersion.getId());
 
-        // 节点按 DB ID 建立索引，供后续边遍历快速查找目标节点
+        // 3. 节点按 DB ID 建立索引，供后续边遍历快速查找目标节点
         Map<Long, FlowNodeBo> nodeMap = new HashMap<>();
         for (FlowNodeBo node : nodes) {
             nodeMap.put(node.getId(), node);
         }
 
-        // 加载该版本的审批节点配置，按 nodeId 建立索引
+        // 4. 加载该版本的审批节点配置，按 nodeId 建立索引
         List<NodeApprovalConfigBo> approvalConfigs = flowMapper.queryApprovalConfigListByVersionId(activeVersion.getId());
         Map<Long, NodeApprovalConfigBo> approvalConfigMap = new HashMap<>();
         for (NodeApprovalConfigBo cfg : approvalConfigs) {
@@ -303,14 +411,17 @@ class SecurityPoolCheckRules {
     }
 
     /**
-     * 判断流程是否为直通流程（开始后无需人工待办即可到结束节点）。
+     * 判断流程是否为直通流程（开始后无需人工待办即可到结束节点）
      *
      * 与 createInitialSteps 自动完成范围对齐：start/end/auto 节点、initiator、approval_strategy=auto
-     * 可无人工到达 end；主路径存在 preempt/all 等人工审批则为非直通。
-     * 例：债券特殊策略入库（发起人→多层 auto→结束）应判为直通。
+     * 可无人工到达 end；主路径存在 preempt/all 等人工审批则为非直通
+     * 例：债券特殊策略入库（发起人→多层 auto→结束）应判为直通
+     *
+     * 执行顺序：
+     * 1. 开始节点为空时返回false
      *
      * @param snapshot 流程快照（含节点索引和连线列表）
-     * @return true 表示直通流程（可直接生效），false 表示需要审批
+     * @return true=直通流程（可直接生效），false=需要审批
      */
     boolean isDirectFlow(FlowSnapshot snapshot) {
         if (snapshot == null || snapshot.nodeMap == null || snapshot.edges == null) {
@@ -326,11 +437,23 @@ class SecurityPoolCheckRules {
         if (startNode == null) {
             return false;
         }
+        // 从当前节点沿主路径（排除 reject 支路）是否仅经无需人工节点即可到达 end
         return canCompleteWithoutHumanApproval(snapshot, startNode, startNode, new HashSet<Long>());
     }
 
     /**
-     * 从当前节点沿主路径（排除 reject 支路）是否仅经无需人工节点即可到达 end。
+     * 从当前节点沿主路径（排除 reject 支路）是否仅经无需人工节点即可到达 end
+     *
+     * 执行顺序：
+     * 1. 终点可直接完成，空节点或回到正在检查的节点时停止判定
+     * 2. 检查审批节点能否由发起人或系统直接完成
+     * 3. 沿每条非驳回连线继续检查，所有路径可结束时才判为直通
+     *
+     * @param snapshot 流程快照（含节点索引和连线列表）
+     * @param current 当前流程节点
+     * @param startNode 流程开始节点
+     * @param visiting 当前流程路径已访问的节点 ID
+     * @return true=从当前节点沿非驳回路径可以在无需人工审批的情况下结束，false=存在无法自动完成的路径
      */
     private boolean canCompleteWithoutHumanApproval(FlowSnapshot snapshot, FlowNodeBo current,
                                                     FlowNodeBo startNode, Set<Long> visiting) {
@@ -369,6 +492,7 @@ class SecurityPoolCheckRules {
             }
             for (FlowEdgeBo edge : outEdges) {
                 FlowNodeBo next = snapshot.nodeMap.get(edge.getToNodeId());
+                // 从当前节点沿主路径（排除 reject 支路）是否仅经无需人工节点即可到达 end
                 if (!canCompleteWithoutHumanApproval(snapshot, next, startNode, visiting)) {
                     return false;
                 }
@@ -408,6 +532,10 @@ class SecurityPoolCheckRules {
     /**
      * 从本批数据构建一只证券的规则上下文
      *
+     * 执行顺序：
+     * 1. 批量上下文复用已读取的主体候选
+     * 2. 将批次状态转为单券规则原本使用的结构
+     *
      * @param req 当前证券及本次选中的目标池
      * @param data 本批共享数据
      * @return 当前证券的校验上下文
@@ -419,10 +547,10 @@ class SecurityPoolCheckRules {
         }
         SecurityInfoBo securityInfo = new SecurityInfoBo();
         BeanUtils.copyProperties(master, securityInfo);
-        // 批量上下文复用已读取的主体候选
+        // 1. 批量上下文复用已读取的主体候选
         applySelectedRatingCompanyInternal(securityInfo, req.getGuarantorCode(), req.getRightsHolderCode(),
                 req.getSelfSelectedRightsHolderCode(), true, req.getSelectedRatingCompany(), data);
-        // 将批次状态转为单券规则原本使用的结构
+        // 2. 将批次状态转为单券规则原本使用的结构
         AdjustSharedData shared = buildBatchSecurityFacts(securityInfo, data, req.getGuarantorCode());
         shared.setRequestInPoolIds(req.getItems().stream()
                 .filter(item -> AdjustMode.IN.getCode().equals(item.getAdjustMode()))
@@ -435,7 +563,18 @@ class SecurityPoolCheckRules {
         return shared;
     }
 
-    /** 组装主券和关联券共用的证券状态及名单事实 */
+    /**
+     * 组装主券和关联券共用的证券状态及名单事实
+     *
+     * 执行顺序：
+     * 1. 手工校验按顶级池组认定在途占用
+     * 2. 证券名单由已查到的池状态判断
+     *
+     * @param security 本次证券
+     * @param data 本批共享数据
+     * @param guarantorCode 担保人代码
+     * @return 本次证券调库共用数据
+     */
     private AdjustSharedData buildBatchSecurityFacts(SecurityInfoBo security, BatchSecurityCheckData data,
                                                       String guarantorCode) {
         String code = security.getWindCode();
@@ -448,21 +587,26 @@ class SecurityPoolCheckRules {
         shared.setCurrentPoolIds(data.activePools.getOrDefault(code, Collections.emptySet()));
         shared.setHasPendingProcess(data.pendingLabels.containsKey(code));
         shared.setPendingProcessNodeLabel(data.pendingLabels.get(code));
-        // 手工校验按顶级池组认定在途占用
+        // 1. 手工校验按顶级池组认定在途占用
         shared.setPendingPoolGroupIds(resolvePoolGroupIds(new ArrayList<>(
                 data.pendingPools.getOrDefault(code, Collections.emptySet())), data.pools));
-        // 证券名单由已查到的池状态判断
+        // 2. 证券名单由已查到的池状态判断
         shared.setSecurityInObservePool(isInBatchPoolType(data, code, "observe"));
+        // 按原名单查询口径检查证券或主体是否在指定类型池生效
         shared.setSecurityInRestrictedPool(isInBatchPoolType(data, code, "restricted"));
         if (CreditBondSpecialInboundRule.isAbs(security)) {
             // ABS 名单仅使用主体级生效记录
             List<String> riskCompanies = batchAbsRiskCompanies(security, data);
             shared.setIssuerInObservePool(riskCompanies.stream().anyMatch(codeForCompany ->
+                    // 按已加载的主体级生效记录判断名单
                     isInBatchCompanyPoolType(data, codeForCompany, "observe")));
             shared.setIssuerInRestrictedPool(riskCompanies.stream().anyMatch(codeForCompany ->
+                    // 按已加载的主体级生效记录判断名单
                     isInBatchCompanyPoolType(data, codeForCompany, "restricted")));
         } else {
+            // 按原名单查询口径检查证券或主体是否在指定类型池生效
             shared.setIssuerInObservePool(isInBatchPoolType(data, issuer, "observe"));
+            // 按原名单查询口径检查证券或主体是否在指定类型池生效
             shared.setIssuerInRestrictedPool(isInBatchPoolType(data, issuer, "restricted"));
         }
         shared.setIssuerRatingDowngraded(data.downgradedCompanies.contains(security.getIssuerCode()));
@@ -471,14 +615,34 @@ class SecurityPoolCheckRules {
         return shared;
     }
 
-    /** 按原名单查询口径检查证券或主体是否在指定类型池生效 */
+    /**
+     * 按原名单查询口径检查证券或主体是否在指定类型池生效
+     *
+     * 执行顺序：
+     * 1. 检查是否符合本批生效数据中命中指定类型的池的条件
+     *
+     * @param data 本批共享数据
+     * @param code 证券代码
+     * @param type 类型
+     * @return true=本批生效数据中命中指定类型的池，false=本批生效数据中未命中指定类型的池
+     */
     private boolean isInBatchPoolType(BatchSecurityCheckData data, String code, String type) {
         return data.activePools.getOrDefault(code, Collections.emptySet()).stream()
                 .map(data.pools::get).anyMatch(pool -> pool != null && Integer.valueOf(0).equals(pool.getIsDeleted())
                         && type.equals(pool.getPoolType()));
     }
 
-    /** 有已确认主体时使用该主体，其余使用全部候选及本次选择 */
+    /**
+     * 有已确认主体时使用该主体，其余使用全部候选及本次选择
+     *
+     * 执行顺序：
+     * 1. 主档已有发行主体时，仅返回该主体代码
+     * 2. 仍未确认时收集批量读取的有效候选，再补入本次证券选择的主体并去重
+     *
+     * @param security 本次证券
+     * @param data 本批共享数据
+     * @return 筛选出的列表
+     */
     private List<String> batchAbsRiskCompanies(SecurityInfoBo security, BatchSecurityCheckData data) {
         String code = security.getWindCode();
         SecurityInfoBo master = data.securities.get(code);
@@ -494,7 +658,17 @@ class SecurityPoolCheckRules {
         return new ArrayList<>(companies);
     }
 
-    /** 按已加载的主体级生效记录判断名单 */
+    /**
+     * 按已加载的主体级生效记录判断名单
+     *
+     * 执行顺序：
+     * 1. 检查是否符合本批主体级生效数据中命中指定类型的池的条件
+     *
+     * @param data 本批共享数据
+     * @param code 证券代码
+     * @param type 类型
+     * @return true=本批主体级生效数据中命中指定类型的池，false=本批主体级生效数据中未命中指定类型的池
+     */
     private boolean isInBatchCompanyPoolType(BatchSecurityCheckData data, String code, String type) {
         return data.blacklistCompanyPools.getOrDefault(code, Collections.emptySet()).stream()
                 .map(data.pools::get).anyMatch(pool -> pool != null && Integer.valueOf(0).equals(pool.getIsDeleted())
@@ -503,12 +677,14 @@ class SecurityPoolCheckRules {
 
     /**
      * ABS 复用全部权益人候选检查主体池，普通债保持单发行人查询
+     *
      * 执行顺序：
      * 1. ABS 使用本次已查询候选和自选代码，只重查动态池状态
      * 2. 普通债沿用原发行主体口径
+     *
      * @param security 本次证券
      * @param poolType 主体池类型
-     * @return 是否命中
+     * @return true=证券发行主体命中指定类型的池，false=证券发行主体未命中指定类型的池
      */
     boolean queryIssuerInPoolType(SecurityInfoBo security, String poolType) {
         if (CreditBondSpecialInboundRule.isAbs(security)) {
@@ -520,7 +696,17 @@ class SecurityPoolCheckRules {
     }
 
     /**
-     * 按证券类型校验并回填本次评级主体：ABS 自选权益人优先，非 ABS 使用担保人。
+     * 按证券类型校验并回填本次评级主体：ABS 自选权益人优先，非 ABS 使用担保人
+     *
+     * 执行顺序：
+     * 1. 没有预解析的评级主体对象时，按传入的担保人或权益人代码校验并回填主体
+     *
+     * @param securityInfo 当前证券信息
+     * @param guarantorCode 担保人代码
+     * @param rightsHolderCode 普通权益人代码
+     * @param selfSelectedRightsHolderCode 自选权益人代码
+     * @param requireAbsSelection ABS 是否需要选择主体
+     * @return 本次快照使用的主体名称
      */
     RatingSelection applySelectedRatingCompanyInternal(
             SecurityInfoBo securityInfo, String guarantorCode, String rightsHolderCode,
@@ -532,9 +718,11 @@ class SecurityPoolCheckRules {
 
     /**
      * 直接复用页面已选主体，未携带选择对象的后台调用沿用原候选读取
+     *
      * 执行顺序：
      * 1. 已传主体时直接回填五字段及矩阵评分，不重复查询名称和评级
      * 2. 未传主体对象时沿用原关系候选入口
+     *
      * @param securityInfo 当前证券信息
      * @param guarantorCode 担保人代码
      * @param rightsHolderCode 普通权益人代码
@@ -551,16 +739,35 @@ class SecurityPoolCheckRules {
                 selfSelectedRightsHolderCode, requireAbsSelection, selected, null);
     }
 
-    /** 根据对应入口提供的候选数据校验并回填主体 */
+    /**
+     * 根据对应入口提供的候选数据校验并回填主体
+     *
+     * 执行顺序：
+     * 1. 需要默认担保人时从候选中补入担保人，对 ABS 显式选择的担保人单独校验并填写担保人字段
+     * 2. 已提供评级主体对象时，按 ABS 或普通担保债分别应用选择，ABS 预览可留空但必填入口校验缺失
+     * 3. ABS 未提供评级主体对象时，核对关联权益人和自选权益人，按默认候选及自选优先规则填写发行主体五字段
+     * 4. 其他证券按明确选择的担保人填写评级字段，无担保时清空担保人相关字段
+     *
+     * @param securityInfo 当前证券信息
+     * @param guarantorCode 担保人代码
+     * @param rightsHolderCode 普通权益人代码
+     * @param selfSelectedRightsHolderCode 自选权益人代码
+     * @param requireAbsSelection ABS 是否需要选择主体
+     * @param selected 页面已选主体
+     * @param batchData 批次数据
+     * @return 本次快照使用的主体名称
+     */
     RatingSelection applySelectedRatingCompanyInternal(
             SecurityInfoBo securityInfo, String guarantorCode, String rightsHolderCode,
             String selfSelectedRightsHolderCode, boolean requireAbsSelection, RatingCompanySelectionReq selected,
             BatchSecurityCheckData batchData) {
+        // 1. 需要默认担保人时从候选中补入担保人，对 ABS 显式选择的担保人单独校验并填写担保人字段
         boolean abs = CreditBondSpecialInboundRule.isAbs(securityInfo);
         boolean guaranteed = Integer.valueOf(1).equals(securityInfo.getGuarantFlag());
         if (guaranteed && guarantorCode == null && (abs || selected == null)) {
             // 只为未传选择的请求初始化，显式传空不再套用默认首项
             RelatedRatingCompanyDto guarantor = defaultGuarantor(securityInfo,
+                    // 批量入口直接读取候选索引，单券入口使用原缓存和查询
                     relatedRatingCompanies(securityInfo.getWindCode(), batchData));
             if (guarantor != null) {
                 fillSelectedRatingCompany(securityInfo, guarantor.getCompanyCode(),
@@ -574,6 +781,7 @@ class SecurityPoolCheckRules {
             fillSelectedRatingCompany(securityInfo, guarantor.getCompanyCode(),
                     guarantor.getCompanyName(), guarantor.getInnerRating());
         }
+        // 2. 已提供评级主体对象时，按 ABS 或普通担保债分别应用选择，ABS 预览可留空但必填入口校验缺失
         if (selected != null) {
             RatingSelection result = new RatingSelection();
             // 预览允许空选择，下一步和正式提交才要求主体必填
@@ -603,10 +811,12 @@ class SecurityPoolCheckRules {
             return result;
         }
         RatingSelection result = new RatingSelection();
+        // 3. ABS 未提供评级主体对象时，核对关联权益人和自选权益人，按默认候选及自选优先规则填写发行主体五字段
         if (abs) {
             RelatedRatingCompanyDto rightsHolder = null;
             SelfSelectedRightsHolderDto selfSelected = null;
             if (rightsHolderCode != null && !rightsHolderCode.trim().isEmpty()) {
+                // 查询并校验当前证券的相关评级主体
                 rightsHolder = findRelatedRatingCompany(
                         securityInfo.getWindCode(), rightsHolderCode.trim(), "所选权益人不属于当前证券", batchData);
                 result.rightsHolderName = rightsHolder.getCompanyName();
@@ -649,6 +859,7 @@ class SecurityPoolCheckRules {
             }
             return result;
         }
+        // 4. 其他证券按明确选择的担保人填写评级字段，无担保时清空担保人相关字段
         if (emptyToNull(guarantorCode) != null) {
             // 普通担保债使用明确选择的担保人，空选择不取首个候选
             RelatedRatingCompanyDto guarantor = findRelatedRatingCompany(
@@ -664,6 +875,10 @@ class SecurityPoolCheckRules {
     /**
      * 担保债优先回显候选中的已保存担保人，否则使用首个候选
      *
+     * 执行顺序：
+     * 1. 只给已有担保标志且存在候选的证券选默认担保人
+     * 2. 优先匹配已保存担保人代码，否则取第一条候选
+     *
      * @param security 当前证券
      * @param candidates 已按展示顺序排列的关联主体
      * @return 默认担保人，无候选或非担保债时返回空
@@ -677,7 +892,18 @@ class SecurityPoolCheckRules {
                 .findFirst().orElse(candidates.get(0));
     }
 
-    /** 查询并校验当前证券的相关评级主体。 */
+    /**
+     * 查询并校验当前证券的相关评级主体
+     *
+     * 执行顺序：
+     * 1. 使用当前入口已准备的候选
+     *
+     * @param securityCode 证券代码
+     * @param companyCode 发行主体代码
+     * @param errorMessage 所选评级主体找不到或不属于候选范围时使用的错误提示
+     * @param batchData 批次数据
+     * @return 关联评级主体及其关系信息
+     */
     private RelatedRatingCompanyDto findRelatedRatingCompany(
             String securityCode, String companyCode, String errorMessage, BatchSecurityCheckData batchData) {
         // 使用当前入口已准备的候选
@@ -690,27 +916,60 @@ class SecurityPoolCheckRules {
         throw new BizException(errorMessage);
     }
 
-    /** 查询关联评级主体接口返回的首条记录，不按关系类型二次筛选。 */
+    /**
+     * 查询关联评级主体接口返回的首条记录，不按关系类型二次筛选
+     *
+     * 执行顺序：
+     * 1. 使用当前入口已准备的候选
+     *
+     * @param securityCode 证券代码
+     * @param batchData 批次数据
+     * @return 关联主体接口返回的第一条记录，无候选时为空
+     */
     private RelatedRatingCompanyDto queryFirstRelatedRatingCompany(String securityCode, BatchSecurityCheckData batchData) {
         // 使用当前入口已准备的候选
         List<RelatedRatingCompanyDto> records = relatedRatingCompanies(securityCode, batchData);
         return records.isEmpty() ? null : records.get(0);
     }
 
-    /** 批量入口直接读取候选索引，单券入口使用原缓存和查询 */
+    /**
+     * 批量入口直接读取候选索引，单券入口使用原缓存和查询
+     *
+     * 执行顺序：
+     * 1. 批量入口从本批索引读取指定证券的候选，未收录时返回空列表
+     * 2. 单券入口先读缓存，缓存没有记录时查询数据库并缓存
+     * 3. 返回查询结果，没有候选时返回空列表
+     *
+     * @param securityCode 证券代码
+     * @param batchData 批次数据
+     * @return 关联评级主体及其关系信息列表，没有候选时返回空列表
+     */
     private List<RelatedRatingCompanyDto> relatedRatingCompanies(String securityCode, BatchSecurityCheckData batchData) {
+        // 1. 批量入口从本批索引读取指定证券的候选，未收录时返回空列表
         if (batchData != null) {
             return batchData.ratingCompanies.getOrDefault(securityCode, Collections.emptyList());
         }
+        // 2. 单券入口先读缓存，缓存没有记录时查询数据库并缓存
         List<RelatedRatingCompanyDto> records = absIdentityService.findRelated(securityCode);
         if (records == null) {
             records = securityPoolAdjustMapper.queryRelatedRatingCompanyList(securityCode);
             absIdentityService.rememberRelated(securityCode, records);
         }
+        // 3. 返回查询结果，没有候选时返回空列表
         return records == null ? Collections.emptyList() : records;
     }
 
-    /** 将后端重查的主体名称、代码及最新内评写入本次业务对象。 */
+    /**
+     * 将后端重查的主体名称、代码及最新内评写入本次业务对象
+     *
+     * 执行顺序：
+     * 1. 把后端查到的担保人名称、代码和主体最新内评分别填回证券信息
+     *
+     * @param securityInfo 当前证券信息
+     * @param companyCode 发行主体代码
+     * @param companyName 最终选择的主体名称
+     * @param innerRating 主体内评
+     */
     void fillSelectedRatingCompany(
             SecurityInfoBo securityInfo, String companyCode, String companyName, String innerRating) {
         securityInfo.setGuarantor(companyName);
@@ -719,18 +978,20 @@ class SecurityPoolCheckRules {
     }
 
     /**
-     * 第三阶段：调入校验
+     * 检查证券调入条件并补充池关系触发的配套项
      *
      * 遍历请求中全部调入方向的手动项，逐项执行前置校验 + 调入校验，
      * 并根据目标池的关系配置自动追加以下两类附加项：
+     * 联动调入项（linkage）：目标池配置的联动池（in_linked）需同步调入
+     * 互斥配套调出项（mutex）：若证券当前已在目标池的互斥池（in_mutex）中，
+     * 需同步调出该互斥池，两池不可同时持有
      *
-     *   - 联动调入项（linkage）：目标池配置的联动池（in_linked）需同步调入
-     *   - 互斥配套调出项（mutex）：若证券当前已在目标池的互斥池（in_mutex）中，
-     *       需同步调出该互斥池，两池不可同时持有
+     * 执行顺序：
+     * 1. 逐项构建手工调库项分组 Key
+     * 2. 获取当前规则应使用的持仓数量
      *
-     *
-     * @param req         调库校验请求
-     * @param shared      本次校验的共享数据
+     * @param req 调库校验请求
+     * @param shared 本次校验的共享数据
      * @param coveredKeys 已覆盖的"池ID_方向"集合，用于自动项去重
      * @return 调入方向的全部校验结果（手动项 + 自动项）
      */
@@ -777,6 +1038,7 @@ class SecurityPoolCheckRules {
                     if (coveredKeys.add(linkedId + "_调入")) {
                         // 构建自动生成的联动/互斥调整项校验结果  与手动项校验流程完全相同，区别在于：  targetPoolId 来自池关系配置，由系统自动推导，非用户选择 itemTag 标记为ItemType.LINKAGE.getCode()或ItemType.MUTEX.getCode()，前端据此区分显示样式
                         AdjustCheckDto.CheckResultItem autoItem =
+                                // 构建自动生成的联动/互斥调整项校验结果
                                 buildAutoResultItem(linkedId, AdjustMode.IN.getCode(), ItemType.LINKAGE.getCode(), adjustGroupKey, shared);
                         // 关联手工项失败时阻断自动联动项
                         inheritManualItemFailure(autoItem, resultItem);
@@ -810,6 +1072,7 @@ class SecurityPoolCheckRules {
                     if (coveredKeys.add(mutexId + "_调出")) {
                         // 构建自动生成的联动/互斥调整项校验结果  与手动项校验流程完全相同，区别在于：  targetPoolId 来自池关系配置，由系统自动推导，非用户选择 itemTag 标记为ItemType.LINKAGE.getCode()或ItemType.MUTEX.getCode()，前端据此区分显示样式
                         AdjustCheckDto.CheckResultItem autoItem =
+                                // 构建自动生成的联动/互斥调整项校验结果
                                 buildAutoResultItem(mutexId, AdjustMode.OUT.getCode(), ItemType.MUTEX.getCode(), adjustGroupKey, shared);
                         // 关联手工项失败时阻断自动互斥项
                         inheritManualItemFailure(autoItem, resultItem);
@@ -826,20 +1089,21 @@ class SecurityPoolCheckRules {
     }
 
     /**
-     * 第四阶段：调出校验
+     * 检查证券调出条件并补充池关系触发的配套项
      *
      * 遍历请求中全部调出方向的手动项，逐项执行前置校验 + 调出校验，
      * 并根据目标池的关系配置自动追加以下附加项：
-     *
-     *   - 联动调出项（linkage）：目标池配置的联动池（out_linked）需同步调出
-     *
-     *
+     * 联动调出项（linkage）：目标池配置的联动池（out_linked）需同步调出
      * 注意：第三阶段由互斥关系生成的调出项已加入 coveredKeys，
      * 若调出方向的手动项恰好与之重叠，以手动项为准（手动项在 coveredKeys 初始化时已注册，
-     * 不会被跳过）；联动调出自动项若已被覆盖则跳过。
+     * 不会被跳过）；联动调出自动项若已被覆盖则跳过
      *
-     * @param req         调库校验请求
-     * @param shared      本次校验的共享数据
+     * 执行顺序：
+     * 1. 逐项构建手工调库项分组 Key
+     * 2. 获取当前规则应使用的持仓数量
+     *
+     * @param req 调库校验请求
+     * @param shared 本次校验的共享数据
      * @param coveredKeys 已覆盖的"池ID_方向"集合，用于自动项去重
      * @return 调出方向的全部校验结果（手动项 + 自动项）
      */
@@ -883,6 +1147,7 @@ class SecurityPoolCheckRules {
                     if (coveredKeys.add(linkedId + "_调出")) {
                         // 构建自动生成的联动/互斥调整项校验结果  与手动项校验流程完全相同，区别在于：  targetPoolId 来自池关系配置，由系统自动推导，非用户选择 itemTag 标记为ItemType.LINKAGE.getCode()或ItemType.MUTEX.getCode()，前端据此区分显示样式
                         AdjustCheckDto.CheckResultItem autoItem =
+                                // 构建自动生成的联动/互斥调整项校验结果
                                 buildAutoResultItem(linkedId, AdjustMode.OUT.getCode(), ItemType.LINKAGE.getCode(), adjustGroupKey, shared);
                         // 关联手工项失败时阻断自动联动项
                         inheritManualItemFailure(autoItem, resultItem);
@@ -896,14 +1161,18 @@ class SecurityPoolCheckRules {
     }
 
     /**
-     * 第五阶段：判断本次调库可选择的审批流程。
+     * 汇总各手工证券调库项可选的审批流程
      *
      * 调出时直接使用目标投资池配置的标准调出流程。调入时：信用债已在库返回上调/下调单流程，
-     * 信用债未在库返回简易/默认调入候选；白名单流程开关开启时才额外返回白名单候选。
-     * 白名单和简易规则按伪代码保留入口，不改表结构。
+     * 信用债未在库返回简易/默认调入候选；白名单流程开关开启时才额外返回白名单候选
+     * 白名单和简易规则按伪代码保留入口，不改表结构
      *
-     * @param req         调库校验请求
-     * @param shared      本次校验的共享数据
+     * 执行顺序：
+     * 1. 逐项判断单条手工调库项可选择的审批流程
+     * 2. 生成流程候选项去重 key
+     *
+     * @param req 调库校验请求
+     * @param shared 本次校验的共享数据
      * @param resultItems 前四阶段的校验结果
      * @return 流程候选项
      */
@@ -948,7 +1217,21 @@ class SecurityPoolCheckRules {
     }
 
     /**
-     * 判断单条手工调库项可选择的审批流程。
+     * 判断单条手工调库项可选择的审批流程
+     *
+     * 执行顺序：
+     * 1. 手工调出：使用投资池定义的标准调出流程
+     * 2. 产品库来源资格独立判断，命中时优先快速，仍保留原普通或特殊流程
+     * 3. 手工调入：当前已在目标池调入互斥池时优先特殊审批（信用债大库默认排除）
+     * 4. ── 目标池非信用债大库：仅返回默认调入流程 ──
+     * 5. 构建简易流程候选项
+     * 6. 默认调入流程
+     * 7. 构建默认调入流程候选项
+     *
+     * @param req 调库校验请求
+     * @param shared 本次校验的共享数据
+     * @param item 当前主项
+     * @return 当前手工项的审批流程候选列表
      */
     List<AdjustCheckDto.FlowOption> resolveAdjustFlowOptionsForItem(
             AdjustCheckReq req, AdjustSharedData shared, AdjustCheckDto.CheckResultItem item) {
@@ -961,10 +1244,11 @@ class SecurityPoolCheckRules {
             return new ArrayList<>();
         }
 
-        // 手工调出：使用投资池定义的标准调出流程
+        // 1. 手工调出：使用投资池定义的标准调出流程
         if (AdjustMode.OUT.getCode().equals(item.getAdjustMode())) {
             // 解析流程名称：优先使用配置名称
             String flowName = resolveFlowName(targetPool.getOutFlowName(), "调出流程");
+            // 判断目标池是否未配置审批流程
             boolean noApproval = isNoApprovalFlow(targetPool.getOutFlowId(), targetPool.getOutFlowKey());
             FlowOptionParam p = new FlowOptionParam();
             p.setFlowType(FlowType.NORMAL_OUTBOUND.getCode());
@@ -974,6 +1258,7 @@ class SecurityPoolCheckRules {
             p.setRecommended(true);
             p.setMatched(true);
             p.setSelectable(true);
+            // 构建目标池默认流程说明
             p.setMatchReasons(Collections.singletonList(buildTargetFlowReason(
                     null, flowName, noApproval, "默认调出流程")));
             p.setUnmatchReasons(new ArrayList<>());
@@ -981,21 +1266,23 @@ class SecurityPoolCheckRules {
             return Collections.singletonList(buildPoolFlowOption(p));
         }
 
-        // 产品库来源资格独立判断，命中时优先快速，仍保留原普通或特殊流程
+        // 2. 产品库来源资格独立判断，命中时优先快速，仍保留原普通或特殊流程
         if (isProductInboundTarget(targetPool, shared.getPoolMap())) {
+            // 为产品库构建快速与原流程候选，来源资格满足时优先快速
             return resolveProductInboundFlowOptions(req.getSecurityCode(), shared, targetPool);
         }
 
-        // 手工调入：当前已在目标池调入互斥池时优先特殊审批（信用债大库默认排除）
+        // 3. 手工调入：当前已在目标池调入互斥池时优先特殊审批（信用债大库默认排除）
         AdjustCheckDto.FlowOption specialOption = resolveSpecialInboundFlowOption(targetPool, shared);
         if (specialOption != null) {
             return Collections.singletonList(specialOption);
         }
 
-        // ── 目标池非信用债大库：仅返回默认调入流程 ──
+        // 4. ── 目标池非信用债大库：仅返回默认调入流程 ──
         if (!isCreditBondPool(targetPool)) {
             // 解析流程名称：优先使用配置名称
             String flowName = resolveFlowName(targetPool.getInFlowName(), "默认调入流程");
+            // 判断目标池是否未配置审批流程
             boolean noApproval = isNoApprovalFlow(targetPool.getInFlowId(), targetPool.getInFlowKey());
             FlowOptionParam p = new FlowOptionParam();
             p.setFlowType(FlowType.NORMAL_INBOUND.getCode());
@@ -1005,6 +1292,7 @@ class SecurityPoolCheckRules {
             p.setRecommended(true);
             p.setMatched(true);
             p.setSelectable(true);
+            // 构建目标池默认流程说明
             p.setMatchReasons(Collections.singletonList(buildTargetFlowReason(
                     "目标池不在信用债大库中", flowName, noApproval, "默认调入流程")));
             p.setUnmatchReasons(new ArrayList<>());
@@ -1024,6 +1312,7 @@ class SecurityPoolCheckRules {
             String fallbackName = FlowType.DOWNGRADE_INBOUND.getCode().equals(flowType) ? "下调流程" : "上调流程";
             String flowKey = FlowType.DOWNGRADE_INBOUND.getCode().equals(flowType)
                     ? FLOW_KEY_STANDARD_DOWNGRADE : FLOW_KEY_STANDARD_UPGRADE;
+            // 同一批次只解析一次相同流程 Key
             FlowDefinitionBo flow = queryBatchFlow(flowKey, shared.getBatchData());
             FlowOptionParam p = new FlowOptionParam();
             p.setFlowType(flowType);
@@ -1086,14 +1375,15 @@ class SecurityPoolCheckRules {
         simpleP.setSelectable(simpleMatched);
         simpleP.setMatchReasons(simpleMatchReasons);
         simpleP.setUnmatchReasons(simpleUnmatchReasons);
-        // 构建简易流程候选项
+        // 5. 构建简易流程候选项
         AdjustCheckDto.FlowOption simpleOption = buildPoolFlowOption(simpleP);
         if (simpleMatched) {
             simpleOption.setMaterialExemptionType(MaterialExemptionType.CREDIT_BOND_SIMPLE.getCode());
         }
         options.add(simpleOption);
-        // 默认调入流程
+        // 6. 默认调入流程
         String normalFlowName = resolveFlowName(targetPool.getInFlowName(), "默认调入流程");
+        // 判断目标池是否未配置审批流程
         boolean normalNoApproval = isNoApprovalFlow(targetPool.getInFlowId(), targetPool.getInFlowKey());
         FlowOptionParam normalP = new FlowOptionParam();
         normalP.setFlowType(FlowType.NORMAL_INBOUND.getCode());
@@ -1103,19 +1393,28 @@ class SecurityPoolCheckRules {
         normalP.setRecommended(FlowType.NORMAL_INBOUND.getCode().equals(recommendedType));
         normalP.setMatched(true);
         normalP.setSelectable(true);
+        // 构建目标池默认流程说明
         normalP.setMatchReasons(Collections.singletonList(buildTargetFlowReason(
                 null, normalFlowName, normalNoApproval, "默认调入流程")));
         normalP.setUnmatchReasons(new ArrayList<>());
-        // 构建默认调入流程候选项
+        // 7. 构建默认调入流程候选项
         options.add(buildPoolFlowOption(normalP));
         return options;
     }
 
     /**
-     * 命中调入互斥池特殊审批时构建特殊流程候选项。
+     * 命中调入互斥池特殊审批时构建特殊流程候选项
      *
      * 信用债大库（pool_type=credit_bond）默认排除：互斥场景仍走白名单/简易/升降级/默认调入，
-     * 不强制覆盖为 bond:special-inbound。
+     * 不强制覆盖为 bond:special-inbound
+     *
+     * 执行顺序：
+     * 1. 信用债大库默认不走互斥特殊审批
+     * 2. 构建特殊审批流程候选项
+     *
+     * @param targetPool 当前调整项的目标池配置
+     * @param shared 本次校验的共享数据
+     * @return 特殊调入流程候选，未命中时为 null
      */
     AdjustCheckDto.FlowOption resolveSpecialInboundFlowOption(InvestmentPoolBo targetPool,
                                                                       AdjustSharedData shared) {
@@ -1123,7 +1422,7 @@ class SecurityPoolCheckRules {
                 || shared.getPoolRelationMap() == null || shared.getCurrentPoolIds() == null) {
             return null;
         }
-        // 信用债大库默认不走互斥特殊审批
+        // 1. 信用债大库默认不走互斥特殊审批
         if (isCreditBondPool(targetPool)) {
             return null;
         }
@@ -1141,12 +1440,14 @@ class SecurityPoolCheckRules {
         if (matchedPoolIds.isEmpty()) {
             return null;
         }
+        // 同一批次只解析一次相同流程 Key
         FlowDefinitionBo flow = queryBatchFlow(FLOW_KEY_SPECIAL_INBOUND, shared.getBatchData());
         if (flow == null) {
             return null;
         }
         FlowOptionParam p = new FlowOptionParam();
         p.setFlowType(FlowType.SPECIAL_INBOUND.getCode());
+        // 解析流程名称：优先使用配置名称，为空时回退到默认名称
         p.setFlowName(resolveFlowName(flow.getName(), "特殊审批流程"));
         p.setFlowId(flow.getId());
         p.setFlowKey(FLOW_KEY_SPECIAL_INBOUND);
@@ -1154,9 +1455,10 @@ class SecurityPoolCheckRules {
         p.setMatched(true);
         p.setSelectable(true);
         p.setMatchReasons(Collections.singletonList("证券当前在目标池调入互斥池中，按特殊审批流程处理："
+                // 将池 ID 列表转为"父级/子级"路径名称，以顿号连接，用于构建可读的失败原因消息
                 + poolNames(matchedPoolIds, shared.getPoolMap())));
         p.setUnmatchReasons(new ArrayList<>());
-        // 构建特殊审批流程候选项
+        // 2. 构建特殊审批流程候选项
         return buildPoolFlowOption(p);
     }
 
@@ -1169,7 +1471,7 @@ class SecurityPoolCheckRules {
      *
      * @param pool 目标池
      * @param poolMap 已加载的投资池集合
-     * @return 是否属于产品库快速入库范围
+     * @return true=目标池在产品库快速入库范围内，false=目标池不在产品库快速入库范围内
      */
     boolean isProductInboundTarget(InvestmentPoolBo pool, Map<Long, InvestmentPoolBo> poolMap) {
         if (pool == null || !"enabled".equals(pool.getStatus()) || Integer.valueOf(1).equals(pool.getIsDeleted())) {
@@ -1208,14 +1510,27 @@ class SecurityPoolCheckRules {
      * @param pool 目标池
      * @param poolMap 已加载的投资池集合
      * @param currentPoolIds 当前已生效的在库集合，不含本次待申请项
-     * @return 是否满足产品库快速资格
+     * @return true=证券满足产品库快速入库资格，false=证券不满足产品库快速入库资格
      */
     boolean isProductInboundFlowMatched(String securityCode, InvestmentPoolBo pool,
                                                  Map<Long, InvestmentPoolBo> poolMap, Set<Long> currentPoolIds) {
         return isProductInboundFlowMatched(securityCode, pool, poolMap, currentPoolIds, null);
     }
 
-    /** 批次检查产品库来源时复用已查的 CRMW 标的状态 */
+    /**
+     * 批次检查产品库来源时复用已查的 CRMW 标的状态
+     *
+     * 执行顺序：
+     * 1. 复用目标范围判断，不按池名或池类型扩大范围
+     * 2. 逐项查询证券调入CRMW来源投资池
+     *
+     * @param securityCode 证券代码
+     * @param pool 目标池
+     * @param poolMap 已加载的投资池集合
+     * @param currentPoolIds 当前已生效的在库集合，不含本次待申请项
+     * @param batchData 批次数据
+     * @return true=证券满足产品库快速入库资格，false=证券不满足产品库快速入库资格
+     */
     boolean isProductInboundFlowMatched(String securityCode, InvestmentPoolBo pool,
                                                  Map<Long, InvestmentPoolBo> poolMap, Set<Long> currentPoolIds,
                                                  BatchSecurityCheckData batchData) {
@@ -1256,12 +1571,14 @@ class SecurityPoolCheckRules {
      */
     private List<AdjustCheckDto.FlowOption> resolveProductInboundFlowOptions(String securityCode, AdjustSharedData shared,
                                                                            InvestmentPoolBo pool) {
-        // 产品库资格独立于信用债简易的评级和历史报告条件，ABS 只提供一般入库流程
+        // 1. 判断产品库快速调入条件，ABS 沿用一般流程口径
         boolean abs = CreditBondSpecialInboundRule.isAbs(shared.getSecurityInfo());
         boolean matched = !abs && isProductInboundFlowMatched(
                 securityCode, pool, shared.getPoolMap(), shared.getCurrentPoolIds(), shared.getBatchData());
+        // 2. 生成快速调入候选，附上符合或不符合的原因
         FlowOptionParam fast = new FlowOptionParam();
         fast.setFlowType(FlowType.SIMPLE_INBOUND.getCode());
+        // 解析流程名称：优先使用配置名称，为空时回退到默认名称
         fast.setFlowName(resolveFlowName(pool.getSimpleInFlowName(), "产品库快速入库流程"));
         fast.setFlowId(pool.getSimpleInFlowId());
         fast.setFlowKey(pool.getSimpleInFlowKey());
@@ -1279,8 +1596,10 @@ class SecurityPoolCheckRules {
             fastOption.setMaterialExemptionType(MaterialExemptionType.PRODUCT_SOURCE.getCode());
         }
         // 原特殊流程仍可选择，避免快速候选覆盖用户的普通办理路径
+        // 3. 保留原有的特殊审批或默认调入候选
         AdjustCheckDto.FlowOption original = resolveSpecialInboundFlowOption(pool, shared);
         if (original == null) {
+            // 构建目标池标准调入流程候选项
             original = buildNormalInboundFlowOption(pool, "使用产品库原调入流程");
         }
         original.setRecommended(!matched);
@@ -1346,7 +1665,15 @@ class SecurityPoolCheckRules {
     }
 
     /**
-     * 根据投资池 ID 列表转换投资池名称。
+     * 根据投资池 ID 列表转换投资池名称
+     *
+     * 执行顺序：
+     * 1. 池 ID 为空时返回空字符串
+     * 2. 逐个取池名称，缺少名称时以 ID 代替，再用顿号连接
+     *
+     * @param poolIds 需要转换的池 ID 列表
+     * @param poolMap 已加载的投资池集合
+     * @return 拼接后的池名，未传池时为空字符串
      */
     private String poolNames(List<Long> poolIds, Map<Long, InvestmentPoolBo> poolMap) {
         if (poolIds == null || poolIds.isEmpty()) {
@@ -1361,7 +1688,13 @@ class SecurityPoolCheckRules {
     }
 
     /**
-     * 生成流程候选项去重 key。
+     * 生成流程候选项去重 key
+     *
+     * 执行顺序：
+     * 1. 缺少流程候选时返回空字符串，有候选时用竖线连接流程 ID、Key、类型和名称
+     *
+     * @param option 待生成去重标识的流程候选
+     * @return 流程候选去重标识，未传入候选时返回空字符串
      */
     private String buildFlowOptionUniqueKey(AdjustCheckDto.FlowOption option) {
         if (option == null) {
@@ -1374,24 +1707,28 @@ class SecurityPoolCheckRules {
     }
 
     /**
-     * 白名单流程命中判断入口。
+     * 判断证券能否使用白名单流程
      *
-     * 伪代码口径：
-     * 1. 证券期限 <= 3 年（解析 date_exists_str）；
-     * 2. 排除永续债、私募债、ABS 债；
-     * 3. 债券类型属于债券类；
-     * 4. 债券主体在白名单配置池中；
-     * 5. 债券不是担保债。
+     * 当前白名单池为空，主体在白名单池的条件会判为不满足，其他条件仍逐项记录
      *
-     * TODO 当前版本不新增白名单配置表、不修改表结构，因此仅保留入口并返回未命中。
-     * 老系统实际使用 WHITEPOOLID_XYJJ 指定的主体白名单池，并排除永续债、私募债、ABS、次级债，
-     * 满足剩余期限不超过 3 年后由用户确认是否选择白名单流程。
+     * 执行顺序：
+     * 1. 从证券主档解析剩余期限，检查是否不超过 3 年
+     * 2. 检查证券是否为永续债、ABS 或私募债
+     * 3. 核对证券品种是否属于债券类
+     * 4. 检查白名单池配置，当前分支尚未接入主体在池查询
+     * 5. 检查证券是否为担保债
+     *
+     * @param req 调库校验请求
+     * @param shared 本次校验的共享数据
+     * @param matchReasons 用于收集匹配原因的列表
+     * @param unmatchReasons 用于收集不匹配原因的列表
+     * @return true=满足白名单流程条件，false=不满足白名单流程条件
      */
     boolean isWhitelistFlowMatched(
             AdjustCheckReq req, AdjustSharedData shared, List<String> matchReasons, List<String> unmatchReasons) {
         SecurityInfoBo sec = shared.getSecurityInfo();
 
-        // 条件1：从 date_exists_str 解析证券期限并判断是否不超过 3 年
+        // 1. 从 date_exists_str 解析证券期限并判断是否不超过 3 年
         BigDecimal remainYears = CreditBondRemainTermUtil.parseRemainTermYears(sec.getDateExistsStr());
         if (remainYears == null) {
             unmatchReasons.add("证券期限无法解析，date_exists_str 为空或格式不正确");
@@ -1401,7 +1738,7 @@ class SecurityPoolCheckRules {
             unmatchReasons.add("证券期限为 " + sec.getDateExistsStr() + "，超过 3 年");
         }
 
-        // 条件2：排除永续债、私募债、ABS 债
+        // 2. 排除永续债、私募债、ABS 债
         boolean isPerpetual = sec.getYxFlag() != null && sec.getYxFlag() == 1;
         boolean isAbs = sec.getAbsFlag() != null && sec.getAbsFlag() == 1;
         boolean isPrivatePlacement = (sec.getIssueType() != null && sec.getIssueType().contains("私募"))
@@ -1416,7 +1753,7 @@ class SecurityPoolCheckRules {
             matchReasons.add("债券非永续债、私募债、ABS 债");
         }
 
-        // 条件3：债券类型属于债券类
+        // 3. 债券类型属于债券类
         String categoryType = shared.getBatchData() == null
                 ? securityPoolAdjustMapper.queryCategoryTypeBySecurityType(sec.getSecurityType())
                 : shared.getBatchData().categories.get(sec.getSecurityType());
@@ -1426,7 +1763,7 @@ class SecurityPoolCheckRules {
             unmatchReasons.add("债券类型不属于债券类");
         }
 
-        // 条件4：债券主体在白名单配置池中（当前 WHITELIST_POOL_IDS 空集，暂不查库）
+        // 4. 债券主体在白名单配置池中（当前 WHITELIST_POOL_IDS 空集，暂不查库）
         if (!WHITELIST_POOL_IDS.isEmpty()) {
             // TODO 后续接入 queryIssuerInWhitelistPools 查询主体在白名单池
             matchReasons.add("主体在白名单池中");
@@ -1434,7 +1771,7 @@ class SecurityPoolCheckRules {
             unmatchReasons.add("白名单池未配置，主体在白名单池条件不成立");
         }
 
-        // 条件5：债券不是担保债
+        // 5. 债券不是担保债
         boolean isGuaranteed = sec.getGuarantFlag() != null && sec.getGuarantFlag() == 1;
         if (!isGuaranteed) {
             matchReasons.add("债券非担保债");
@@ -1446,17 +1783,23 @@ class SecurityPoolCheckRules {
     }
 
     /**
-     * 简易流程命中判断入口。
+     * 简易流程命中判断入口
      *
      * 以下五项必须全部满足，逐项记录命中或不命中的原因：
      *
-     *   1. 当前规则唯一允许的层级为信用债一至三级，且目标池本身在准入范围内。
-     *   2. 同发行人债券近180天以非简易入库流程进入过信用债大库任意层级，含升库和降库。
-     *   3. 同发行人债券近180天实际入库的已通过调入业务中有信评附件。
-     *   4. 同发行人债券近180天实际入库的已通过调入业务中有有效证券分析。
-     *   5. 按永续、次级、标准信用债的顺序匹配一类附加要求。
+     * 执行顺序：
+     * 1. 当前规则唯一允许的层级为信用债一至三级，且目标池本身在准入范围内
+     * 2. 同发行人债券近180天以非简易入库流程进入过信用债大库任意层级，含升库和降库
+     * 3. 同发行人债券近180天实际入库的已通过调入业务中有信评附件
+     * 4. 同发行人债券近180天实际入库的已通过调入业务中有有效证券分析
+     * 5. 按永续、次级、标准信用债的顺序匹配一类附加要求唯一性按完整一至五级准入范围判断，不受当前勾选池、权限或放开规则开关影响
      *
-     * 唯一性按完整一至五级准入范围判断，不受当前勾选池、权限或放开规则开关影响。
+     * @param req 调库校验请求
+     * @param shared 本次校验的共享数据
+     * @param targetPool 当前调整项的目标池配置
+     * @param matchReasons 用于收集匹配原因的列表
+     * @param unmatchReasons 用于收集不匹配原因的列表
+     * @return true=满足简易入库流程条件，false=不满足简易入库流程条件
      */
     boolean isSimpleInboundFlowMatched(
             AdjustCheckReq req, AdjustSharedData shared, InvestmentPoolBo targetPool,
@@ -1483,11 +1826,13 @@ class SecurityPoolCheckRules {
             // 简易资格沿用当前入库规则的年期限口径
             String bucketCode = matchTermBucket(CreditBondRemainTermUtil.resolveRemainTermYears(security), shared.getBatchData());
             if (bucketCode != null) {
+                // 同批相同评级档和期限档共用允许投资池
                 matrixPoolIds = queryInboundMatrix(gradeCode, bucketCode, shared.getBatchData());
             }
         }
         // 先按特殊债及观察名单展开全部一至五级，再判断是否唯一
         Integer standardBestSort = resolveBestAllowedSort(matrixPoolIds, shared.getPoolMap());
+        // 根据完整准入规则计算一至五级可入层级，避免只看目标池造成唯一性误判
         Set<Integer> allowedLevels = resolveSimpleInboundAllowedLevels(shared, matrixPoolIds, standardBestSort);
         if (allowedLevels.size() == 1) {
             Integer onlyLevel = allowedLevels.iterator().next();
@@ -1548,7 +1893,20 @@ class SecurityPoolCheckRules {
         return unmatchReasons.isEmpty();
     }
 
-    /** 根据完整准入规则计算一至五级可入层级，避免只看目标池造成唯一性误判。 */
+    /**
+     * 根据完整准入规则计算一至五级可入层级，避免只看目标池造成唯一性误判
+     *
+     * 执行顺序：
+     * 1. 无标准矩阵结果或属于分级库排除类型时，不存在可入层级
+     * 2. 在标准最佳档位基础上应用特殊债及观察名单规则，确定实际准入起始层级
+     * 3. 重点观察名单按当前所在层级执行既有准入限制
+     * 4. 遍历全部分级库并按层级去重，不能只筛一至三级或只看本次勾选池
+     *
+     * @param shared 本次校验的共享数据
+     * @param matrixPoolIds ID列表
+     * @param standardBestSort 特殊债调整前的标准矩阵最佳层级，层级数字增加1表示下调一级
+     * @return 筛选出的集合
+     */
     private Set<Integer> resolveSimpleInboundAllowedLevels(
             AdjustSharedData shared, List<Long> matrixPoolIds, Integer standardBestSort) {
         Set<Integer> levels = new TreeSet<>();
@@ -1584,7 +1942,19 @@ class SecurityPoolCheckRules {
         return levels;
     }
 
-    /** 目标池须为规则实际允许的分级库，不能仅凭与另一个允许池同档认定可入。 */
+    /**
+     * 目标池须为规则实际允许的分级库，不能仅凭与另一个允许池同档认定可入
+     *
+     * 执行顺序：
+     * 1. 按与完整准入集合相同的档位规则核对目标池
+     * 2. 目标池须为规则实际允许的分级库，不能仅凭与另一个允许池同档认定可入
+     *
+     * @param shared 本次校验的共享数据
+     * @param matrixPoolIds ID列表
+     * @param standardBestSort 特殊债调整前的标准矩阵最佳层级，层级数字增加1表示下调一级
+     * @param targetPool 当前调整项的目标池配置
+     * @return true=目标池在简易入库规则实际允许的分级池范围内，false=目标池不在规则允许范围内
+     */
     private boolean isSimpleInboundTargetAllowed(
             AdjustSharedData shared, List<Long> matrixPoolIds, Integer standardBestSort, InvestmentPoolBo targetPool) {
         if (!CreditBondSpecialInboundRule.isGradedLevelPool(targetPool)) {
@@ -1599,10 +1969,16 @@ class SecurityPoolCheckRules {
     }
 
     /**
-     * 简易条件4：检查特殊债档位要求，以及次级债和标准信用债的期限上限。
+     * 简易条件4：检查特殊债档位要求，以及次级债和标准信用债的期限上限
      *
+     * 执行顺序：
+     * 1. 特殊债要求只看发债主体内评，不用担保人内评替代
+     * 2. 永续债：内评1档恰好下调一级，其他档位至少下调一级
+     *
+     * @param shared 本次校验的共享数据
      * @param standardBestSort 特殊债调整前的标准矩阵最佳层级，层级数字增加1表示下调一级
      * @param targetSort 本次目标层级
+     * @param failures 校验失败原因
      */
     void checkSimpleInboundSpecialConditions(
             AdjustSharedData shared, Integer standardBestSort, Integer targetSort, List<String> failures) {
@@ -1611,7 +1987,7 @@ class SecurityPoolCheckRules {
         String issuerGrade = normalizeGradeCode(security.getInnerIssuerRating());
         BigDecimal remainYears = CreditBondRemainTermUtil.resolveRemainTermYears(security);
 
-        // 4.1 永续债：内评1档恰好下调一级，其他档位至少下调一级
+        // 1. 永续债：内评1档恰好下调一级，其他档位至少下调一级
         if (CreditBondSpecialInboundRule.isPerpetual(security)) {
             boolean levelMatched = false;
             if (standardBestSort != null && targetSort != null) {
@@ -1625,7 +2001,7 @@ class SecurityPoolCheckRules {
                 failures.add("永续债内评1档须按标准入库等级下调一级，其余须至少下调一级");
             }
         } else if (CreditBondSpecialInboundRule.isSubordinated(security)) {
-            // 4.2 次级债：先检查目标档位，再检查内评2-档的五年期限上限
+            // 次级债：先检查目标档位，再检查内评2-档的五年期限上限
             boolean gradeTwoBand = "2+".equals(issuerGrade) || "2".equals(issuerGrade) || "2-".equals(issuerGrade);
             boolean levelMatched;
             if ("1".equals(issuerGrade)) {
@@ -1652,23 +2028,37 @@ class SecurityPoolCheckRules {
         } else if (isStandardCreditBond(security) && "3".equals(issuerGrade)
                 && (remainYears == null || remainYears.signum() < 0
                 || remainYears.compareTo(BigDecimal.ONE) > 0)) {
-            // 4.3 标准信用债：内评3档期限须在1年及以内，空值或负数不通过
+            // 标准信用债：内评3档期限须在1年及以内，空值或负数不通过
             failures.add("内评3档的标准信用债期限须在1年及以内");
         }
     }
 
     /**
-     * 独立判断标准信用债，完整业务定义由上游维护，只有std_credit_flag=1时认定为标准。
+     * 独立判断标准信用债，完整业务定义由上游维护，只有std_credit_flag=1时认定为标准
+     *
+     * 执行顺序：
+     * 1. 检查主档的标准信用债标志是否为 1
+     *
+     * @param security 本次证券
+     * @return true=标准信用债标志为 1，false=标准信用债标志未设置或不为 1
      */
     boolean isStandardCreditBond(SecurityInfoBo security) {
         return security != null && Integer.valueOf(1).equals(security.getStdCreditFlag());
     }
 
     /**
-     * 判断信用债在库调整流程是上调还是下调。
+     * 判断信用债在库调整流程是上调还是下调
      *
      * 同一父级下，目标池 innerSort 小于当前所在池为升库，大于当前所在池为降库；
-     * 未找到同父级当前池时返回 null，由调用方走目标池标准调入流程。
+     * 未找到同父级当前池时返回 null，由调用方走目标池标准调入流程
+     *
+     * 执行顺序：
+     * 1. 目标池有父池和档级时，在当前在池记录中寻找同父级的池
+     * 2. 档位比较结果决定升库或降库，无可比较结果时留空
+     *
+     * @param targetPool 当前调整项的目标池配置
+     * @param shared 本次校验的共享数据
+     * @return 上调或下调流程类型，无法判断时为 null
      */
     private String resolveCreditBondAdjustFlowType(InvestmentPoolBo targetPool, AdjustSharedData shared) {
         if (targetPool == null || targetPool.getParentId() == null || targetPool.getInnerSort() == null) {
@@ -1694,7 +2084,13 @@ class SecurityPoolCheckRules {
     }
 
     /**
-     * 判断目标池是否属于信用债大库。
+     * 判断目标池是否属于信用债大库
+     *
+     * 执行顺序：
+     * 1. 投资池为空时判为不匹配，有投资池时比较信用债池类型代码
+     *
+     * @param pool 目标池
+     * @return true=目标池属于信用债大库，false=目标池不属于信用债大库
      */
     boolean isCreditBondPool(InvestmentPoolBo pool) {
         if (pool == null) {
@@ -1704,14 +2100,26 @@ class SecurityPoolCheckRules {
     }
 
     /**
-     * 判断是否为临时代码占位证券（security_source=temporary）。
+     * 判断是否为临时代码占位证券（security_source=temporary）
+     *
+     * 执行顺序：
+     * 1. 证券有值且来源字段为 temporary 时判为临时证券
+     *
+     * @param sec 证券主数据
+     * @return true=证券为临时代码占位证券，false=证券不是临时代码占位证券
      */
     private boolean isTemporarySecurity(SecurityInfoBo sec) {
         return sec != null && "temporary".equals(sec.getSecuritySource());
     }
 
     /**
-     * 判断证券当前是否已在信用债大库中。
+     * 判断证券当前是否已在信用债大库中
+     *
+     * 执行顺序：
+     * 1. 用当前在池 ID 查池配置，发现任一信用债大库即返回 true，遍历完仍未发现时返回 false
+     *
+     * @param shared 本次校验的共享数据
+     * @return true=证券当前至少在一个信用债池，false=证券当前不在任何信用债池
      */
     private boolean isSecurityInCreditBondPool(AdjustSharedData shared) {
         for (Long currentPoolId : shared.getCurrentPoolIds()) {
@@ -1725,7 +2133,13 @@ class SecurityPoolCheckRules {
     }
 
     /**
-     * 判断目标池是否为信用债大库一、二、三级库。
+     * 判断目标池是否为信用债大库一、二、三级库
+     *
+     * 执行顺序：
+     * 1. 池类型是信用债且层级排序值在 1 到 3 之间时返回 true
+     *
+     * @param pool 目标池
+     * @return true=目标池为信用债大库一至三级，false=目标池不属于这三个档级
      */
     private boolean isCreditBondLevelOneToThree(InvestmentPoolBo pool) {
         return pool != null
@@ -1736,10 +2150,19 @@ class SecurityPoolCheckRules {
     }
 
     /**
-     * 构建白名单流程候选项。
+     * 构建白名单流程候选项
+     *
+     * 执行顺序：
+     * 1. 同一批次只解析一次相同流程 Key
+     * 2. 构建流程候选项（统一入口）
+     *
+     * @param p 用于组装流程候选的参数
+     * @param batchData 批次数据
+     * @return 白名单流程候选
      */
     private AdjustCheckDto.FlowOption buildWhitelistFlowOption(FlowOptionParam p, BatchSecurityCheckData batchData) {
 
+        // 1. 同一批次只解析一次相同流程 Key
         FlowDefinitionBo flow = queryBatchFlow(FLOW_KEY_WHITELIST_INBOUND, batchData);
         List<String> reasons = new ArrayList<>(p.getUnmatchReasons());
         if (flow == null) {
@@ -1751,15 +2174,26 @@ class SecurityPoolCheckRules {
         p.setFlowKey(FLOW_KEY_WHITELIST_INBOUND);
         p.setSelectable(p.isMatched());
         p.setUnmatchReasons(reasons);
-        // 构建流程候选项（统一入口）
+        // 2. 构建流程候选项（统一入口）
         return buildFlowOption(p);
     }
 
     /**
-     * 构建目标池标准调入流程候选项。
+     * 构建目标池标准调入流程候选项
+     *
+     * 执行顺序：
+     * 1. 解析流程名称：优先使用配置名称，为空时回退到默认名称
+     * 2. 构建目标池默认流程说明
+     * 3. 构建默认调入流程候选项
+     *
+     * @param targetPool 当前调整项的目标池配置
+     * @param matchReason 已知的流程匹配原因
+     * @return 默认调入流程候选
      */
     private AdjustCheckDto.FlowOption buildNormalInboundFlowOption(InvestmentPoolBo targetPool, String matchReason) {
+        // 1. 解析流程名称：优先使用配置名称，为空时回退到默认名称
         String flowName = resolveFlowName(targetPool.getInFlowName(), "默认调入流程");
+        // 判断目标池是否未配置审批流程
         boolean noApproval = isNoApprovalFlow(targetPool.getInFlowId(), targetPool.getInFlowKey());
         FlowOptionParam p = new FlowOptionParam();
         p.setFlowType(FlowType.NORMAL_INBOUND.getCode());
@@ -1769,15 +2203,25 @@ class SecurityPoolCheckRules {
         p.setRecommended(true);
         p.setMatched(true);
         p.setSelectable(true);
+        // 2. 构建目标池默认流程说明
         p.setMatchReasons(Collections.singletonList(buildTargetFlowReason(
                 matchReason, flowName, noApproval, "默认调入流程")));
         p.setUnmatchReasons(new ArrayList<>());
-        // 构建默认调入流程候选项
+        // 3. 构建默认调入流程候选项
         return buildPoolFlowOption(p);
     }
 
     /**
-     * 构建目标池默认流程说明。
+     * 构建目标池默认流程说明
+     *
+     * 执行顺序：
+     * 1. 先保留调用方传入的说明前缀，再根据是否需要审批补充默认流程或无流程的提示
+     *
+     * @param prefix 已知的流程原因前缀
+     * @param flowName 流程展示名称
+     * @param noApproval 目标池是否未配置审批流程
+     * @param flowLabel 用于提示的流程类别名称
+     * @return 展示给用户的流程匹配原因
      */
     private String buildTargetFlowReason(String prefix, String flowName, boolean noApproval, String flowLabel) {
         String reasonPrefix = prefix != null && !prefix.isEmpty() ? prefix + "，" : "";
@@ -1788,12 +2232,19 @@ class SecurityPoolCheckRules {
     }
 
     /**
-     * 使用目标池配置构建流程候选项。
+     * 使用目标池配置构建流程候选项
      *
      * 调用方需先将 {@code configuredFlowName} 与 {@code fallbackFlowName} 决议为最终的
-     * {@code flowName} 后传入 {@link FlowOptionParam}。
+     * {@code flowName} 后传入 {@link FlowOptionParam}
+     *
+     * 执行顺序：
+     * 1. 构建流程候选项（统一入口）
+     *
+     * @param p 用于组装流程候选的参数
+     * @return 用于选择的池配置流程候选
      */
     private AdjustCheckDto.FlowOption buildPoolFlowOption(FlowOptionParam p) {
+        // 判断目标池是否未配置审批流程
         boolean noApproval = isNoApprovalFlow(p.getFlowId(), p.getFlowKey());
         FlowOptionParam result = new FlowOptionParam();
         result.setFlowType(p.getFlowType());
@@ -1810,21 +2261,42 @@ class SecurityPoolCheckRules {
     }
 
     /**
-     * 判断目标池是否未配置审批流程。
+     * 判断目标池是否未配置审批流程
+     *
+     * 执行顺序：
+     * 1. 同时检查流程 ID 和流程 Key，两者都未填写时判为无流程
+     *
+     * @param flowId 流程定义 ID，可为 null
+     * @param flowKey 流程 Key，可为 null/空
+     * @return true=流程 ID 和流程 Key 均未填写，false=至少填写了一个流程标识
      */
     private boolean isNoApprovalFlow(Long flowId, String flowKey) {
         return flowId == null && (flowKey == null || flowKey.isEmpty());
     }
 
     /**
-     * 解析流程名称：优先使用配置名称，为空时回退到默认名称。
+     * 解析流程名称：优先使用配置名称，为空时回退到默认名称
+     *
+     * 执行顺序：
+     * 1. 配置名称非空时按原值使用，缺失时返回传入的默认名称
+     *
+     * @param configuredName 配置的流程名称
+     * @param fallbackName 未配置名称时使用的默认名称
+     * @return 流程展示名称
      */
     private static String resolveFlowName(String configuredName, String fallbackName) {
         return configuredName != null && !configuredName.isEmpty() ? configuredName : fallbackName;
     }
 
     /**
-     * 构建流程候选项（统一入口）。
+     * 构建流程候选项（统一入口）
+     *
+     * 执行顺序：
+     * 1. 填入流程类型、ID、Key 及名称
+     * 2. 填入推荐、可选及匹配标志，并带上匹配和不匹配原因
+     *
+     * @param p 用于组装流程候选的参数
+     * @return 返回给页面的流程候选
      */
     private AdjustCheckDto.FlowOption buildFlowOption(FlowOptionParam p) {
 
@@ -1845,7 +2317,12 @@ class SecurityPoolCheckRules {
      * 调入校验：通用校验 + 类型特有校验
      *
      * 先执行 checkCommonIn（通用：池锁定/品种/市场/pending/重复入池/容量/来源/限制/互斥/弹性），
-     * 再按 categoryType 路由类型特有校验（债券到期 checkBondIn / 股票退市 checkStockIn 等）。
+     * 再按 categoryType 路由类型特有校验（债券到期 checkBondIn / 股票退市 checkStockIn 等）
+     *
+     * 执行顺序：
+     * 1. 通用校验（所有类型都走）
+     * 2. 类型特有校验（按 categoryType 路由）
+     * 3. 按发行主体复核黑名单质押库调入条件
      *
      * @param ctx 调库校验上下文
      * @return 不通过的失败原因列表，通过则返回空列表
@@ -1855,25 +2332,32 @@ class SecurityPoolCheckRules {
         if (ctx.isExcelCompanyFollow()) {
             // 线下主体决定优先，池关系和在途冲突仍需执行
             addIfFailed(failures, preCheckPendingProcess(ctx));
+            // 若 reason 非 null 则追加到失败原因列表（避免调用方每次判空）
             addIfFailed(failures, inCheckRestrictPool(ctx));
+            // 若 reason 非 null 则追加到失败原因列表（避免调用方每次判空），再规则：同一请求中同时勾选了互斥调入项
             addIfFailed(failures, inCheckMutexConflict(ctx));
+            // 单条校验返回的警告原因非空时加入警告列表（不阻断调库，如弹性禁投池），再规则：调入弹性禁投池（in_soft_restrict）
             addIfWarning(ctx.getWarnings(), inCheckElasticPool(ctx));
             return failures;
         }
-        // 通用校验（所有类型都走）
+        // 1. 通用校验（所有类型都走）
         failures.addAll(checkCommonIn(ctx));
-        // 类型特有校验（按 categoryType 路由）
+        // 2. 类型特有校验（按 categoryType 路由）
         String categoryType = ctx.getCategoryType();
         if (CategoryType.BOND.getCode().equals(categoryType)) {
+            // 债券类型特有调入校验
             failures.addAll(checkBondIn(ctx));
         } else if (CategoryType.STOCK.getCode().equals(categoryType)) {
+            // 股票类型特有调入校验
             failures.addAll(checkStockIn(ctx));
         } else if (CategoryType.FUND.getCode().equals(categoryType)) {
+            // 基金类型特有调入校验
             failures.addAll(checkFundIn(ctx));
         } else if (CategoryType.COMPANY.getCode().equals(categoryType)) {
+            // 主体类型特有调入校验（主体不校验到期，暂无）
             failures.addAll(checkCompanyIn(ctx));
         }
-        // 按发行主体复核黑名单质押库调入条件
+        // 3. 按发行主体复核黑名单质押库调入条件
         addPledgeBlacklistFailure(failures, ctx, AdjustMode.IN.getCode());
         return failures;
     }
@@ -1881,18 +2365,30 @@ class SecurityPoolCheckRules {
     /**
      * 通用调入校验（所有类型都走）
      *
-     * 含池锁定、品种、市场、pending流程、重复入池、容量、来源池、限制池、互斥、弹性禁投。
-     * 不含证券到期（已拆到类型特有：债券到期 checkBondIn / 股票退市 checkStockIn）。
+     * 含池锁定、品种、市场、pending流程、重复入池、容量、来源池、限制池、互斥、弹性禁投
+     * 不含证券到期（已拆到类型特有：债券到期 checkBondIn / 股票退市 checkStockIn）
+     *
+     * 执行顺序：
+     * 1. 前置检查：目标池是否已锁定（最硬拦截，优先执行）
+     * 2. 前置检查：证券品种是否符合目标池配置
+     * 3. 前置检查：证券市场是否符合目标池配置
+     * 4. 前置检查：是否存在待处理流程
+     * 5. 入池检查：证券当前在弹性禁投池中（in_soft_restrict，警告不阻断）
+     * 6. 入池检查：证券是否在全局禁止池（forbidden 禁投池）
+     * 7. 开放日校验（按池 open_day_adjust，调入）
+     *
+     * @param ctx 调库校验上下文
+     * @return 阻断调入的原因，空列表表示通过
      */
     private List<String> checkCommonIn(AdjustCheckContext ctx) {
         List<String> failures = new ArrayList<>();
-        // 前置检查：目标池是否已锁定（最硬拦截，优先执行）
+        // 1. 前置检查：目标池是否已锁定（最硬拦截，优先执行）
         addIfFailed(failures, inCheckPoolLocked(ctx));
-        // 前置检查：证券品种是否符合目标池配置
+        // 2. 前置检查：证券品种是否符合目标池配置
         addIfFailed(failures, inCheckVariety(ctx));
-        // 前置检查：证券市场是否符合目标池配置
+        // 3. 前置检查：证券市场是否符合目标池配置
         addIfFailed(failures, inCheckMarket(ctx));
-        // 前置检查：是否存在待处理流程
+        // 4. 前置检查：是否存在待处理流程
         addIfFailed(failures, preCheckPendingProcess(ctx));
         // 入池检查：证券是否已在目标池中
         addIfFailed(failures, inCheckSecurityAlreadyInPool(ctx));
@@ -1904,13 +2400,13 @@ class SecurityPoolCheckRules {
         addIfFailed(failures, inCheckRestrictPool(ctx));
         // 入池检查：本次请求中是否同时勾选了互斥池（不可同时调入）
         addIfFailed(failures, inCheckMutexConflict(ctx));
-        // 入池检查：证券当前在弹性禁投池中（in_soft_restrict，警告不阻断）
+        // 5. 入池检查：证券当前在弹性禁投池中（in_soft_restrict，警告不阻断）
         addIfWarning(ctx.getWarnings(), inCheckElasticPool(ctx));
-        // 入池检查：证券是否在全局禁止池（forbidden 禁投池）
+        // 6. 入池检查：证券是否在全局禁止池（forbidden 禁投池）
         addIfFailed(failures, inCheckForbiddenPool(ctx));
         // 行业限制校验（按池 industry_code，调入）——暂时不需要，先注释
         // addIfFailed(failures, inCheckIndustry(ctx));
-        // 开放日校验（按池 open_day_adjust，调入）
+        // 7. 开放日校验（按池 open_day_adjust，调入）
         addIfFailed(failures, inCheckOpenDay(ctx));
         return failures;
     }
@@ -1918,13 +2414,20 @@ class SecurityPoolCheckRules {
     /**
      * 债券类型特有调入校验
      *
-     * 含债券到期校验（maturity_date 早于今日则禁止调入）。
+     * 含债券到期校验（maturity_date 早于今日则禁止调入）
+     *
+     * 执行顺序：
+     * 1. 债券到期校验
+     * 2. 主体债入库规则校验（信用债大库矩阵）
+     *
+     * @param ctx 调库校验上下文
+     * @return 阻断债券调入的原因
      */
     private List<String> checkBondIn(AdjustCheckContext ctx) {
         List<String> failures = new ArrayList<>();
-        // 债券到期校验
+        // 1. 债券到期校验
         addIfFailed(failures, inCheckBondMaturity(ctx));
-        // 主体债入库规则校验（信用债大库矩阵）
+        // 2. 主体债入库规则校验（信用债大库矩阵）
         addIfFailed(failures, inCheckMainGradeRule(ctx));
         return failures;
     }
@@ -1932,25 +2435,37 @@ class SecurityPoolCheckRules {
     /**
      * 规则：主体债入库规则（credit_bond_pool_grade_rule 矩阵）
      *
-     * 调入信用债大库池时，按债券的「主体内评分档 × 期限档」查矩阵得到允许调入的池列表。
+     * 调入信用债大库池时，按债券的「主体内评分档 × 期限档」查矩阵得到允许调入的池列表
      * 担保债取主体与担保人内评孰高后再查矩阵；
      * ABS：所选权益人内评（自选权益人优先，复用 innerGuarantorRating）1 档只能调入一级库，缺少内评或非 1 档至少下调一级；
      * 私募发债主体内评 1 档只能调入一级库，其余至少下调一级；
      * 永续发债主体内评 1 档下调一级（矩阵最好档再降一档且只留那一档），其余至少下调一级；
-     * 次级发债主体内评 1 档只能调入一级库，2+/2/2- 下调一级（只留那一档），其余至少下调一级。
-     * 担保债或已在观察池：不得高于矩阵最好档，从该档开到五级。
-     * 已在重点观察名单：未在分级库不得新增（开关开启时强担保豁免），已在 1～4 级只能去五级。开关开启时池间调入限制仅对强担保豁免 restricted 池，禁止池仍全局拦截。可转债/可交换债/CRMW 不适用信用债 1～5。
-     * 正式证券无内评禁止入信用债 1～5 级；临时代码默认档 4。
-     * 期限为空默认最长档（期限>5）继续走矩阵，不跳过。
-     * 境外债目标池不走本规则。仅调入校验。
+     * 次级发债主体内评 1 档只能调入一级库，2+/2/2- 下调一级（只留那一档），其余至少下调一级
+     * 担保债或已在观察池：不得高于矩阵最好档，从该档开到五级
+     * 已在重点观察名单：未在分级库不得新增（开关开启时强担保豁免），已在 1～4 级只能去五级。开关开启时池间调入限制仅对强担保豁免 restricted 池，禁止池仍全局拦截。可转债/可交换债/CRMW 不适用信用债 1～5
+     * 正式证券无内评禁止入信用债 1～5 级；临时代码默认档 4
+     * 期限为空默认最长档（期限&gt;5）继续走矩阵，不跳过
+     * 境外债目标池不走本规则。仅调入校验
+     *
+     * 执行顺序：
+     * 1. 是否放开规则：是=跳过主体债入库矩阵校验（对齐批量调库 releaseRules）
+     * 2. 前置门控：仅信用债分级库校验（境外债跳过）
+     * 3. 可转债 / 可交换债 / CRMW 不能调入信用债分级库
+     * 4. 证券自身或发行主体任一在重点观察名单，即走重点观察名单禁新增规则
+     * 5. 含权口径取剩余期限年（date_exists_str 解析，含权/回购已是年）；算不出期限时按最长档继续走矩阵，不跳过
+     * 6. 标准矩阵最好档，再叠加特殊债/担保/观察池口径
+     * 7. 目标池是否在允许范围内（档位口径或矩阵点名的池）
+     *
+     * @param ctx 调库校验上下文
+     * @return 分档矩阵未通过时的阻断原因，通过时为空
      */
     String inCheckMainGradeRule(AdjustCheckContext ctx) {
-        // 是否放开规则：是=跳过主体债入库矩阵校验（对齐批量调库 releaseRules）
+        // 1. 是否放开规则：是=跳过主体债入库矩阵校验（对齐批量调库 releaseRules）
         if (ctx.isReleaseRules()) {
             return null;
         }
         InvestmentPoolBo pool = ctx.getTargetPool();
-        // 前置门控：仅信用债分级库校验（境外债跳过）
+        // 2. 前置门控：仅信用债分级库校验（境外债跳过）
         if (!isGradedBondPool(pool)) {
             return null;
         }
@@ -1958,11 +2473,11 @@ class SecurityPoolCheckRules {
         if (sec == null) {
             return null;
         }
-        // 可转债 / 可交换债 / CRMW 不能调入信用债分级库
+        // 3. 可转债 / 可交换债 / CRMW 不能调入信用债分级库
         if (CreditBondSpecialInboundRule.isExcludedFromCreditBondGradedPool(sec)) {
             return "可转债、可交换债、信用风险缓释工具不适用信用债分级库";
         }
-        // 证券自身或发行主体任一在重点观察名单，即走重点观察名单禁新增规则
+        // 4. 证券自身或发行主体任一在重点观察名单，即走重点观察名单禁新增规则
         boolean inRestricted = ctx.isSecurityInRestrictedPool() || ctx.isIssuerInRestrictedPool();
         // 取当前已在分级库最好档，供重点观察名单区分新增/已在库
         Integer currentGradedSort = resolveCurrentGradedSort(ctx.getCurrentPoolIds(), ctx.getPoolMap());
@@ -1980,22 +2495,23 @@ class SecurityPoolCheckRules {
             return CreditBondSpecialInboundRule.isAbs(sec)
                     ? "所选权益人无内评分" : "主体无内评分";
         }
-        // 含权口径取剩余期限年（date_exists_str 解析，含权/回购已是年）；算不出期限时按最长档继续走矩阵，不跳过
+        // 5. 含权口径取剩余期限年（date_exists_str 解析，含权/回购已是年）；算不出期限时按最长档继续走矩阵，不跳过
         String bucketCode = matchTermBucket(CreditBondRemainTermUtil.resolveRemainTermYears(sec), ctx.getBatchData());
         if (bucketCode == null) {
             return "无法匹配债券期限档";
         }
+        // 同批相同评级档和期限档共用允许投资池
         List<Long> allowedPoolIds = queryInboundMatrix(gradeCode, bucketCode, ctx.getBatchData());
         if (allowedPoolIds == null || allowedPoolIds.isEmpty()) {
             return "主体债入库矩阵未配置允许池";
         }
-        // 标准矩阵最好档，再叠加特殊债/担保/观察池口径
+        // 6. 标准矩阵最好档，再叠加特殊债/担保/观察池口径
         Integer bestAllowedSort = resolveBestAllowedSort(allowedPoolIds, ctx.getPoolMap());
         boolean inObserve = ctx.isSecurityInObservePool() || ctx.isIssuerInObservePool();
         CreditBondSpecialInboundRule.GradedInboundMode inboundMode =
                 CreditBondSpecialInboundRule.resolveGradedInboundMode(sec, inObserve);
         Integer startSort = inboundMode.resolveStartSort(bestAllowedSort);
-        // 目标池是否在允许范围内（档位口径或矩阵点名的池）
+        // 7. 目标池是否在允许范围内（档位口径或矩阵点名的池）
         if (isLeafAllowedByGradeRule(pool, allowedPoolIds, inboundMode, startSort, ctx.getPoolMap())) {
             return null;
         }
@@ -2017,19 +2533,31 @@ class SecurityPoolCheckRules {
     }
 
     /**
-     * 按剩余期限（年）匹配信用债期限分组编码。
+     * 按剩余期限（年）匹配信用债期限分组编码
      *
-     * 遍历启用的 credit_bond_term_bucket，按 min_term_year/max_term_year + inclusive 标志判定区间归属。
-     * 入参为 {@link CreditBondRemainTermUtil#resolveRemainTermYears}（date_exists_str 解析，含权/回购已是年）。
+     * 遍历启用的 credit_bond_term_bucket，按 min_term_year/max_term_year + inclusive 标志判定区间归属
+     * 入参为 {@link CreditBondRemainTermUtil#resolveRemainTermYears}（date_exists_str 解析，含权/回购已是年）
      *
-     * @param remainTermYears 剩余期限年数；null 时按最长档（期限>5）兜底
+     * 执行顺序：
+     * 1. 用实时读取的期限分组配置匹配证券剩余年限
+     *
+     * @param remainTermYears 剩余期限年数；null 时按最长档（期限&gt;5）兜底
      * @return 期限档编码；无可用档或年数落不进任何档时返回 null
      */
     String matchTermBucket(BigDecimal remainTermYears) {
         return matchTermBucket(remainTermYears, null);
     }
 
-    /** 使用批次期限档或单券实时配置匹配期限 */
+    /**
+     * 使用批次期限档或单券实时配置匹配期限
+     *
+     * 执行顺序：
+     * 1. 查询启用期限区间列表
+     *
+     * @param remainTermYears 剩余期限年数；null 时按最长档（期限&gt;5）兜底
+     * @param data 本批共享数据
+     * @return 期限档编码；无可用档或年数落不进任何档时返回 null
+     */
     String matchTermBucket(BigDecimal remainTermYears, BatchSecurityCheckData data) {
         return CreditBondRemainTermUtil.matchTermBucket(
                 remainTermYears, data == null ? creditBondGradeRuleMapper.queryEnabledTermBucketList()
@@ -2037,12 +2565,17 @@ class SecurityPoolCheckRules {
     }
 
     /**
-     * 取两个主体内评分档中评级较高者（sort_no 较小者；担保债按主体与担保人孰高）。
+     * 取两个主体内评分档中评级较高者（sort_no 较小者；担保债按主体与担保人孰高）
      *
-     * 评分档未命中字典时保持主体评级档不变。
+     * 评分档未命中字典时保持主体评级档不变
+     *
+     * 执行顺序：
+     * 1. 查询启用评级档级列表
+     * 2. 取两个主体内评分档中评级较高者（sort_no 较小者
      *
      * @param gradeCode1 主体内评档
      * @param gradeCode2 担保人内评档
+     * @param data 本批共享数据
      * @return 更好的那档
      */
     private String pickBetterRatingGrade(String gradeCode1, String gradeCode2, BatchSecurityCheckData data) {
@@ -2065,9 +2598,12 @@ class SecurityPoolCheckRules {
     }
 
     /**
-     * 查矩阵用内评档：先取主档发行人内评；临时代码默认 4，担保债再与担保人内评取孰高。
+     * 查矩阵用内评档：先取主档发行人内评；临时代码默认 4，担保债再与担保人内评取孰高
      *
      * ABS 的评级主体固定写在发行人字段，担保人三字段为空，因此走到这里只会用到发行人内评，无需单独分支
+     *
+     * 执行顺序：
+     * 1. 缺少本批分档索引时，按单券方式取得当前证券的矩阵内评档级
      *
      * @param sec 证券主数据
      * @return 内评档编码；正式券无内评返回 null
@@ -2076,11 +2612,21 @@ class SecurityPoolCheckRules {
         return resolveMatrixGradeCode(sec, null);
     }
 
-    /** 按既有发行人和担保人取档规则获取矩阵内评 */
+    /**
+     * 按既有发行人和担保人取档规则获取矩阵内评
+     *
+     * 执行顺序：
+     * 1. 空串视为无内评
+     * 2. 临时代码占位常无内评，默认最低档 4
+     *
+     * @param sec 证券主数据
+     * @param data 本批共享数据
+     * @return 内评档编码；正式券无内评返回 null
+     */
     String resolveMatrixGradeCode(SecurityInfoBo sec, BatchSecurityCheckData data) {
-        // 空串视为无内评
+        // 1. 空串视为无内评
         String gradeCode = normalizeGradeCode(sec.getInnerIssuerRating());
-        // 临时代码占位常无内评，默认最低档 4
+        // 2. 临时代码占位常无内评，默认最低档 4
         if (gradeCode == null && isTemporarySecurity(sec)) {
             gradeCode = "4";
         }
@@ -2092,7 +2638,17 @@ class SecurityPoolCheckRules {
         return gradeCode;
     }
 
-    /** 同批相同评级档和期限档共用允许投资池 */
+    /**
+     * 同批相同评级档和期限档共用允许投资池
+     *
+     * 执行顺序：
+     * 1. 按评级档和期限区间查询允许调入的池，批量入口用同一组合的查询结果作为缓存
+     *
+     * @param gradeCode 档级代码
+     * @param bucketCode 区间代码
+     * @param data 本批共享数据
+     * @return 筛选出的列表
+     */
     private List<Long> queryInboundMatrix(String gradeCode, String bucketCode, BatchSecurityCheckData data) {
         if (data == null) {
             return creditBondGradeRuleMapper.queryAllowedPoolIdsByGradeAndBucket(gradeCode, bucketCode);
@@ -2101,7 +2657,16 @@ class SecurityPoolCheckRules {
                 key -> creditBondGradeRuleMapper.queryAllowedPoolIdsByGradeAndBucket(gradeCode, bucketCode));
     }
 
-    /** 同一批次只解析一次相同流程 Key */
+    /**
+     * 同一批次只解析一次相同流程 Key
+     *
+     * 执行顺序：
+     * 1. 按流程编码查询启用定义，批量入口只在该编码尚未查询时读库并保存结果
+     *
+     * @param flowKey 流程 Key，可为 null/空
+     * @param data 本批共享数据
+     * @return 流程定义记录
+     */
     private FlowDefinitionBo queryBatchFlow(String flowKey, BatchSecurityCheckData data) {
         if (data == null) {
             return flowMapper.queryActiveFlowByKey(flowKey);
@@ -2112,33 +2677,59 @@ class SecurityPoolCheckRules {
         return data.flows.get(flowKey);
     }
 
-    /** 获取当前规则应使用的持仓数量 */
+    /**
+     * 获取当前规则应使用的持仓数量
+     *
+     * 执行顺序：
+     * 1. 查询投资池当前数量
+     *
+     * @param shared 本次校验的共享数据
+     * @param poolId 当前限制池 ID
+     * @return 符合本次条件的数量
+     */
     private int checkPoolCount(AdjustSharedData shared, Long poolId) {
         return shared.getBatchData() == null ? securityPoolAdjustMapper.queryPoolCurrentCount(poolId)
                 : shared.getBatchData().counts.getOrDefault(poolId, 0);
     }
 
-    /** 使用已加载的市场映射执行原主档市场校验 */
+    /**
+     * 使用已加载的市场映射执行原主档市场校验
+     *
+     * 执行顺序：
+     * 1. 按证券代码从批量数据里取市场映射
+     * 2. 沿用统一市场校验，缺失映射时交由该校验报错
+     *
+     * @param data 本批共享数据
+     * @param securityCode 证券代码
+     * @return 批次市场
+     */
     private String resolveBatchMarket(BatchSecurityCheckData data, String securityCode) {
         List<SecurityMarketMappingDto> records = data.markets.getOrDefault(securityCode, Collections.emptyList());
         return SecurityMarketService.requireMarketCode(securityCode, records);
     }
 
     /**
-     * 是否信用债大库树（主体评分档套件范围）。
+     * 是否信用债大库树（主体评分档套件范围）
+     *
+     * 执行顺序：
+     * 1. 检查是否符合属于按内评分档的信用债池的条件
      *
      * @param pool 投资池
-     * @return true=信用债
+     * @return true=属于按内评分档的信用债池，false=不属于按内评分档的信用债池
      */
     boolean isGradedBondPool(InvestmentPoolBo pool) {
         return pool != null && CreditBondSpecialInboundRule.isGradedBondPoolType(pool.getPoolType());
     }
 
     /**
-     * 当前已在分级库的最好档（inner_sort 最小）。
+     * 当前已在分级库的最好档（inner_sort 最小）
+     *
+     * 执行顺序：
+     * 1. 从当前在池记录中筛出有排序值的信用债分级池
+     * 2. 取排序值最小的一档作为当前最好档
      *
      * @param currentPoolIds 当前在池 ID
-     * @param poolMap        全量池索引
+     * @param poolMap 全量池索引
      * @return 最好档；未在分级库返回 null
      */
     Integer resolveCurrentGradedSort(Set<Long> currentPoolIds, Map<Long, InvestmentPoolBo> poolMap) {
@@ -2159,10 +2750,13 @@ class SecurityPoolCheckRules {
     }
 
     /**
-     * 标准矩阵允许池的最好档。
+     * 标准矩阵允许池的最好档
+     *
+     * 执行顺序：
+     * 1. 允许的投资池ID 列表为空时返回空值
      *
      * @param allowedPoolIds 矩阵允许的信用债池 ID
-     * @param poolMap        全量池索引
+     * @param poolMap 全量池索引
      * @return 最小 inner_sort；无法解析返回 null
      */
     Integer resolveBestAllowedSort(List<Long> allowedPoolIds, Map<Long, InvestmentPoolBo> poolMap) {
@@ -2183,16 +2777,20 @@ class SecurityPoolCheckRules {
     }
 
     /**
-     * 这一级信用债库能不能调入。
+     * 这一级信用债库能不能调入
      * 只能调入一级库 / 下调一级：只留起始档那一级；至少下调一级 / 担保或观察池：起始档及更差；
-     * 算不出起始档或普通债：只认矩阵点名的那些池 ID。
+     * 算不出起始档或普通债：只认矩阵点名的那些池 ID
      *
-     * @param pool           待判断叶子池
+     * 执行顺序：
+     * 1. 启用档位准入方式且已知起始档级时比较目标排序
+     * 2. 其他情况检查目标池是否为规则显式允许的信用债池
+     *
+     * @param pool 待判断叶子池
      * @param allowedPoolIds 矩阵允许的信用债池 ID
-     * @param inboundMode    准入方式
-     * @param startSort      档位规则的起始档（1～5）
-     * @param poolMap        全量池索引（保留参数，便于调用方统一传入）
-     * @return true=允许调入
+     * @param inboundMode 准入方式
+     * @param startSort 档位规则的起始档（1～5）
+     * @param poolMap 全量池索引（保留参数，便于调用方统一传入）
+     * @return true=分档规则允许调入目标池，false=分档规则不允许调入目标池
      */
     boolean isLeafAllowedByGradeRule(InvestmentPoolBo pool, List<Long> allowedPoolIds,
                                              CreditBondSpecialInboundRule.GradedInboundMode inboundMode,
@@ -2210,13 +2808,21 @@ class SecurityPoolCheckRules {
     /**
      * 股票类型特有调入校验
      *
-     * 含股票退市校验（delist_date 早于今日则禁止调入）。
+     * 含股票退市校验（delist_date 早于今日则禁止调入）
+     *
+     * 执行顺序：
+     * 1. 检查股票退市限制，记录未通过原因
+     * 2. 检查目标池评级限制，汇总未通过原因
+     *
+     * @param ctx 调库校验上下文
+     * @return 阻断股票调入的原因
      */
     private List<String> checkStockIn(AdjustCheckContext ctx) {
         List<String> failures = new ArrayList<>();
-        // 股票退市校验
+        // 1. 检查股票退市限制，记录未通过原因
         addIfFailed(failures, inCheckStockDelist(ctx));
         // TODO 股票分管人限制及 StockResearch/investrank 评级来源尚未迁移，当前仅保留评级入口
+        // 2. 检查目标池评级限制，汇总未通过原因
         addIfFailed(failures, inCheckGradeAstrict(ctx));
         return failures;
     }
@@ -2224,8 +2830,14 @@ class SecurityPoolCheckRules {
     /**
      * 基金类型特有调入校验
      *
-     * 含基金评分校验（fund_rate_limit）：池配置评分限制表达式时，校验请求传入的 fundRate 是否满足。
-     * 对应老项目 checkInPool:1092-1120。
+     * 含基金评分校验（fund_rate_limit）：池配置评分限制表达式时，校验请求传入的 fundRate 是否满足
+     * 对应老项目 checkInPool:1092-1120
+     *
+     * 执行顺序：
+     * 1. 用本次传入的评分核对目标池规则，并收集未通过的原因
+     *
+     * @param ctx 调库校验上下文
+     * @return 基金评分未通过时的原因列表，通过时返回空列表
      */
     private List<String> checkFundIn(AdjustCheckContext ctx) {
         List<String> failures = new ArrayList<>();
@@ -2237,10 +2849,19 @@ class SecurityPoolCheckRules {
     /**
      * 规则：基金评分（fund_rate_limit）
      *
-     * 池配置了基金评分限制表达式（如 3<=#rate<=8）时，调入校验请求传入的 fundRate 是否满足。
-     * #rate 为基金评分占位。表达式支持 <=#rate / <#rate（下限）、#rate<= / #rate<（上限）及组合，
-     * 各条件须同时满足。fundRate 为空或解析失败则校验失败。
-     * 对应老项目 checkInPool:1092-1120。仅调入校验（老代码 checkOutPool 无）。
+     * 池配置了基金评分限制表达式（如 3&lt;=#rate&lt;=8）时，调入校验请求传入的 fundRate 是否满足
+     * #rate 为基金评分占位。表达式支持 &lt;=#rate / &lt;#rate（下限）、#rate&lt;= / #rate&lt;（上限）及组合，
+     * 各条件须同时满足。fundRate 为空或解析失败则校验失败
+     * 对应老项目 checkInPool:1092-1120。仅调入校验（老代码 checkOutPool 无）
+     *
+     * 执行顺序：
+     * 1. 未传基金评分或解析失败，校验失败
+     * 2. 下限：&lt;=#rate（下限 &lt;= fundRate）
+     * 3. 下限：&lt;#rate（下限 &lt; fundRate）
+     * 4. 上限：#rate&lt;=（fundRate &lt;= 上限）优先于 #rate&lt;（fundRate &lt; 上限）
+     *
+     * @param ctx 调库校验上下文
+     * @return 基金评分未通过时的阻断原因，通过时为空
      */
     String inCheckFundRate(AdjustCheckContext ctx) {
         InvestmentPoolBo pool = ctx.getTargetPool();
@@ -2249,7 +2870,7 @@ class SecurityPoolCheckRules {
         }
         String rate = pool.getFundRateLimit().replaceAll(" ", "");
         String fundRateStr = ctx.getFundRate();
-        // 未传基金评分或解析失败，校验失败
+        // 1. 未传基金评分或解析失败，校验失败
         double fundRate;
         if (fundRateStr == null || fundRateStr.trim().isEmpty()) {
             return pool.getPoolName() + "的评分，必须在" + rate.replace("#rate", "基金评分");
@@ -2260,24 +2881,28 @@ class SecurityPoolCheckRules {
             return pool.getPoolName() + "的评分，必须在" + rate.replace("#rate", "基金评分");
         }
         boolean ok = true;
-        // 下限：<=#rate（下限 <= fundRate）
+        // 2. 下限：<=#rate（下限 <= fundRate）
         if (rate.indexOf("<=#rate") > 0
+                // 安全解析基金评分表达式边界值，解析失败返回 0.0（对齐老项目 NumberTool.safeToDouble 默认 0.0）
                 && !(parseRateBound(rate.split("<=#rate")[0]) <= fundRate)) {
             ok = false;
         }
-        // 下限：<#rate（下限 < fundRate）
+        // 3. 下限：<#rate（下限 < fundRate）
         if (rate.indexOf("<#rate") > 0
+                // 安全解析基金评分表达式边界值，解析失败返回 0.0（对齐老项目 NumberTool.safeToDouble 默认 0.0）
                 && !(parseRateBound(rate.split("<#rate")[0]) < fundRate)) {
             ok = false;
         }
-        // 上限：#rate<=（fundRate <= 上限）优先于 #rate<（fundRate < 上限）
+        // 4. 上限：#rate<=（fundRate <= 上限）优先于 #rate<（fundRate < 上限）
         if (rate.indexOf("#rate<=") > 0) {
             String[] parts = rate.split("#rate<=");
+            // 安全解析基金评分表达式边界值，解析失败返回 0.0（对齐老项目 NumberTool.safeToDouble 默认 0.0）
             if (!(fundRate <= parseRateBound(parts[parts.length - 1]))) {
                 ok = false;
             }
         } else if (rate.indexOf("#rate<") > 0) {
             String[] parts = rate.split("#rate<");
+            // 安全解析基金评分表达式边界值，解析失败返回 0.0（对齐老项目 NumberTool.safeToDouble 默认 0.0）
             if (!(fundRate < parseRateBound(parts[parts.length - 1]))) {
                 ok = false;
             }
@@ -2288,7 +2913,15 @@ class SecurityPoolCheckRules {
         return null;
     }
 
-    /** 安全解析基金评分表达式边界值，解析失败返回 0.0（对齐老项目 NumberTool.safeToDouble 默认 0.0）。 */
+    /**
+     * 安全解析基金评分表达式边界值，解析失败返回 0.0（对齐老项目 NumberTool.safeToDouble 默认 0.0）
+     *
+     * 执行顺序：
+     * 1. 去掉文本首尾空白后按 Double 解析，解析异常时使用 0.0
+     *
+     * @param s 待处理的文本
+     * @return 用于评分比较的数值边界
+     */
     private double parseRateBound(String s) {
         try {
             return Double.parseDouble(s.trim());
@@ -2297,7 +2930,15 @@ class SecurityPoolCheckRules {
         }
     }
 
-    /** 主体类型特有调入校验（主体不校验到期，暂无） */
+    /**
+     * 主体类型特有调入校验（主体不校验到期，暂无）
+     *
+     * 执行顺序：
+     * 1. 当前没有适用于主体调入的专属规则，返回空的失败原因列表
+     *
+     * @param ctx 调库校验上下文
+     * @return 空的失败原因列表
+     */
     private List<String> checkCompanyIn(AdjustCheckContext ctx) {
         return new ArrayList<>();
     }
@@ -2306,7 +2947,10 @@ class SecurityPoolCheckRules {
      * 调出校验：通用校验 + 类型特有校验
      *
      * 先执行 checkCommonOut（通用：池锁定/pending/不在池/冻结期/限制/互斥/弹性），
-     * 再按 categoryType 路由类型特有校验（债券到期 checkBondOut / 股票退市 checkStockOut 等）。
+     * 再按 categoryType 路由类型特有校验（债券到期 checkBondOut / 股票退市 checkStockOut 等）
+     *
+     * 执行顺序：
+     * 1. 按常规调出入口执行通用和品种规则，质押黑名单条件使用默认判定
      *
      * @param ctx 调库校验上下文
      * @return 不通过的失败原因列表，通过则返回空列表
@@ -2315,49 +2959,86 @@ class SecurityPoolCheckRules {
         return checkOutConditions(ctx, null);
     }
 
-    /** 复核互斥调出时，批量提交使用本次已读到的关联主体 */
+    /**
+     * 复核互斥调出时，批量提交使用本次已读到的关联主体
+     *
+     * 执行顺序：
+     * 1. 通用校验（所有类型都走）
+     * 2. 类型特有校验（按 categoryType 路由）
+     * 3. 按发行主体复核黑名单质押库调出条件
+     *
+     * @param ctx 调库校验上下文
+     * @param candidates 已按展示顺序排列的关联主体
+     * @return 不通过的失败原因列表，通过则返回空列表
+     */
     List<String> checkOutConditions(AdjustCheckContext ctx, List<RelatedRatingCompanyDto> candidates) {
         List<String> failures = new ArrayList<>();
         if (ctx.isExcelCompanyFollow()) {
+            // 若 reason 非 null 则追加到失败原因列表（避免调用方每次判空），再规则：证券是否存在进行中的调库流程
             addIfFailed(failures, preCheckPendingProcess(ctx));
+            // 若 reason 非 null 则追加到失败原因列表（避免调用方每次判空）
             addIfFailed(failures, outCheckRestrictPool(ctx));
+            // 若 reason 非 null 则追加到失败原因列表（避免调用方每次判空），再规则：调出互斥池（out_mutex）
             addIfFailed(failures, outCheckMutexPool(ctx));
+            // 若 reason 非 null 则追加到失败原因列表（避免调用方每次判空），再规则：同一请求中同时勾选了互斥调出项
             addIfFailed(failures, outCheckMutexConflict(ctx));
+            // 单条校验返回的警告原因非空时加入警告列表（不阻断调库，如弹性禁投池），再规则：调出弹性禁投池（out_soft_restrict）
             addIfWarning(ctx.getWarnings(), outCheckElasticPool(ctx));
             return failures;
         }
-        // 通用校验（所有类型都走）
+        // 1. 通用校验（所有类型都走）
         failures.addAll(checkCommonOut(ctx));
-        // 类型特有校验（按 categoryType 路由）
+        // 2. 类型特有校验（按 categoryType 路由）
         String categoryType = ctx.getCategoryType();
         if (CategoryType.BOND.getCode().equals(categoryType)) {
+            // 债券类型特有调出校验
             failures.addAll(checkBondOut(ctx));
         } else if (CategoryType.STOCK.getCode().equals(categoryType)) {
+            // 股票类型特有调出校验
             failures.addAll(checkStockOut(ctx));
         } else if (CategoryType.FUND.getCode().equals(categoryType)) {
+            // 基金类型特有调出校验（暂无，后续 P2 加基金评分）
             failures.addAll(checkFundOut(ctx));
         } else if (CategoryType.COMPANY.getCode().equals(categoryType)) {
+            // 主体类型特有调出校验（主体不校验到期，暂无）
             failures.addAll(checkCompanyOut(ctx));
         }
-        // 按发行主体复核黑名单质押库调出条件
+        // 3. 按发行主体复核黑名单质押库调出条件
         addPledgeBlacklistFailure(failures, ctx, AdjustMode.OUT.getCode(), candidates);
         return failures;
     }
 
     /**
-     * 单券进入或退出黑名单质押库时，按发行主体复核三条件。
+     * 单券进入或退出黑名单质押库时，按发行主体复核三条件
      *
-     * @param failures   校验失败原因
-     * @param ctx        调库校验上下文
+     * 执行顺序：
+     * 1. 将当前证券、方向和原因列表转交给接受批量上下文的重载，本次批量上下文传 null
+     *
+     * @param failures 校验失败原因
+     * @param ctx 调库校验上下文
      * @param adjustMode 调整方向
      */
     void addPledgeBlacklistFailure(List<String> failures, AdjustCheckContext ctx, String adjustMode) {
+        // 按调用入口提供的候选复核黑名单质押条件
         addPledgeBlacklistFailure(failures, ctx, adjustMode, null);
     }
 
-    /** 按调用入口提供的候选复核黑名单质押条件 */
+    /**
+     * 按调用入口提供的候选复核黑名单质押条件
+     *
+     * 执行顺序：
+     * 1. 仅目标池为黑名单质押库时继续校验
+     * 2. ABS 按已确认身份或关联候选收集风险主体，其他证券按发行主体校验，批量入口复用已加载的主体状态
+     * 3. 有阻断原因时追加到调库失败列表
+     *
+     * @param failures 校验失败原因
+     * @param ctx 调库校验上下文
+     * @param adjustMode 调整方向
+     * @param candidates 已按展示顺序排列的关联主体
+     */
     private void addPledgeBlacklistFailure(List<String> failures, AdjustCheckContext ctx, String adjustMode,
                                            List<RelatedRatingCompanyDto> candidates) {
+        // 1. 仅目标池为黑名单质押库时继续校验
         if (ctx == null || ctx.getTargetPool() == null
                 || !PledgeBlacklistRuleService.BLACKLIST_POOL_ID.equals(ctx.getTargetPool().getId())) {
             return;
@@ -2365,6 +3046,7 @@ class SecurityPoolCheckRules {
         SecurityInfoBo security = ctx.getSecurityInfo();
         String companyCode = security == null ? null : security.getIssuerCode();
         String failure;
+        // 2. ABS 按已确认身份或关联候选收集风险主体，其他证券按发行主体校验，批量入口复用已加载的主体状态
         if (CreditBondSpecialInboundRule.isAbs(security)) {
             if (ctx.getBatchData() == null) {
                 List<String> companies = candidates == null ? absIdentityService.queryRiskCompanyCodes(security)
@@ -2374,6 +3056,7 @@ class SecurityPoolCheckRules {
             } else {
                 // 根据已加载的各主体状态执行同一组合规则
                 failure = pledgeBlacklistRuleService.validateCompanies(batchAbsRiskCompanies(security, ctx.getBatchData()),
+                        // 从本批索引读取名单与外评，并合并本次的预期池变动
                         adjustMode, code -> batchBlacklistDecision(code, ctx));
             }
         } else if (ctx.getBatchData() == null) {
@@ -2385,11 +3068,21 @@ class SecurityPoolCheckRules {
             // 失败原因与单券复用同一判断
             failure = pledgeBlacklistRuleService.validateDecision(batchBlacklistDecision(companyCode, ctx), adjustMode);
         }
-        // 汇总黑名单质押库校验失败原因
+        // 3. 有阻断原因时追加到调库失败列表
         addIfFailed(failures, failure);
     }
 
-    /** 从本批索引读取名单与外评，并合并本次的预期池变动 */
+    /**
+     * 从本批索引读取名单与外评，并合并本次的预期池变动
+     *
+     * 执行顺序：
+     * 1. 确认已配置有效认可评级机构，再读取本批主体的生效池与外评结果
+     * 2. 合并该主体本次拟调入和调出的池，得出质押黑名单库三项条件
+     *
+     * @param companyCode 发行主体代码
+     * @param ctx 调库校验上下文
+     * @return 主体命中质押黑名单库三项条件的结果
+     */
     private PledgeBlacklistRuleService.Decision batchBlacklistDecision(String companyCode, AdjustCheckContext ctx) {
         BatchSecurityCheckData data = ctx.getBatchData();
         if (!data.ratingAgenciesConfigured) {
@@ -2409,28 +3102,40 @@ class SecurityPoolCheckRules {
     /**
      * 通用调出校验（所有类型都走）
      *
-     * 含池锁定、pending流程、不在池、冻结期、限制池、互斥、弹性禁投。
-     * 不含证券到期（已拆到类型特有：债券到期 checkBondOut / 股票退市 checkStockOut）。
+     * 含池锁定、pending流程、不在池、冻结期、限制池、互斥、弹性禁投
+     * 不含证券到期（已拆到类型特有：债券到期 checkBondOut / 股票退市 checkStockOut）
+     *
+     * 执行顺序：
+     * 1. 前置检查：目标池是否已锁定（最硬拦截，优先执行）
+     * 2. 前置检查：是否存在待处理流程
+     * 3. 出池检查：证券是否不在来源池中
+     * 4. 出池检查：是否在冻结期内（入池后N天不可调出，须在确认在池后校验）
+     * 5. 出池检查：本次请求中是否同时勾选了互斥池（不可同时调出）
+     * 6. 出池检查：证券当前在弹性禁投池中（out_soft_restrict，警告不阻断）
+     * 7. 开放日校验（按池 open_day_adjust，调出）
+     *
+     * @param ctx 调库校验上下文
+     * @return 阻断调出的原因，空列表表示通过
      */
     private List<String> checkCommonOut(AdjustCheckContext ctx) {
         List<String> failures = new ArrayList<>();
-        // 前置检查：目标池是否已锁定（最硬拦截，优先执行）
+        // 1. 前置检查：目标池是否已锁定（最硬拦截，优先执行）
         addIfFailed(failures, outCheckPoolLocked(ctx));
-        // 前置检查：是否存在待处理流程
+        // 2. 前置检查：是否存在待处理流程
         addIfFailed(failures, preCheckPendingProcess(ctx));
-        // 出池检查：证券是否不在来源池中
+        // 3. 出池检查：证券是否不在来源池中
         addIfFailed(failures, outCheckSecurityNotInPool(ctx));
-        // 出池检查：是否在冻结期内（入池后N天不可调出，须在确认在池后校验）
+        // 4. 出池检查：是否在冻结期内（入池后N天不可调出，须在确认在池后校验）
         addIfFailed(failures, outCheckFrozenPeriod(ctx));
         // 出池检查：证券当前在调出限制池中（out_restrict）
         addIfFailed(failures, outCheckRestrictPool(ctx));
         // 出池检查：是否与互斥池冲突（证券当前在互斥池中）
         addIfFailed(failures, outCheckMutexPool(ctx));
-        // 出池检查：本次请求中是否同时勾选了互斥池（不可同时调出）
+        // 5. 出池检查：本次请求中是否同时勾选了互斥池（不可同时调出）
         addIfFailed(failures, outCheckMutexConflict(ctx));
-        // 出池检查：证券当前在弹性禁投池中（out_soft_restrict，警告不阻断）
+        // 6. 出池检查：证券当前在弹性禁投池中（out_soft_restrict，警告不阻断）
         addIfWarning(ctx.getWarnings(), outCheckElasticPool(ctx));
-        // 开放日校验（按池 open_day_adjust，调出）
+        // 7. 开放日校验（按池 open_day_adjust，调出）
         addIfFailed(failures, outCheckOpenDay(ctx));
         return failures;
     }
@@ -2438,7 +3143,13 @@ class SecurityPoolCheckRules {
     /**
      * 债券类型特有调出校验
      *
-     * 含债券到期校验（maturity_date 早于今日则禁止调出）。
+     * 含债券到期校验（maturity_date 早于今日则禁止调出）
+     *
+     * 执行顺序：
+     * 1. 债券到期校验
+     *
+     * @param ctx 调库校验上下文
+     * @return 阻断债券调出的原因
      */
     private List<String> checkBondOut(AdjustCheckContext ctx) {
         List<String> failures = new ArrayList<>();
@@ -2450,7 +3161,13 @@ class SecurityPoolCheckRules {
     /**
      * 股票类型特有调出校验
      *
-     * 含股票退市校验（delist_date 早于今日则禁止调出）。
+     * 含股票退市校验（delist_date 早于今日则禁止调出）
+     *
+     * 执行顺序：
+     * 1. 股票退市校验
+     *
+     * @param ctx 调库校验上下文
+     * @return 阻断股票调出的原因
      */
     private List<String> checkStockOut(AdjustCheckContext ctx) {
         List<String> failures = new ArrayList<>();
@@ -2459,12 +3176,28 @@ class SecurityPoolCheckRules {
         return failures;
     }
 
-    /** 基金类型特有调出校验（暂无，后续 P2 加基金评分） */
+    /**
+     * 基金类型特有调出校验（暂无，后续 P2 加基金评分）
+     *
+     * 执行顺序：
+     * 1. 当前没有适用于基金调出的专属规则，返回空的失败原因列表
+     *
+     * @param ctx 调库校验上下文
+     * @return 空的失败原因列表
+     */
     private List<String> checkFundOut(AdjustCheckContext ctx) {
         return new ArrayList<>();
     }
 
-    /** 主体类型特有调出校验（主体不校验到期，暂无） */
+    /**
+     * 主体类型特有调出校验（主体不校验到期，暂无）
+     *
+     * 执行顺序：
+     * 1. 当前没有适用于主体调出的专属规则，返回空的失败原因列表
+     *
+     * @param ctx 调库校验上下文
+     * @return 空的失败原因列表
+     */
     private List<String> checkCompanyOut(AdjustCheckContext ctx) {
         return new ArrayList<>();
     }
@@ -2472,7 +3205,13 @@ class SecurityPoolCheckRules {
     /**
      * 规则：债券到期（delist_date）
      *
-     * 债券摘牌日早于今日则禁止调入。对应老项目 checkInPool:544（ptype=4000 债券分支）。
+     * 债券摘牌日早于今日则禁止调入。对应老项目 checkInPool:544（ptype=4000 债券分支）
+     *
+     * 执行顺序：
+     * 1. 读取债券摘牌日，有值且早于当天时返回到期调入提示
+     *
+     * @param ctx 调库校验上下文
+     * @return 债券到期提示，未命中时为 null
      */
     private String inCheckBondMaturity(AdjustCheckContext ctx) {
         String delistDate = ctx.getSecurityInfo().getDelistDate();
@@ -2488,7 +3227,13 @@ class SecurityPoolCheckRules {
     /**
      * 规则：股票退市（delist_date）
      *
-     * 股票摘牌日早于今日则禁止调入。对应老项目 checkInPool:956（ptype=2000 股票分支）。
+     * 股票摘牌日早于今日则禁止调入。对应老项目 checkInPool:956（ptype=2000 股票分支）
+     *
+     * 执行顺序：
+     * 1. 读取股票摘牌日，有值且早于当天时返回退市调入提示
+     *
+     * @param ctx 调库校验上下文
+     * @return 股票退市提示，未命中时为 null
      */
     private String inCheckStockDelist(AdjustCheckContext ctx) {
         String delistDate = ctx.getSecurityInfo().getDelistDate();
@@ -2504,7 +3249,13 @@ class SecurityPoolCheckRules {
     /**
      * 规则：债券到期（delist_date，调出）
      *
-     * 债券摘牌日早于今日则禁止调出。对应老项目 checkOutPool 到期校验。
+     * 债券摘牌日早于今日则禁止调出。对应老项目 checkOutPool 到期校验
+     *
+     * 执行顺序：
+     * 1. 将债券摘牌日与当天比较，已过摘牌日时返回调出校验提示
+     *
+     * @param ctx 调库校验上下文
+     * @return 债券到期提示，未命中时为 null
      */
     private String outCheckBondMaturity(AdjustCheckContext ctx) {
         String delistDate = ctx.getSecurityInfo().getDelistDate();
@@ -2520,7 +3271,13 @@ class SecurityPoolCheckRules {
     /**
      * 规则：股票退市（delist_date，调出）
      *
-     * 股票摘牌日早于今日则禁止调出。对应老项目 checkOutPool 退市校验。
+     * 股票摘牌日早于今日则禁止调出。对应老项目 checkOutPool 退市校验
+     *
+     * 执行顺序：
+     * 1. 将股票摘牌日与当天比较，已过摘牌日时返回调出校验提示
+     *
+     * @param ctx 调库校验上下文
+     * @return 股票退市提示，未命中时为 null
      */
     private String outCheckStockDelist(AdjustCheckContext ctx) {
         String delistDate = ctx.getSecurityInfo().getDelistDate();
@@ -2537,7 +3294,14 @@ class SecurityPoolCheckRules {
      * 规则：证券是否存在进行中的调库流程
      *
      * 存在 pending 流程步骤的调库记录视为进行中，
-     * 需等待该流程终结后方可再次发起调库，避免并发操作导致入池状态混乱。
+     * 需等待该流程终结后方可再次发起调库，避免并发操作导致入池状态混乱
+     *
+     * 执行顺序：
+     * 1. 没有在途流程时返回 null
+     * 2. 有在途流程时返回阻止原因，拿到节点名称时一并显示
+     *
+     * @param ctx 调库校验上下文
+     * @return 进行中的流程提示，没有时为 null
      */
     private String preCheckPendingProcess(AdjustCheckContext ctx) {
         if (ctx.isHasPendingProcess()) {
@@ -2553,7 +3317,13 @@ class SecurityPoolCheckRules {
     /**
      * 规则：证券是否已在目标池中
      *
-     * 以 ip_pool_status 中 audit_status='20' 的有效记录为准，重复调入无实际意义。
+     * 以 ip_pool_status 中 audit_status='20' 的有效记录为准，重复调入无实际意义
+     *
+     * 执行顺序：
+     * 1. 比较目标池 ID 和证券的当前在池记录，已经在该池时返回重复调入提示
+     *
+     * @param ctx 调库校验上下文
+     * @return 组合已在池的提示，未命中时为 null
      */
     String inCheckSecurityAlreadyInPool(AdjustCheckContext ctx) {
         Long poolId = ctx.getTargetPool() != null ? ctx.getTargetPool().getId() : null;
@@ -2567,7 +3337,13 @@ class SecurityPoolCheckRules {
      * 规则：目标池是否已达持仓上限
      *
      * maxCapacity 为 null 或 0 时表示不限制数量；
-     * 当前有效证券数量（poolCurrentCount）≥ 上限时拒绝调入。
+     * 当前有效证券数量（poolCurrentCount）≥ 上限时拒绝调入
+     *
+     * 执行顺序：
+     * 1. 目标池设置正数持仓上限时比较当前数量，达到上限则拦截调入
+     *
+     * @param ctx 调库校验上下文
+     * @return 达到容量上限的提示，未命中时为 null
      */
     private String inCheckPoolCapacity(AdjustCheckContext ctx) {
         InvestmentPoolBo pool = ctx.getTargetPool();
@@ -2582,8 +3358,15 @@ class SecurityPoolCheckRules {
      * 规则：来源池限制
      *
      * 若目标池配置了来源池（source），则证券必须当前已在其中至少一个来源池中，
-     * 或本次请求同时调入至少一个来源池，满足"从低级库向高级库晋升"等分层调库规则。
-     * 未配置来源池时不做限制。
+     * 或本次请求同时调入至少一个来源池，满足"从低级库向高级库晋升"等分层调库规则
+     * 未配置来源池时不做限制
+     *
+     * 执行顺序：
+     * 1. 读取目标池所配来源池，未配置时通过
+     * 2. 证券当前在池或本批拟调入池都无法命中任何来源池时给出限制提示
+     *
+     * @param ctx 调库校验上下文
+     * @return 未满足来源池要求的提示，符合时为 null
      */
     String inCheckSourcePool(AdjustCheckContext ctx) {
         List<Long> sourcePools = ctx.getTargetPoolRelations().get(RelationType.SOURCE.getCode());
@@ -2605,7 +3388,13 @@ class SecurityPoolCheckRules {
     /**
      * 规则：调入限制池（in_restrict）
      *
-     * 证券当前在配置的限制池中，则不允许调入目标池；开关开启时，非 ABS、担保人内评为 1 档的强担保债仅豁免重点观察名单池。
+     * 证券当前在配置的限制池中，则不允许调入目标池；开关开启时，非 ABS、担保人内评为 1 档的强担保债仅豁免重点观察名单池
+     *
+     * 执行顺序：
+     * 1. 开关开启时，强担保只豁免重点观察名单的池间限制，其他调入限制池仍然拦截
+     *
+     * @param ctx 调库校验上下文
+     * @return 调入限制提示，未命中时为 null
      */
     String inCheckRestrictPool(AdjustCheckContext ctx) {
         List<Long> relPools = ctx.getTargetPoolRelations().get(RelationType.IN_RESTRICT.getCode());
@@ -2615,9 +3404,11 @@ class SecurityPoolCheckRules {
         // 开关开启时，强担保只豁免重点观察名单的池间限制，其他调入限制池仍然拦截
         List<Long> blocked = relPools.stream()
                 .filter(ctx.getCurrentPoolIds()::contains)
+                // 判断当前限制池是否为强担保可豁免的重点观察名单池
                 .filter(poolId -> !isStrongGuaranteeRestrictedPool(ctx, poolId))
                 .collect(Collectors.toList());
         if (!blocked.isEmpty()) {
+            // 将池 ID 列表转为"父级/子级"路径名称，以顿号连接，用于构建可读的失败原因消息
             return "证券当前在调入限制池中：" + poolNames(blocked, ctx);
         }
         return null;
@@ -2626,9 +3417,13 @@ class SecurityPoolCheckRules {
     /**
      * 判断当前限制池是否为强担保可豁免的重点观察名单池
      *
+     * 执行顺序：
+     * 1. 先按强担保开关确认证券是否符合强担保认定
+     * 2. 再检查当前限制池是否为重点观察名单池
+     *
      * @param ctx 调库校验上下文
      * @param poolId 当前限制池 ID
-     * @return true=强担保可豁免的重点观察名单池
+     * @return true=开关开启且目标池为可豁免的重点观察名单池，false=不满足强担保重点观察名单豁免条件
      */
     private boolean isStrongGuaranteeRestrictedPool(AdjustCheckContext ctx, Long poolId) {
         if (!CreditBondSpecialInboundRule.isStrongGuarantee(
@@ -2644,7 +3439,13 @@ class SecurityPoolCheckRules {
      * 规则：调入弹性禁投池（in_soft_restrict）
      *
      * 弹性禁投池与硬性限制池的校验逻辑相同，但语义上表示"柔性"限制，
-     * 业务层面可由特定角色绕过（绕过逻辑在审批流程中处理，此处只做初步拦截）。
+     * 业务层面可由特定角色绕过（绕过逻辑在审批流程中处理，此处只做初步拦截）
+     *
+     * 执行顺序：
+     * 1. 通用阻断校验：检查证券是否在指定关系类型的池中，在则返回失败原因，不在则返回 null
+     *
+     * @param ctx 调库校验上下文
+     * @return 弹性限制提示，未命中时为 null
      */
     private String inCheckElasticPool(AdjustCheckContext ctx) {
         // 通用阻断校验：检查证券是否在指定关系类型的池中
@@ -2656,7 +3457,14 @@ class SecurityPoolCheckRules {
      *
      * 若目标池配置了互斥池（in_mutex），且本次请求中同时存在对这些互斥池的调入操作，
      * 则两者不可并存，均应失败。例如：信用债大库/一级库与专户产品/一级库互斥，
-     * 不可同时勾选"调入信用债大库/一级库"和"调入专户产品/一级库"。
+     * 不可同时勾选"调入信用债大库/一级库"和"调入专户产品/一级库"
+     *
+     * 执行顺序：
+     * 1. 从目标池互斥配置与本批拟调入池中取交集
+     * 2. 存在交集时按池名提示不能同时调入
+     *
+     * @param ctx 调库校验上下文
+     * @return 同时调入互斥池的提示，未命中时为 null
      */
     private String inCheckMutexConflict(AdjustCheckContext ctx) {
         List<Long> inMutex = ctx.getTargetPoolRelations().get(RelationType.IN_MUTEX.getCode());
@@ -2676,7 +3484,13 @@ class SecurityPoolCheckRules {
     /**
      * 规则：证券是否不在目标池中
      *
-     * 不在池中则无法调出，属于基础前置判断，避免操作无效数据。
+     * 不在池中则无法调出，属于基础前置判断，避免操作无效数据
+     *
+     * 执行顺序：
+     * 1. 目标池未指定或证券当前未在该池时，给出无法调出的原因
+     *
+     * @param ctx 调库校验上下文
+     * @return 组合不在池的提示，在池时为 null
      */
     String outCheckSecurityNotInPool(AdjustCheckContext ctx) {
         Long poolId = ctx.getTargetPool() != null ? ctx.getTargetPool().getId() : null;
@@ -2689,7 +3503,13 @@ class SecurityPoolCheckRules {
     /**
      * 规则：调出限制池（out_restrict）
      *
-     * 证券当前在配置的限制池中，则不允许从目标池调出。
+     * 证券当前在配置的限制池中，则不允许从目标池调出
+     *
+     * 执行顺序：
+     * 1. 通用阻断校验：检查证券是否在指定关系类型的池中，在则返回失败原因，不在则返回 null
+     *
+     * @param ctx 调库校验上下文
+     * @return 调出限制提示，未命中时为 null
      */
     String outCheckRestrictPool(AdjustCheckContext ctx) {
         // 通用阻断校验：检查证券是否在指定关系类型的池中
@@ -2699,9 +3519,15 @@ class SecurityPoolCheckRules {
     /**
      * 规则：调出互斥池（out_mutex）
      *
-     * 证券当前在配置的互斥池中，则不允许从目标池调出。
+     * 证券当前在配置的互斥池中，则不允许从目标池调出
      * 注意：此处校验的是"调出方向的互斥"，与调入互斥池（in_mutex）含义不同：
-     * in_mutex 用于在第三阶段自动生成配套调出项；out_mutex 用于阻止调出操作本身。
+     * in_mutex 用于在第三阶段自动生成配套调出项；out_mutex 用于阻止调出操作本身
+     *
+     * 执行顺序：
+     * 1. 通用阻断校验：检查证券是否在指定关系类型的池中，在则返回失败原因，不在则返回 null
+     *
+     * @param ctx 调库校验上下文
+     * @return 调出互斥提示，未命中时为 null
      */
     private String outCheckMutexPool(AdjustCheckContext ctx) {
         // 通用阻断校验：检查证券是否在指定关系类型的池中
@@ -2711,7 +3537,13 @@ class SecurityPoolCheckRules {
     /**
      * 规则：调出弹性禁投池（out_soft_restrict）
      *
-     * 证券当前在配置的弹性禁投池中，则不允许从目标池调出。
+     * 证券当前在配置的弹性禁投池中，则不允许从目标池调出
+     *
+     * 执行顺序：
+     * 1. 通用阻断校验：检查证券是否在指定关系类型的池中，在则返回失败原因，不在则返回 null
+     *
+     * @param ctx 调库校验上下文
+     * @return 弹性限制提示，未命中时为 null
      */
     private String outCheckElasticPool(AdjustCheckContext ctx) {
         // 通用阻断校验：检查证券是否在指定关系类型的池中
@@ -2723,7 +3555,14 @@ class SecurityPoolCheckRules {
      *
      * 若目标池配置了互斥池（in_mutex），且本次请求中同时存在对这些互斥池的调出操作，
      * 则两者不可并存，均应失败。互斥池对代表"不可同时持有"，
-     * 因此也不应在同一批次中同时对两池执行调出操作。
+     * 因此也不应在同一批次中同时对两池执行调出操作
+     *
+     * 执行顺序：
+     * 1. 读取目标池的调入互斥配置，与本次拟调出池比较
+     * 2. 命中时列出不能同时调出的池
+     *
+     * @param ctx 调库校验上下文
+     * @return 同时调出互斥池的提示，未命中时为 null
      */
     private String outCheckMutexConflict(AdjustCheckContext ctx) {
         List<Long> inMutex = ctx.getTargetPoolRelations().get(RelationType.IN_MUTEX.getCode());
@@ -2743,7 +3582,13 @@ class SecurityPoolCheckRules {
     /**
      * 规则：目标池已锁定（lock_flag=1）
      *
-     * 池被锁定后不可调入，属于最硬的池级拦截，优先于其他调入校验执行。
+     * 池被锁定后不可调入，属于最硬的池级拦截，优先于其他调入校验执行
+     *
+     * 执行顺序：
+     * 1. 读取目标池的锁定标志，值为 1 时返回池已锁定的提示
+     *
+     * @param ctx 调库校验上下文
+     * @return 池锁定提示，未锁定时为 null
      */
     String inCheckPoolLocked(AdjustCheckContext ctx) {
         InvestmentPoolBo pool = ctx.getTargetPool();
@@ -2756,7 +3601,13 @@ class SecurityPoolCheckRules {
     /**
      * 规则：目标池已锁定（lock_flag=1）
      *
-     * 池被锁定后不可调出，属于最硬的池级拦截，优先于其他调出校验执行。
+     * 池被锁定后不可调出，属于最硬的池级拦截，优先于其他调出校验执行
+     *
+     * 执行顺序：
+     * 1. 读取目标池的锁定标志，值为 1 时返回池已锁定的提示
+     *
+     * @param ctx 调库校验上下文
+     * @return 池锁定提示，未锁定时为 null
      */
     String outCheckPoolLocked(AdjustCheckContext ctx) {
         InvestmentPoolBo pool = ctx.getTargetPool();
@@ -2769,21 +3620,28 @@ class SecurityPoolCheckRules {
     /**
      * 规则：调出冻结期（frozen_period_in）
      *
-     * 目标池配置了调入冻结期天数时，证券入池后 N 天内不可调出。
+     * 目标池配置了调入冻结期天数时，证券入池后 N 天内不可调出
      * 以 ip_pool_status.entry_time（audit_status=20）为入池时间基准，
-     * entry_time + frozenPeriodIn 天 > 当前时间则视为仍在冻结期。
+     * entry_time + frozenPeriodIn 天 &gt; 当前时间则视为仍在冻结期
+     *
+     * 执行顺序：
+     * 1. 取证券在目标池的入池时间
+     * 2. 计算冻结期截止时间 = 入池时间 + N 天
+     *
+     * @param ctx 调库校验上下文
+     * @return 入池时间缺失或仍在冻结期的提示，符合时为 null
      */
     String outCheckFrozenPeriod(AdjustCheckContext ctx) {
         InvestmentPoolBo pool = ctx.getTargetPool();
         if (pool == null || pool.getFrozenPeriodIn() == null || pool.getFrozenPeriodIn() <= 0) {
             return null;
         }
-        // 取证券在目标池的入池时间
+        // 1. 取证券在目标池的入池时间
         Date entryTime = ctx.getTargetPoolEntryTime();
         if (entryTime == null) {
             return "证券入池生效时间缺失";
         }
-        // 计算冻结期截止时间 = 入池时间 + N 天
+        // 2. 计算冻结期截止时间 = 入池时间 + N 天
         long frozenMs = pool.getFrozenPeriodIn() * 24L * 60L * 60L * 1000L;
         Date frozenDeadline = new Date(entryTime.getTime() + frozenMs);
         if (new Date().before(frozenDeadline)) {
@@ -2795,19 +3653,26 @@ class SecurityPoolCheckRules {
     /**
      * 规则：投资品种（variety_codes）
      *
-     * 目标池配置了投资品种时，证券品种（categoryType）须在配置内。
-     * categoryType 由 dict_security_type 表按 securityType 查询得到（大类见 CategoryType / 演示数据）。
+     * 目标池配置了投资品种时，证券品种（categoryType）须在配置内
+     * categoryType 由 dict_security_type 表按 securityType 查询得到（大类见 CategoryType / 演示数据）
+     *
+     * 执行顺序：
+     * 1. 查证券品种大类
+     * 2. 池配置品种为 JSON 数组（如 ["bond"]），判断是否包含证券品种
+     *
+     * @param ctx 调库校验上下文
+     * @return 品种不在允许范围的提示，符合时为 null
      */
     String inCheckVariety(AdjustCheckContext ctx) {
         InvestmentPoolBo pool = ctx.getTargetPool();
         if (pool == null || pool.getVarietyCodes() == null || pool.getVarietyCodes().isEmpty()) {
             return null;
         }
-        // 查证券品种大类
+        // 1. 查证券品种大类
         String categoryType = ctx.getBatchData() == null
                 ? securityPoolAdjustMapper.queryCategoryTypeBySecurityType(ctx.getSecurityInfo().getSecurityType())
                 : ctx.getCategoryType();
-        // 池配置品种为 JSON 数组（如 ["bond"]），判断是否包含证券品种
+        // 2. 池配置品种为 JSON 数组（如 ["bond"]），判断是否包含证券品种
         if (categoryType == null || !pool.getVarietyCodes().contains("\"" + categoryType + "\"")) {
             return "证券不在本池投资品种范围内";
         }
@@ -2817,9 +3682,15 @@ class SecurityPoolCheckRules {
     /**
      * 规则：投资市场（market_codes）
      *
-     * 目标池配置了投资市场时，当前证券代码所属市场须在配置内。
+     * 目标池配置了投资市场时，当前证券代码所属市场须在配置内
      * 市场 code 统一见 {@link com.znty.rrs.common.enums.MarketCode}，
-     * 市场由统一 SecurityMarketService 权威查询。
+     * 市场由统一 SecurityMarketService 权威查询
+     *
+     * 执行顺序：
+     * 1. 仅比较当前证券代码所属市场
+     *
+     * @param ctx 调库校验上下文
+     * @return 市场不在允许范围的提示，符合时为 null
      */
     private String inCheckMarket(AdjustCheckContext ctx) {
         InvestmentPoolBo pool = ctx.getTargetPool();
@@ -2831,6 +3702,7 @@ class SecurityPoolCheckRules {
                 ? securityMarketService.matchesPoolMarkets(pool.getMarketCodes(), ctx.getSecurityInfo())
                 : MarketCodeMatchUtil.matchesPoolMarkets(pool.getMarketCodes(),
                         "company".equals(ctx.getSecurityInfo().getSecurityType()) ? MarketCode.COMPANY.getCode()
+                                // 使用已加载的市场映射执行原主档市场校验
                                 : resolveBatchMarket(ctx.getBatchData(), ctx.getSecurityInfo().getWindCode()));
         if (!matches) {
             return "证券不在本池投资市场范围内";
@@ -2841,12 +3713,20 @@ class SecurityPoolCheckRules {
     /**
      * 规则：全局禁止池（forbidden 禁投池）
      *
-     * 证券当前在禁投池中则不能调入任何其他池（全局禁止，区别于池间 in_restrict）。
-     * 对应老项目 Forbiddenlastpoolid 配置。
+     * 证券当前在禁投池中则不能调入任何其他池（全局禁止，区别于池间 in_restrict）
+     * 对应老项目 Forbiddenlastpoolid 配置
+     *
+     * 执行顺序：
+     * 1. 查询证券调入禁投投资池
+     * 2. 规则：全局禁止池（forbidden 禁投池）
+     *
+     * @param ctx 调库校验上下文
+     * @return 禁投提示，未命中时为 null
      */
     String inCheckForbiddenPool(AdjustCheckContext ctx) {
         String code = ctx.getSecurityInfo().getWindCode();
         boolean forbidden = ctx.getBatchData() == null ? securityPoolAdjustMapper.querySecurityInForbiddenPool(code)
+                // 按原名单查询口径检查证券或主体是否在指定类型池生效
                 : isInBatchPoolType(ctx.getBatchData(), code, "forbidden");
         if (forbidden) {
             return "证券当前在禁止池中";
@@ -2859,14 +3739,20 @@ class SecurityPoolCheckRules {
      *
      * 老系统该字段对应“股票入池评级限制”，评级来源为 StockResearch/investrank
      * （买入、增持、中性、卖出等），不是债券 ratingBond。当前项目尚未接入股票研究评级来源，
-     * 因此仅保留股票分支入口，配置了 grade_astrict 时先跳过，不对债券评级做误拦截。
+     * 因此仅保留股票分支入口，配置了 grade_astrict 时先跳过，不对债券评级做误拦截
+     *
+     * 执行顺序：
+     * 1. 当前没有接入股票研究评级数据，直接返回空值
+     *
+     * @param ctx 调库校验上下文
+     * @return 当前固定返回 null
      */
     private String inCheckGradeAstrict(AdjustCheckContext ctx) {
         InvestmentPoolBo pool = ctx.getTargetPool();
         if (pool == null || pool.getGradeAstrict() == null || pool.getGradeAstrict().trim().isEmpty()) {
             return null;
         }
-        // 后续接入股票研究评级来源后，按 pool.gradeAstrict 校验买入/增持/中性/卖出等评级 code。
+        // 后续接入股票研究评级来源后，按 pool.gradeAstrict 校验买入/增持/中性/卖出等评级 code
         return null;
     }
 
@@ -2874,11 +3760,17 @@ class SecurityPoolCheckRules {
      * 规则：行业限制（industry_code / industry_exponent）
      *
      * 目标池配置了行业限制时，调入校验证券行业是否匹配：
-     * 池 industry_code 非空且 industry_exponent=0（非行业指数模式）时，证券 industry_name 须等于池配置值。
+     * 池 industry_code 非空且 industry_exponent=0（非行业指数模式）时，证券 industry_name 须等于池配置值
      * 对应老项目 checkInPool:485（industryPartition.industrycode 比对 pool.IndustryCode），
      * TODO 投资池当前配置的是农业、城投、电力等业务行业值，尚未完成与证券行业数据的可靠映射；
-     * 当前暂用 SecurityInfoBo.industryName 名称精确匹配，不作为最终行业校验口径（老项目为编码前缀层级匹配）。
-     * 仅调入校验（老代码 checkOutPool 无）。
+     * 当前暂用 SecurityInfoBo.industryName 名称精确匹配，不作为最终行业校验口径（老项目为编码前缀层级匹配）
+     * 仅调入校验（老代码 checkOutPool 无）
+     *
+     * 执行顺序：
+     * 1. 行业指数模式（industry_exponent != 0）跳过行业校验
+     *
+     * @param ctx 调库校验上下文
+     * @return 行业不一致的提示，符合或未检查时为 null
      */
     String inCheckIndustry(AdjustCheckContext ctx) {
         InvestmentPoolBo pool = ctx.getTargetPool();
@@ -2904,8 +3796,15 @@ class SecurityPoolCheckRules {
     /**
      * 规则：开放日（open_day_adjust，调入侧）
      *
-     * 目标池启用开放日校验（open_day_adjust=1）时，调入校验当日是否落在 ip_pool_open_day 的开放区间内。
-     * 对应老项目 checkInPool:479（isInPoolOpenDay）。
+     * 目标池启用开放日校验（open_day_adjust=1）时，调入校验当日是否落在 ip_pool_open_day 的开放区间内
+     * 对应老项目 checkInPool:479（isInPoolOpenDay）
+     *
+     * 执行顺序：
+     * 1. 只有启用开放日限制的目标池需要检查
+     * 2. 有批量数据时使用已查到的开放日结果，否则按当天日期实时查询
+     *
+     * @param ctx 调库校验上下文
+     * @return 非开放日提示，符合时为 null
      */
     String inCheckOpenDay(AdjustCheckContext ctx) {
         InvestmentPoolBo pool = ctx.getTargetPool();
@@ -2924,7 +3823,14 @@ class SecurityPoolCheckRules {
     /**
      * 规则：开放日（open_day_adjust，调出侧）
      *
-     * 目标池启用开放日校验时，调出校验当日是否落在开放区间内。对应老项目 checkOutPool:139。
+     * 目标池启用开放日校验时，调出校验当日是否落在开放区间内。对应老项目 checkOutPool:139
+     *
+     * 执行顺序：
+     * 1. 只有启用开放日限制的目标池需要检查
+     * 2. 有批量数据时使用已查到的开放日结果，否则按当天日期实时查询
+     *
+     * @param ctx 调库校验上下文
+     * @return 非开放日提示，符合时为 null
      */
     private String outCheckOpenDay(AdjustCheckContext ctx) {
         InvestmentPoolBo pool = ctx.getTargetPool();
@@ -2944,14 +3850,23 @@ class SecurityPoolCheckRules {
      * 构建单个调库项的校验上下文（{@link AdjustCheckContext}）
      *
      * 负责将"本次校验共享数据"与"当次调库项的目标池信息"合并填充到上下文中，
-     * 供三层校验方法直接读取，无需再逐级传参。
+     * 供三层校验方法直接读取，无需再逐级传参
      *
-     * @param item             当前调库项（目标池 ID、调整方向等）
+     * 执行顺序：
+     * 1. 从全量投资池 Map 中取出目标池及其父级池（用于构建错误消息中的池路径）
+     * 2. 取出目标池自身的所有关系配置（来源池、限制池、联动池等），供关系型校验规则直接使用
+     * 3. 调出时查询证券在目标池的入池时间，用于冻结期校验（调入时不需要）
+     * 4. 查证券品种大类，用于类型特有校验路由（dict_security_type.category_type）
+     * 5. 基金评分（基金证券调入校验用，透传请求级 fundRate）
+     * 6. 是否放开规则（透传 shared，主体债入库矩阵校验用）
+     *
+     * @param item 当前调库项（目标池 ID、调整方向等）
      * @param poolCurrentCount 目标池当前有效证券数量（调用方按需查询）
-     * @param shared           本次 checkAdjust 调用的共享数据
+     * @param shared 本次 checkAdjust 调用的共享数据
+     * @return 当前调整项的规则检查上下文
      */
     AdjustCheckContext buildCheckContext(AdjustCheckReq.CheckItem item, int poolCurrentCount, AdjustSharedData shared) {
-        // 从全量投资池 Map 中取出目标池及其父级池（用于构建错误消息中的池路径）
+        // 1. 从全量投资池 Map 中取出目标池及其父级池（用于构建错误消息中的池路径）
         InvestmentPoolBo targetPool = shared.getPoolMap().get(item.getTargetPoolId());
         InvestmentPoolBo parentPool = (targetPool != null && targetPool.getParentId() != null)
                 ? shared.getPoolMap().get(targetPool.getParentId()) : null;
@@ -2965,7 +3880,7 @@ class SecurityPoolCheckRules {
         ctx.setCurrentPoolIds(shared.getCurrentPoolIds());
         ctx.setPoolCurrentCount(poolCurrentCount);
         ctx.setAdjustMode(item.getAdjustMode());
-        // 取出目标池自身的所有关系配置（来源池、限制池、联动池等），供关系型校验规则直接使用
+        // 2. 取出目标池自身的所有关系配置（来源池、限制池、联动池等），供关系型校验规则直接使用
         ctx.setTargetPoolRelations(shared.getPoolRelationMap().getOrDefault(item.getTargetPoolId(), Collections.emptyMap()));
         ctx.setPoolMap(shared.getPoolMap());
         ctx.setHasPendingProcess(shared.getPendingPoolGroupIds() != null
@@ -2977,20 +3892,20 @@ class SecurityPoolCheckRules {
         ctx.setIssuerInRestrictedPool(shared.isIssuerInRestrictedPool());
         ctx.setRequestInPoolIds(shared.getRequestInPoolIds());
         ctx.setRequestOutPoolIds(shared.getRequestOutPoolIds());
-        // 调出时查询证券在目标池的入池时间，用于冻结期校验（调入时不需要）
+        // 3. 调出时查询证券在目标池的入池时间，用于冻结期校验（调入时不需要）
         if (AdjustMode.OUT.getCode().equals(item.getAdjustMode())) {
             ctx.setTargetPoolEntryTime(shared.getBatchData() == null ? securityPoolAdjustMapper.queryPoolEntryTime(
                     shared.getSecurityInfo().getWindCode(), item.getTargetPoolId())
                     : shared.getBatchData().entryTimes.getOrDefault(shared.getSecurityInfo().getWindCode(),
                             Collections.emptyMap()).get(item.getTargetPoolId()));
         }
-        // 查证券品种大类，用于类型特有校验路由（dict_security_type.category_type）
+        // 4. 查证券品种大类，用于类型特有校验路由（dict_security_type.category_type）
         ctx.setCategoryType(shared.getBatchData() == null ? securityPoolAdjustMapper.queryCategoryTypeBySecurityType(
                 shared.getSecurityInfo().getSecurityType()) : shared.getBatchData().categories
                 .get(shared.getSecurityInfo().getSecurityType()));
-        // 基金评分（基金证券调入校验用，透传请求级 fundRate）
+        // 5. 基金评分（基金证券调入校验用，透传请求级 fundRate）
         ctx.setFundRate(shared.getFundRate());
-        // 是否放开规则（透传 shared，主体债入库矩阵校验用）
+        // 6. 是否放开规则（透传 shared，主体债入库矩阵校验用）
         ctx.setReleaseRules(shared.isReleaseRules());
         return ctx;
     }
@@ -3000,36 +3915,42 @@ class SecurityPoolCheckRules {
      *
      * 与手动项校验流程完全相同，区别在于：
      *
-     *   - targetPoolId 来自池关系配置，由系统自动推导，非用户选择
-     *   - itemTag 标记为ItemType.LINKAGE.getCode()或ItemType.MUTEX.getCode()，前端据此区分显示样式
+     * targetPoolId 来自池关系配置，由系统自动推导，非用户选择
+     * itemTag 标记为ItemType.LINKAGE.getCode()或ItemType.MUTEX.getCode()，前端据此区分显示样式
      *
+     * 执行顺序：
+     * 1. 构造虚拟 CheckItem，使其可以复用 buildCheckContext 逻辑
+     * 2. 构建调库校验上下文
+     * 3. 构建投资池全路径名称
      *
      * @param targetPoolId 自动生成项的目标池 ID
-     * @param adjustMode   调整方向（AdjustMode.IN.getCode()或AdjustMode.OUT.getCode()）
-     * @param itemTag      来源标签：linkage（联动）/ mutex（互斥）
+     * @param adjustMode 调整方向（AdjustMode.IN.getCode()或AdjustMode.OUT.getCode()）
+     * @param itemTag 来源标签：linkage（联动）/ mutex（互斥）
      * @param adjustGroupKey 触发该自动项的手工调库分组 Key
-     * @param shared       本次 checkAdjust 调用的共享数据
+     * @param shared 本次 checkAdjust 调用的共享数据
+     * @return 联动或互斥调整的检查结果
      */
     private AdjustCheckDto.CheckResultItem buildAutoResultItem(
             Long targetPoolId, String adjustMode, String itemTag, String adjustGroupKey, AdjustSharedData shared) {
 
+        // 获取当前规则应使用的持仓数量
         int poolCurrentCount = checkPoolCount(shared, targetPoolId);
         InvestmentPoolBo pool = shared.getPoolMap().get(targetPoolId);
 
-        // 构造虚拟 CheckItem，使其可以复用 buildCheckContext 逻辑
+        // 1. 构造虚拟 CheckItem，使其可以复用 buildCheckContext 逻辑
         AdjustCheckReq.CheckItem fakeItem = new AdjustCheckReq.CheckItem();
         fakeItem.setTargetPoolId(targetPoolId);
         fakeItem.setAdjustMode(adjustMode);
         fakeItem.setPoolType(pool != null ? pool.getPoolType() : null);
 
-        // 构建调库校验上下文
+        // 2. 构建调库校验上下文
         AdjustCheckContext ctx = buildCheckContext(fakeItem, poolCurrentCount, shared);
 
         List<String> failures = AdjustMode.IN.getCode().equals(adjustMode) ? checkInConditions(ctx) : checkOutConditions(ctx);
 
         AdjustCheckDto.CheckResultItem resultItem = new AdjustCheckDto.CheckResultItem();
         resultItem.setTargetPoolId(targetPoolId);
-        // 构建投资池全路径名称
+        // 3. 构建投资池全路径名称
         resultItem.setPoolName(buildPoolPath(targetPoolId, shared.getPoolMap()));
         resultItem.setPoolType(pool != null ? pool.getPoolType() : null);
         resultItem.setAdjustMode(adjustMode);
@@ -3041,7 +3962,14 @@ class SecurityPoolCheckRules {
     }
 
     /**
-     * 手工调库项失败时，将失败状态传递给同组自动生成项。
+     * 手工调库项失败时，将失败状态传递给同组自动生成项
+     *
+     * 执行顺序：
+     * 1. 手工项可调整时直接结束
+     * 2. 手工项失败时保留自动项原有原因并追加来源说明，将自动项标为不可调整
+     *
+     * @param autoItem 待处理的自动调整结果
+     * @param manualItem 本组的手工调整项
      */
     private void inheritManualItemFailure(
             AdjustCheckDto.CheckResultItem autoItem, AdjustCheckDto.CheckResultItem manualItem) {
@@ -3057,9 +3985,15 @@ class SecurityPoolCheckRules {
     }
 
     /**
-     * 互斥配套调出失败时，反阻断同组手工调入，避免只入目标池导致双池。
+     * 互斥配套调出失败时，反阻断同组手工调入，避免只入目标池导致双池
      *
-     * 仅处理 itemTag=mutex 的配套调出；联动失败不反绑手工项。
+     * 仅处理 itemTag=mutex 的配套调出；联动失败不反绑手工项
+     *
+     * 执行顺序：
+     * 1. 互斥子原因拆成独立 failReasons，避免「；」嵌套成一句矛盾长文
+     *
+     * @param manualItem 本组的手工调整项
+     * @param groupMutexItems 本组配套互斥调整结果
      */
     private void propagateMutexFailureToManual(AdjustCheckDto.CheckResultItem manualItem,
                                                List<AdjustCheckDto.CheckResultItem> groupMutexItems) {
@@ -3097,7 +4031,13 @@ class SecurityPoolCheckRules {
     }
 
     /**
-     * 构建手工调库项分组 Key。
+     * 构建手工调库项分组 Key
+     *
+     * 执行顺序：
+     * 1. 获取目标投资池 ID
+     *
+     * @param item 当前调库项（目标池 ID、调整方向等）
+     * @return 手工项和配套自动项共用的分组键
      */
     private String buildAdjustGroupKey(AdjustCheckReq.CheckItem item) {
         return "manual_" + item.getTargetPoolId() + "_" + item.getAdjustMode();
@@ -3106,8 +4046,13 @@ class SecurityPoolCheckRules {
     /**
      * 通用阻断校验：检查证券是否在指定关系类型的池中，在则返回失败原因，不在则返回 null
      *
+     * 执行顺序：
+     * 1. 取出"证券当前在其中"的阻断池
+     *
+     * @param ctx 调库校验上下文
      * @param relationType 关系类型常量（RelationType.IN_RESTRICT.getCode() / RelationType.OUT_RESTRICT.getCode() 等）
-     * @param label        用于错误消息的中文标签（如"调入限制池"）
+     * @param label 用于错误消息的中文标签（如"调入限制池"）
+     * @return 命中的限制池提示，未命中时为 null
      */
     private String checkBlockedByPools(AdjustCheckContext ctx, String relationType, String label) {
         List<Long> relPools = ctx.getTargetPoolRelations().get(relationType);
@@ -3128,8 +4073,12 @@ class SecurityPoolCheckRules {
     /**
      * 将池 ID 列表转为"父级/子级"路径名称，以顿号连接，用于构建可读的失败原因消息
      *
+     * 执行顺序：
+     * 1. 按传入顺序取得每个池的路径名称，再用顿号连接供错误提示使用
+     *
      * @param poolIds 需要转换的池 ID 列表
-     * @param ctx     上下文（内含全量投资池 Map）
+     * @param ctx 上下文（内含全量投资池 Map）
+     * @return 拼接后的池名，未传池时为空字符串
      */
     private String poolNames(List<Long> poolIds, AdjustCheckContext ctx) {
         return poolIds.stream()
@@ -3141,8 +4090,11 @@ class SecurityPoolCheckRules {
     /**
      * 若 reason 非 null 则追加到失败原因列表（避免调用方每次判空）
      *
+     * 执行顺序：
+     * 1. 收到非 null 的失败原因时追加到原列表，空值直接跳过
+     *
      * @param failures 失败原因集合
-     * @param reason   单条校验返回的失败原因，null 表示通过
+     * @param reason 单条校验返回的失败原因，null 表示通过
      */
     private void addIfFailed(List<String> failures, String reason) {
         if (reason != null) {
@@ -3150,7 +4102,15 @@ class SecurityPoolCheckRules {
         }
     }
 
-    /** 单条校验返回的警告原因非空时加入警告列表（不阻断调库，如弹性禁投池）。 */
+    /**
+     * 单条校验返回的警告原因非空时加入警告列表（不阻断调库，如弹性禁投池）
+     *
+     * 执行顺序：
+     * 1. 收到非 null 的警告原因时追加到原列表，空值直接跳过
+     *
+     * @param warnings 用于收集非阻断提示的列表
+     * @param reason 单条校验返回的失败原因，null 表示通过
+     */
     private void addIfWarning(List<String> warnings, String reason) {
         if (reason != null) {
             warnings.add(reason);
@@ -3158,7 +4118,17 @@ class SecurityPoolCheckRules {
     }
 
     /**
-     * 判断当前审批节点是否应由流程发起人自动完成。
+     * 判断当前审批节点是否应由流程发起人自动完成
+     *
+     * 执行顺序：
+     * 1. 发起节点通过 approval_strategy=initiator + 出边 route_action=submit 标记
+     *
+     * @param snapshot 流程快照（含节点索引和连线列表）
+     * @param node 待判断的流程节点
+     * @param config 节点审批配置
+     * @param prevNode 前一个节点（用于排除回退边），可为 null
+     * @param startNode 流程开始节点
+     * @return true=当前节点符合由发起人提交的条件，false=当前节点不符合由发起人提交的条件
      */
     boolean isInitiatorStep(FlowSnapshot snapshot, FlowNodeBo node, NodeApprovalConfigBo config,
                                     FlowNodeBo prevNode, FlowNodeBo startNode) {
@@ -3168,11 +4138,21 @@ class SecurityPoolCheckRules {
         // 发起节点通过 approval_strategy=initiator + 出边 route_action=submit 标记
         return config != null
                 && ApprovalStrategy.INITIATOR.getCode().equals(config.getApprovalStrategy())
+                // 判断节点是否存在指定流转动作出边
                 && hasOutgoingRouteAction(snapshot, node, ProcessAction.SUBMIT.getCode());
     }
 
     /**
-     * 判断节点是否存在指定流转动作出边。
+     * 判断节点是否存在指定流转动作出边
+     *
+     * 执行顺序：
+     * 1. 快照、节点和动作有效时遍历连线
+     * 2. 只有当前节点的出线且动作相同才判为命中
+     *
+     * @param snapshot 流程快照（含节点索引和连线列表）
+     * @param node 待判断的流程节点
+     * @param routeAction 当前处理动作对应的路由动作
+     * @return true=节点存在指定动作的出线，false=节点没有指定动作的出线
      */
     private boolean hasOutgoingRouteAction(FlowSnapshot snapshot, FlowNodeBo node, String routeAction) {
         if (snapshot == null || node == null || routeAction == null) {
@@ -3187,7 +4167,14 @@ class SecurityPoolCheckRules {
     }
 
     /**
-     * 从 Wind 同 ISIN 记录解析关联证券代码列表（已带后缀、去自身、去重，不递归）。
+     * 从 Wind 同 ISIN 记录解析关联证券代码列表（已带后缀、去自身、去重，不递归）
+     *
+     * 执行顺序：
+     * 1. 按共用市场集合读取同券代码
+     * 2. 从 Wind 同 ISIN 记录解析关联证券代码列表（已带后缀、去自身、去重，不递归）
+     *
+     * @param main 证券主档信息
+     * @return 本次涉及的同券跨市场代码列表
      */
     List<String> resolveRelatedSecurityCodes(SecurityInfoBo main) {
         List<String> codes = new ArrayList<>();
@@ -3201,11 +4188,23 @@ class SecurityPoolCheckRules {
     }
 
     /**
-     * 按关联证券代码加载校验共享数据（复用主请求的池关系/请求池集合）。
+     * 按关联证券代码加载校验共享数据（复用主请求的池关系/请求池集合）
+     *
+     * 执行顺序：
+     * 1. 多市场代码属于同一证券，沿用主券已完成防伪校验的最终评级主体，字段原样拷贝
+     * 2. 观察池：证券或主体已在观察池则不得高于矩阵最好档；重点观察名单：禁新增，已在库只能去五级
+     * 3. 评级下调标志按关联券自身主体信息判定
+     * 4. 同券各市场沿用本次申请的矩阵放开选择，其他规则仍逐券校验
+     *
+     * @param securityCode 证券代码
+     * @param securityInfo 当前证券信息
+     * @param mainShared 主标的的校验共用数据
+     * @param mainReq 主标的的校验请求
+     * @return 关联标的的校验共用数据
      */
     private AdjustSharedData loadSharedDataForSecurity(String securityCode, SecurityInfoBo securityInfo,
                                                        AdjustSharedData mainShared, AdjustCheckReq mainReq) {
-        // 多市场代码属于同一证券，沿用主券已完成防伪校验的最终评级主体，字段原样拷贝
+        // 1. 多市场代码属于同一证券，沿用主券已完成防伪校验的最终评级主体，字段原样拷贝
         if (securityInfo != null && mainShared.getSecurityInfo() != null) {
             SecurityInfoBo mainSecurity = mainShared.getSecurityInfo();
             securityInfo.setIssuer(mainSecurity.getIssuer());
@@ -3239,12 +4238,12 @@ class SecurityPoolCheckRules {
         shared.setPendingPoolGroupIds(resolvePoolGroupIds(
                 securityPoolAdjustMapper.queryPendingManualTargetPoolIdList(securityCode, null),
                 mainShared.getPoolMap()));
-        // 观察池：证券或主体已在观察池则不得高于矩阵最好档；重点观察名单：禁新增，已在库只能去五级
+        // 2. 观察池：证券或主体已在观察池则不得高于矩阵最好档；重点观察名单：禁新增，已在库只能去五级
         shared.setSecurityInObservePool(securityPoolAdjustMapper.querySecurityInObservePool(securityCode));
         shared.setIssuerInObservePool(queryIssuerInPoolType(securityInfo, "observe"));
         shared.setSecurityInRestrictedPool(securityPoolAdjustMapper.querySecurityInRestrictedPool(securityCode));
         shared.setIssuerInRestrictedPool(queryIssuerInPoolType(securityInfo, "restricted"));
-        // 评级下调标志按关联券自身主体信息判定
+        // 3. 评级下调标志按关联券自身主体信息判定
         shared.setIssuerRatingDowngraded(ratingDowngradeChecker.isIssuerDowngraded(securityInfo));
         shared.setOutlookRatingDowngraded(ratingDowngradeChecker.isOutlookNegative(securityInfo));
         shared.setGuarantorRatingDowngraded(
@@ -3252,15 +4251,25 @@ class SecurityPoolCheckRules {
         shared.setRequestInPoolIds(mainShared.getRequestInPoolIds());
         shared.setRequestOutPoolIds(mainShared.getRequestOutPoolIds());
         shared.setFundRate(mainReq.getFundRate());
-        // 同券各市场沿用本次申请的矩阵放开选择，其他规则仍逐券校验
+        // 4. 同券各市场沿用本次申请的矩阵放开选择，其他规则仍逐券校验
         shared.setReleaseRules(mainShared.isReleaseRules());
         return shared;
     }
 
     /**
-     * 多市场关联码扩批：对主结果中的 manual/linkage/mutex 项，按 Wind 同 ISIN 记录展开 related 项。
+     * 多市场关联码扩批：对主结果中的 manual/linkage/mutex 项，按 Wind 同 ISIN 记录展开 related 项
      *
-     * 关联码独立校验已在池/不在池/pending/容量等；同池同批调入累计 projected 占用容量。
+     * 关联码独立校验已在池/不在池/pending/容量等；同池同批调入累计 projected 占用容量
+     *
+     * 执行顺序：
+     * 1. 回填主券证券信息到已有结果项
+     * 2. 仅对主券母项扩批（manual/linkage/mutex）
+     * 3. 已通过的调入项占用 projected 容量，避免主+关联同池全部通过却超容
+     * 4. 保留仍需执行的关联券，整组校验前跳过主券已满足的联动调入
+     *
+     * @param req 调库校验请求
+     * @param mainShared 主标的的校验共用数据
+     * @param resultItems 前四阶段的校验结果
      */
     void expandRelatedMarketCodeItems(AdjustCheckReq req, AdjustSharedData mainShared,
                                               List<AdjustCheckDto.CheckResultItem> resultItems) {
@@ -3269,7 +4278,7 @@ class SecurityPoolCheckRules {
             return;
         }
         boolean scheduled = mainShared.getBatchData() != null && mainShared.getBatchData().scheduled;
-        // 回填主券证券信息到已有结果项
+        // 1. 回填主券证券信息到已有结果项
         for (AdjustCheckDto.CheckResultItem item : resultItems) {
             if (item.getSecurityCode() == null || item.getSecurityCode().isEmpty()) {
                 item.setSecurityCode(mainSec.getWindCode());
@@ -3296,12 +4305,13 @@ class SecurityPoolCheckRules {
         if (relatedCodes.isEmpty()) {
             // 没有其他市场代码时，只跳过主券已满足的联动调入
             if (scheduled) {
+                // 判断自动补债的联动调入是否只因已在池而失败
                 resultItems.removeIf(item -> isSatisfiedLinkedInbound(item.getItemTag(), item));
             }
             return;
         }
 
-        // 仅对主券母项扩批（manual/linkage/mutex）
+        // 2. 仅对主券母项扩批（manual/linkage/mutex）
         List<AdjustCheckDto.CheckResultItem> motherItems = new ArrayList<>();
         Map<String, AdjustCheckDto.CheckResultItem> manualByGroup = new HashMap<>();
         for (AdjustCheckDto.CheckResultItem item : resultItems) {
@@ -3319,7 +4329,7 @@ class SecurityPoolCheckRules {
             return;
         }
 
-        // 已通过的调入项占用 projected 容量，避免主+关联同池全部通过却超容
+        // 3. 已通过的调入项占用 projected 容量，避免主+关联同池全部通过却超容
         Map<Long, Integer> projectedInbound = new HashMap<>();
         Set<String> coveredKeys = new HashSet<>();
         for (AdjustCheckDto.CheckResultItem item : resultItems) {
@@ -3344,6 +4354,7 @@ class SecurityPoolCheckRules {
                 }
             }
             AdjustSharedData relatedShared = relatedSec == null ? null
+                    // 按关联证券代码加载校验共享数据（复用主请求的池关系/请求池集合）
                     : loadSharedDataForSecurity(relatedCode, relatedSec, mainShared, req);
             if (relatedShared != null) {
                 mainShared.getRelatedSecurityData().put(relatedCode, relatedShared);
@@ -3372,6 +4383,7 @@ class SecurityPoolCheckRules {
                 } else {
                     relatedItem.setSecurityShortName(relatedSec.getShortName());
                     relatedItem.setSecurityType(relatedSec.getSecurityType());
+                    // 获取当前规则应使用的持仓数量
                     int baseCount = checkPoolCount(relatedShared, mother.getTargetPoolId());
                     // 调入时把本批已通过项计入有效持仓，再跑容量校验
                     int effectiveCount = AdjustMode.IN.getCode().equals(mother.getAdjustMode())
@@ -3406,20 +4418,25 @@ class SecurityPoolCheckRules {
                 }
             }
         }
-        // 保留仍需执行的关联券，整组校验前跳过主券已满足的联动调入
+        // 4. 保留仍需执行的关联券，整组校验前跳过主券已满足的联动调入
         if (scheduled) {
+            // 判断自动补债的联动调入是否只因已在池而失败
             resultItems.removeIf(item -> isSatisfiedLinkedInbound(item.getItemTag(), item));
         }
         resultItems.addAll(relatedResults);
+        // 汇总跨市场失败原因后统一阻断同组，保留原始失败项的具体原因
         propagateRelatedMarketFailure(resultItems);
     }
 
     /**
      * 判断自动补债的联动调入是否只因已在池而失败
      *
+     * 执行顺序：
+     * 1. 同时检查来源是联动、方向是调入，且唯一失败原因是证券已在池
+     *
      * @param sourceTag 主券调库项的类型，关联券沿用来源项类型
      * @param item 本次校验的实际证券和目标池
-     * @return 联动池已满足且没有其他校验失败时返回 true
+     * @return true=联动池已满足且没有其他校验失败，false=联动池未满足或还有其他校验失败
      */
     private boolean isSatisfiedLinkedInbound(String sourceTag, AdjustCheckDto.CheckResultItem item) {
         return ItemType.LINKAGE.getCode().equals(sourceTag)
@@ -3427,7 +4444,15 @@ class SecurityPoolCheckRules {
                 && Collections.singletonList(ALREADY_IN_POOL_FAILURE).equals(item.getFailReasons());
     }
 
-    /** 汇总跨市场失败原因后统一阻断同组，保留原始失败项的具体原因。 */
+    /**
+     * 汇总跨市场失败原因后统一阻断同组，保留原始失败项的具体原因
+     *
+     * 执行顺序：
+     * 1. 先汇总同组跨市场失败项的具体原因
+     * 2. 把该组仍可调整的记录一并标为失败，已失败的记录继续保留自身原因
+     *
+     * @param resultItems 前四阶段的校验结果
+     */
     private void propagateRelatedMarketFailure(List<AdjustCheckDto.CheckResultItem> resultItems) {
         Map<String, List<String>> failuresByGroup = new HashMap<>();
         for (AdjustCheckDto.CheckResultItem item : resultItems) {
@@ -3448,7 +4473,17 @@ class SecurityPoolCheckRules {
         }
     }
 
-    /** 构建投资池全路径名称 */
+    /**
+     * 构建投资池全路径名称
+     *
+     * 执行顺序：
+     * 1. 找不到池时返回空路径，根池直接用该池名称
+     * 2. 从父池取得上级全路径，再用斜线拼上当前池名
+     *
+     * @param poolId 当前限制池 ID
+     * @param poolMap 已加载的投资池集合
+     * @return 投资池全路径名称
+     */
     String buildPoolPath(Long poolId, Map<Long, InvestmentPoolBo> poolMap) {
         InvestmentPoolBo pool = poolMap.get(poolId);
         if (pool == null) {
@@ -3463,30 +4498,48 @@ class SecurityPoolCheckRules {
         return parentName == null || parentName.isEmpty() ? poolName : parentName + "/" + poolName;
     }
 
-    /** 校验一只证券的主项、联动、互斥和关联市场，并匹配流程候选 */
+    /**
+     * 校验一只证券的主项、联动、互斥和关联市场，并匹配流程候选
+     *
+     * 执行顺序：
+     * 1. 记录批量流程开关，按目标池和方向登记手工项，避免生成重复自动项
+     * 2. 校验调入并生成适用的联动和互斥项
+     * 3. 校验调出并合并校验结果
+     * 4. 回填主券信息，按 Wind ISIN 展开同池同向的关联市场证券
+     * 5. 按 Excel 入口处理已达到目标状态的配套项和可转为提示的校验结果
+     * 6. 标记 ABS 主体身份冲突，身份冲突的项仍不能提交
+     * 7. 匹配流程候选及推荐项，Excel 主体联动返回空候选
+     *
+     * @param req 调库校验请求
+     * @param shared 本次校验的共享数据
+     * @param includeBatchFlows 是否追加目标池已配置的批量流程
+     * @param excelWarningsOnly 是否将 Excel 原业务失败保留为可提交提示
+     * @return 调库校验结果及流程候选
+     */
     AdjustCheckDto checkPreparedAdjust(AdjustCheckReq req, AdjustSharedData shared, boolean includeBatchFlows,
                                          boolean excelWarningsOnly) {
         shared.setBatchFlowOptionsEnabled(includeBatchFlows);
 
-        // 预先将全部手动选择项注册到"已覆盖"集合，确保第三、四阶段生成的自动项
-        // 不会与用户手动选择的项产生重复结果（手动项优先，自动项跳过已覆盖的 key）
+
+        // 1. 记录批量流程开关，按目标池和方向登记手工项，避免生成重复自动项
         Set<String> coveredKeys = new HashSet<>();
         for (AdjustCheckReq.CheckItem item : req.getItems()) {
             coveredKeys.add(item.getTargetPoolId() + "_" + item.getAdjustMode());
         }
 
-        // ══ 第三阶段：调入校验 ══
+        // 2. 校验调入并生成适用的联动和互斥项
         List<AdjustCheckDto.CheckResultItem> resultItems = new ArrayList<>(
                 // 执行调入校验并补充联动、互斥调库项
                 executeInAdjustCheck(req, shared, coveredKeys));
 
-        // ══ 第四阶段：调出校验 ══
+        // 3. 校验调出并合并校验结果
         resultItems.addAll(executeOutAdjustCheck(req, shared, coveredKeys));
 
-        // ══ 第四点五阶段：多市场关联码扩批（itemTag=related） ══
-        // 回填主券证券信息，并按 Wind 非空 ISIN 展开同池同向关联项
+
+        // 4. 回填主券信息，按 Wind ISIN 展开同池同向的关联市场证券
         expandRelatedMarketCodeItems(req, shared, resultItems);
 
+        // 5. 按 Excel 入口处理已达到目标状态的配套项和可转为提示的校验结果
         if (shared.isExcelCompanyFollow()) {
             // 已达到目标状态的关系项与关联券不重复执行
             resultItems.removeIf(item -> {
@@ -3501,7 +4554,7 @@ class SecurityPoolCheckRules {
             allowExcelImportResults(shared, resultItems);
         }
 
-        // 身份冲突作为不可调整原因展示，Excel 提示放行不能覆盖此结果
+        // 6. 标记 ABS 主体身份冲突，身份冲突的项仍不能提交
         if (shared.getBatchData() == null) {
             absIdentityService.applyIdentityCheckFailures(shared.getSecurityInfo(), resultItems);
         } else {
@@ -3509,7 +4562,7 @@ class SecurityPoolCheckRules {
                     shared.getBatchData().absIdentities);
         }
 
-        // ══ 第五阶段：流程类型判断 ══
+        // 7. 匹配流程候选及推荐项，Excel 主体联动返回空候选
         List<AdjustCheckDto.FlowOption> flowOptions = shared.isExcelCompanyFollow()
                 ? Collections.emptyList() : resolveAdjustFlowOptions(req, shared, resultItems);
 
@@ -3527,29 +4580,65 @@ class SecurityPoolCheckRules {
         return dto;
     }
 
-    /** 使用本批数据检查指定证券，适用普通调库阻断规则 */
+    /**
+     * 使用本批数据检查指定证券，适用普通调库阻断规则
+     *
+     * 执行顺序：
+     * 1. 带着批量预读数据校验证券及流程候选，业务失败按正常批量规则阻断
+     *
+     * @param request 本行目标池、方向及主体选择
+     * @param includeBatchFlows 是否追加目标池已配置的批量流程
+     * @param data 本批共享数据
+     * @return 调库校验结果及流程候选
+     */
     AdjustCheckDto checkBatchItem(AdjustCheckReq request, boolean includeBatchFlows, BatchSecurityCheckData data) {
         // 页面及任务按业务规则阻断
         return checkBatchItem(request, includeBatchFlows, data, false);
     }
 
-    /** 使用本批数据检查指定证券，Excel 可保留业务失败为调整提示 */
+    /**
+     * 使用本批数据检查指定证券，Excel 可保留业务失败为调整提示
+     *
+     * 执行顺序：
+     * 1. 用本批数据构建单券规则上下文
+     * 2. 执行共用准入规则和审批流程匹配
+     *
+     * @param request 本行目标池、方向及主体选择
+     * @param includeBatchFlows 是否追加目标池已配置的批量流程
+     * @param data 本批共享数据
+     * @param excelWarningsOnly 是否将 Excel 原业务失败保留为可提交提示
+     * @return 调库校验结果及流程候选
+     */
     AdjustCheckDto checkBatchItem(AdjustCheckReq request, boolean includeBatchFlows, BatchSecurityCheckData data,
                                   boolean excelWarningsOnly) {
-        // 用本批数据构建单券规则上下文
+        // 1. 用本批数据构建单券规则上下文
         AdjustSharedData shared = loadBatchSharedData(request, data);
-        // 执行共用准入规则和审批流程匹配
+        // 2. 执行共用准入规则和审批流程匹配
         return checkPreparedAdjust(request, shared, includeBatchFlows, excelWarningsOnly);
     }
 
-    /** 执行主体 Excel 决定派生的调库规则和池关系 */
+    /**
+     * 执行主体 Excel 决定派生的调库规则和池关系
+     *
+     * 执行顺序：
+     * 1. 从本批数据构建一只证券的规则上下文
+     * 2. 校验一只证券的主项、联动、互斥和关联市场，并匹配流程候选
+     *
+     * @param request 本行目标池、方向及主体选择
+     * @param data 本批共享数据
+     * @return 调库校验结果及流程候选
+     */
     AdjustCheckDto checkExcelCompanyFollowItem(AdjustCheckReq request, BatchSecurityCheckData data) {
         AdjustSharedData shared = loadBatchSharedData(request, data);
         shared.setExcelCompanyFollow(true);
         return checkPreparedAdjust(request, shared, false, false);
     }
 
-    /** 共用审批判断所需的流程版本和图数据 */
+    /**
+     * 保存证券调库校验使用的审批流程快照
+     *
+     * 保留启用版本、节点和连线，以及按节点和审批配置整理的审批规则与处理人
+     */
     static class FlowSnapshot {
 
         /** 流程定义 */
@@ -3570,6 +4659,19 @@ class SecurityPoolCheckRules {
         /** 审批处理人明细索引（approvalConfigId → handler 列表） */
         final Map<Long, List<NodeApprovalHandlerBo>> approvalHandlerMap;
 
+        /**
+         * 保存证券调库校验流程候选使用的流程快照
+         *
+         * 执行顺序：
+         * 1. 保存流程定义、启用版本、节点、连线及审批配置索引
+         *
+         * @param definition 流程定义
+         * @param activeVersion 当前活跃版本
+         * @param nodeMap 节点索引（DB ID → FlowNodeBo），用于连线遍历时快速定位目标节点
+         * @param edges 该版本的全量连线列表
+         * @param approvalConfigMap 审批配置索引（nodeId → NodeApprovalConfigBo），用于创建步骤时获取审批策略和处理人
+         * @param approvalHandlerMap 审批处理人明细索引（approvalConfigId → handler 列表）
+         */
         FlowSnapshot(FlowDefinitionBo definition,
                      FlowVersionBo activeVersion,
                      Map<Long, FlowNodeBo> nodeMap,
@@ -3585,10 +4687,15 @@ class SecurityPoolCheckRules {
         }
     }
 
-    /** 规则判定使用的权益人选择结果 */
+    /**
+     * 记录规则判定中采用的 ABS 权益人选择
+     *
+     * 分别记录证券当前关系中的普通权益人和用户选择的自选权益人，供快照展示
+     */
     static final class RatingSelection {
         /** 当前关系中的普通权益人 */
         String rightsHolderName;
+
         /** 从全市场选择的自选权益人 */
         String selfSelectedRightsHolderName;
     }

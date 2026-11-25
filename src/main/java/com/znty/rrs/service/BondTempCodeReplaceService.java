@@ -13,7 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 /**
- * 债券临时代码替换
+ * 债券临时代码替换（仅债券）
  *
  * 执行顺序：
  * 1. 扫描已补齐正式证券代码的临时代码记录
@@ -31,6 +31,7 @@ public class BondTempCodeReplaceService implements RrsScheduledTask {
     /** 任务名称 */
     public static final String TASK_NAME = "债券临时代码替换（仅债券）";
 
+    /** 定时任务页面展示的临时代码扫描和转正规则说明 */
     private static final String PARAM_HELP =
             "参数说明：本任务无需扩展参数，请将 param_json 留空\n"
                     + "扫描条件：rrs_temp_security_code.status=temporary，且 security_code 已由外部数据补齐\n"
@@ -49,13 +50,27 @@ public class BondTempCodeReplaceService implements RrsScheduledTask {
     @Resource
     private TempSecurityCodeService tempSecurityCodeService;
 
-    /** 返回债券临时代码替换任务编码 */
+    /**
+     * 返回债券临时代码替换任务编码
+     *
+     * 执行顺序：
+     * 1. 返回当前任务定义的固定编码
+     *
+     * @return 任务编码
+     */
     @Override
     public String getTaskCode() {
         return TASK_CODE;
     }
 
-    /** 返回债券临时代码替换任务参数说明 */
+    /**
+     * 返回债券临时代码替换任务参数说明
+     *
+     * 执行顺序：
+     * 1. 返回当前任务定义的参数说明
+     *
+     * @return 任务参数说明
+     */
     @Override
     public String getParamHelp() {
         return PARAM_HELP;
@@ -92,7 +107,7 @@ public class BondTempCodeReplaceService implements RrsScheduledTask {
             // 3. 逐条复用人工转正式业务处理
             for (TempSecurityCodeBo row : rows) {
                 try {
-                    // 3.1 复用人工转正式的完整业务分叉，并将操作来源记为 job
+                    // 复用人工转正式的完整业务分叉，并将操作来源记为 job
                     tempSecurityCodeService.editTempSecurityCodeToUpdatedByJob(row.getId());
                     successCount++;
                     detail.line("替换成功：记录ID=" + row.getId()

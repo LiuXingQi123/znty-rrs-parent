@@ -20,7 +20,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 主体内评分档规则服务，维护信用债期限、主体内评分档与投资池的关系矩阵
+ * 维护信用债期限、主体内评分档与投资池的关系
+ *
+ * 按启用的期限分组、内评分档和信用债一至五级库组装规则矩阵，供页面查看和编辑
+ * 保存前检查矩阵引用的期限、评级和投资池是否可用，再更新对应的分档规则
  */
 @Service
 public class CreditBondGradeRuleService {
@@ -34,19 +37,33 @@ public class CreditBondGradeRuleService {
 
     /**
      * 查询主体内评分档规则矩阵
+     *
+     * 执行顺序：
+     * 1. 查询矩阵基础配置
+     * 2. 组装矩阵返回对象
+     *
+     * @param req 信用债分档规则
+     * @return 信用债分档规则
      */
     public CreditBondGradeRuleDto queryGradeRuleMatrix(CreditBondGradeRuleReq req) {
-        // 查询矩阵基础配置
+        // 1. 查询矩阵基础配置
         List<CreditBondTermBucketBo> termBuckets = creditBondGradeRuleMapper.queryEnabledTermBucketList();
         List<CreditBondInnerRatingGradeBo> ratingGrades = creditBondGradeRuleMapper.queryEnabledRatingGradeList();
         List<InvestmentPoolBo> pools = creditBondGradeRuleMapper.queryCreditBondPoolList();
         List<CreditBondPoolGradeRuleBo> rules = creditBondGradeRuleMapper.queryEnabledRuleList();
-        // 组装矩阵返回对象
+        // 2. 组装矩阵返回对象
         return buildMatrixDto(termBuckets, ratingGrades, pools, rules);
     }
 
     /**
      * 保存主体内评分档规则矩阵
+     *
+     * 执行顺序：
+     * 1. 查询并校验矩阵基础配置
+     * 2. 构建待保存关系
+     *
+     * @param req 信用债分档规则
+     * @return 信用债分档规则
      */
     @Transactional(rollbackFor = Exception.class)
     public CreditBondGradeRuleDto editGradeRuleMatrix(CreditBondGradeRuleReq req) {
@@ -57,11 +74,11 @@ public class CreditBondGradeRuleService {
         if (items == null) {
             items = new ArrayList<>();
         }
-        // 查询并校验矩阵基础配置
+        // 1. 查询并校验矩阵基础配置
         List<CreditBondTermBucketBo> termBuckets = creditBondGradeRuleMapper.queryEnabledTermBucketList();
         List<CreditBondInnerRatingGradeBo> ratingGrades = creditBondGradeRuleMapper.queryEnabledRatingGradeList();
         List<InvestmentPoolBo> pools = creditBondGradeRuleMapper.queryCreditBondPoolList();
-        // 构建待保存关系
+        // 2. 构建待保存关系
         List<CreditBondPoolGradeRuleBo> rules = buildRulesForSave(items, termBuckets, ratingGrades, pools);
         creditBondGradeRuleMapper.deleteAllRule();
         if (!rules.isEmpty()) {
@@ -72,6 +89,16 @@ public class CreditBondGradeRuleService {
 
     /**
      * 组装矩阵返回对象
+     *
+     * 执行顺序：
+     * 1. 把期限区间、主体内评分档和信用债投资池分别转成页面选项
+     * 2. 附上按期限、评级和池 ID 对应的规则记录
+     *
+     * @param termBuckets 信用债期限区间列表
+     * @param ratingGrades 本次处理使用的列表
+     * @param pools 待过滤的投资池列表
+     * @param rules 信用债投资池分档规则列表
+     * @return 信用债分档规则
      */
     private CreditBondGradeRuleDto buildMatrixDto(List<CreditBondTermBucketBo> termBuckets,
                                                   List<CreditBondInnerRatingGradeBo> ratingGrades,
@@ -124,16 +151,27 @@ public class CreditBondGradeRuleService {
 
     /**
      * 构建待保存的矩阵关系
+     *
+     * 执行顺序：
+     * 1. 构建期限分组校验映射
+     * 2. 构建主体内评分档校验映射
+     * 3. 构建信用债投资池校验映射
+     *
+     * @param items 明细列表
+     * @param termBuckets 信用债期限区间列表
+     * @param ratingGrades 本次处理使用的列表
+     * @param pools 待过滤的投资池列表
+     * @return 信用债投资池分档规则列表
      */
     private List<CreditBondPoolGradeRuleBo> buildRulesForSave(List<CreditBondGradeRuleReq.RuleItem> items,
                                                               List<CreditBondTermBucketBo> termBuckets,
                                                               List<CreditBondInnerRatingGradeBo> ratingGrades,
                                                               List<InvestmentPoolBo> pools) {
-        // 构建期限分组校验映射
+        // 1. 构建期限分组校验映射
         Map<Long, CreditBondTermBucketBo> termBucketMap = buildTermBucketMap(termBuckets);
-        // 构建主体内评分档校验映射
+        // 2. 构建主体内评分档校验映射
         Map<Long, CreditBondInnerRatingGradeBo> ratingGradeMap = buildRatingGradeMap(ratingGrades);
-        // 构建信用债投资池校验映射
+        // 3. 构建信用债投资池校验映射
         Map<Long, InvestmentPoolBo> poolMap = buildPoolMap(pools);
         List<CreditBondPoolGradeRuleBo> rules = new ArrayList<>();
         Set<String> uniqueKeys = new HashSet<>();
@@ -176,6 +214,12 @@ public class CreditBondGradeRuleService {
 
     /**
      * 构建期限分组映射
+     *
+     * 执行顺序：
+     * 1. 以期限分组 ID 为键保存每条期限配置，供后续按 ID 查找
+     *
+     * @param termBuckets 信用债期限区间列表
+     * @return 按期限分组索引的分档配置
      */
     private Map<Long, CreditBondTermBucketBo> buildTermBucketMap(List<CreditBondTermBucketBo> termBuckets) {
         Map<Long, CreditBondTermBucketBo> map = new HashMap<>();
@@ -187,6 +231,12 @@ public class CreditBondGradeRuleService {
 
     /**
      * 构建主体内评分档映射
+     *
+     * 执行顺序：
+     * 1. 以主体内评分档 ID 为键保存每条评级配置，供后续按 ID 查找
+     *
+     * @param ratingGrades 本次处理使用的列表
+     * @return 评级档级索引
      */
     private Map<Long, CreditBondInnerRatingGradeBo> buildRatingGradeMap(List<CreditBondInnerRatingGradeBo> ratingGrades) {
         Map<Long, CreditBondInnerRatingGradeBo> map = new HashMap<>();
@@ -198,6 +248,12 @@ public class CreditBondGradeRuleService {
 
     /**
      * 构建投资池映射
+     *
+     * 执行顺序：
+     * 1. 以投资池 ID 为键保存各投资池记录
+     *
+     * @param pools 待过滤的投资池列表
+     * @return 池映射
      */
     private Map<Long, InvestmentPoolBo> buildPoolMap(List<InvestmentPoolBo> pools) {
         Map<Long, InvestmentPoolBo> map = new HashMap<>();

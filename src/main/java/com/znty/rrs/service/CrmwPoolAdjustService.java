@@ -94,28 +94,19 @@ import java.util.TreeSet;
 import java.util.stream.Collectors;
 
 /**
- * 处理 CRMW 凭证与标的证券组合的调库，为单笔、批量和 Excel 导入提供共用的校验和提交能力
+ * 处理 CRMW 凭证与标的证券组合的调库
  *
- * 主要职责
- * 1. 查询可选凭证、标的证券、投资池以及组合的在池状态和调整记录
- * 2. 按入口检查调入和调出规则，补充联动、互斥及同券跨市场调整项，并匹配审批流程
- * 3. 提交时保存调库日志、证券快照和初始审批步骤，无需人工审批的记录复核通过后更新池状态
- * 4. 为人工终审提供生效前复核和池状态更新
+ * 为单笔、批量和 Excel 导入提供共用校验与提交，查询可选凭证、标的、投资池、在池状态和调整历史
+ * 调入检查市场、品种、在途流程、容量、来源池和调入限制等条件，调出检查在池状态、冻结期和调出限制等条件
+ * 通用校验后按标的品种复核债券到期或股票退市等规则，命中弹性禁投池时给出提示
  *
- * 校验结构
- * 1. 调入先检查池锁定、品种、市场和进行中的流程，再检查重复入池、容量、来源池、限制池、互斥冲突、禁投状态和开放日
- * 2. 调出先检查池锁定和进行中的流程，再检查在池状态、冻结期、限制池、互斥池、互斥冲突和开放日
- * 3. 通用规则之后按标的品种补充检查，例如债券到期和股票退市
- * 4. 调入和调出命中弹性禁投池时只记录提示
- *
- * 自动生成项规则
- * 1. 联动池（linkage）按目标池配置补充同方向调整项，调入时追加联动调入，调出时追加联动调出
- * 2. 互斥池（mutex）在调入时检查组合是否已在目标池配置的调入互斥池中，已在池时追加该互斥池的调出项
- * 3. 同券跨市场项（related）按同一 ISIN 对应的跨市场证券代码扩展调整项，沿用原凭证并按实际标的逐项校验
+ * 按池关系补充同方向的联动项，调入命中互斥池时追加调出项，同券跨市场项沿用凭证并按实际标的校验
+ * 提交时保存调库日志、证券快照和初始审批步骤，直通项复核通过后更新组合池状态
+ * {@link CrmwPoolAdjustFlowService} 在人工终审时调用本类完成生效前复核和落池
  */
 @Service
 public class CrmwPoolAdjustService {
-    /** 统一证券市场及同券查询组件。 */
+    /** 统一证券市场及同券查询组件 */
     @Resource
     private SecurityMarketService securityMarketService;
 
@@ -124,10 +115,13 @@ public class CrmwPoolAdjustService {
 
     /** 管理员用户 ID */
     private static final String ADMIN_USER_ID = "1";
+
     /** CRMW 证券类型编码 */
     private static final String CRMW_SECURITY_TYPE = "crmw";
+
     /** Excel 主项来源，同组配套项通过批次继承提示放行口径 */
     private static final String EXCEL_IMPORT_ADJUST_TYPE = "Excel导入";
+
     /** CRMW池调整数据访问组件 */
     @Resource
     private CrmwPoolAdjustMapper crmwPoolAdjustMapper;
@@ -155,9 +149,11 @@ public class CrmwPoolAdjustService {
     /** 报告库服务，用于调库完成后统一生成内部报告 */
     @Resource
     private ReportService reportService;
+
     /** 白名单调入流程 Key */
     private static final String FLOW_KEY_WHITELIST_INBOUND = "bond:whitelist-inbound";
-    /** 是否启用白名单调入流程；当前业务未启用，恢复时改为 true。 */
+
+    /** 是否启用白名单调入流程；当前业务未启用，恢复时改为 true */
     private static final boolean WHITELIST_FLOW_ENABLED = false;
 
     /** 通用查询服务 */
@@ -175,12 +171,16 @@ public class CrmwPoolAdjustService {
     /** 评级下调判定组件（主体/展望/担保人评级下调判断，查 wind_cbondissuerrating） */
     @Resource
     private RatingDowngradeChecker ratingDowngradeChecker;
+
     /** 白名单池 ID 集合：主体在这些池中时符合白名单条件；当前写死空集，后续配置后补 queryIssuerInWhitelistPools 查询 */
     private static final Set<Long> WHITELIST_POOL_IDS = Collections.emptySet();
+
     /** 信用债标准上调流程 Key */
     private static final String FLOW_KEY_STANDARD_UPGRADE = "bond:standard-upgrade";
+
     /** 信用债标准下调流程 Key */
     private static final String FLOW_KEY_STANDARD_DOWNGRADE = "bond:standard-downgrade";
+
     /** 调入互斥池特殊审批流程 Key */
     private static final String FLOW_KEY_SPECIAL_INBOUND = "bond:special-inbound";
     // ═══════════════════════════════════════════════════════════
@@ -420,7 +420,7 @@ public class CrmwPoolAdjustService {
      * 1. 将当前用户 ID 与管理员 ID 比较
      *
      * @param currentUserId 当前用户 ID
-     * @return 用户为管理员时返回 true
+     * @return true=当前用户是管理员，false=当前用户不是管理员
      */
     private boolean isAdminUser(String currentUserId) {
         return ADMIN_USER_ID.equals(currentUserId);
@@ -644,12 +644,14 @@ public class CrmwPoolAdjustService {
      *
      * @param flowId 选择的流程 ID
      * @param flowKey 选择的流程编码
-     * @return 无需人工审批即可完成时返回 true
+     * @return true=无需人工审批即可完成，包括未配置流程，false=未找到可直接完成的流程
      */
     public boolean isDirectAdjustFlow(Long flowId, String flowKey) {
+        // 1. 未配置流程 ID 和编码时按无需审批处理
         if (flowId == null && (flowKey == null || flowKey.isEmpty())) {
             return true;
         }
+        // 2. 只有流程编码时查询启用的流程，找不到时进入后续校验
         Long resolvedId = flowId;
         if (resolvedId == null) {
             FlowDefinitionBo definition = flowMapper.queryActiveFlowByKey(flowKey);
@@ -659,7 +661,7 @@ public class CrmwPoolAdjustService {
             // 配置了 key 但解析不到定义时，按非直通走后续提交校验
             return false;
         }
-        // 加载启用流程版本及其审批配置
+        // 3. 加载流程快照并判断是否无需人工审批
         FlowSnapshot snapshot = buildFlowSnapshot(resolvedId);
         // 判断流程快照是否无需人工审批
         return snapshot != null && isDirectFlow(snapshot);
@@ -1057,7 +1059,7 @@ public class CrmwPoolAdjustService {
      * 1. 将空值和纯空白统一成 null，其余文本保留原值
      *
      * @param value 待统一空值的文本
-     * @return 用于比较的文本
+     * @return 用于重复提交比较的原文本，输入为 null 或只有空白时返回 null
      */
     private String normalizeText(String value) {
         return value == null || value.trim().isEmpty() ? null : value;
@@ -1209,7 +1211,7 @@ public class CrmwPoolAdjustService {
      * 1. 将未填写来源标记和明确标为手工的调整项视为手工项
      *
      * @param item 当前调整项
-     * @return 调整项为手工项时返回 true
+     * @return true=手工调库项（含未填标签的项），false=其他类型的调库项
      */
     private boolean isManualSubmitItem(CrmwPoolAdjustSubmitReq.AdjustItem item) {
         return item.getItemTag() == null || item.getItemTag().isEmpty() || ItemType.MANUAL.getCode().equals(item.getItemTag());
@@ -1370,7 +1372,7 @@ public class CrmwPoolAdjustService {
      * 2. 从开始节点检查各条非驳回路径能否自动结束
      *
      * @param snapshot 当前操作使用的快照
-     * @return 所有非驳回路径都无需人工审批时返回 true
+     * @return true=所有非驳回路径均可直接完成，false=流程缺失或存在无法直接完成的路径
      */
     private boolean isDirectFlow(FlowSnapshot snapshot) {
         if (snapshot == null || snapshot.nodeMap == null || snapshot.edges == null) {
@@ -1405,7 +1407,7 @@ public class CrmwPoolAdjustService {
      * @param current 正在检查的流程节点
      * @param startNode 流程开始节点
      * @param visiting 当前流程路径已访问的节点 ID
-     * @return 该节点及后续非驳回路径都能自动完成时返回 true
+     * @return true=从当前节点沿非驳回路径可以在无需人工审批的情况下结束，false=存在无法自动完成的路径
      */
     private boolean canCompleteWithoutHumanApproval(FlowSnapshot snapshot, FlowNodeBo current,
                                                     FlowNodeBo startNode, Set<Long> visiting) {
@@ -1884,9 +1886,11 @@ public class CrmwPoolAdjustService {
 
     /**
      * 使用本次已有证券信息构建申请快照，避免保存时重新查询主档
+     *
      * 执行顺序：
      * 1. 优先取本次共享数据，没有共享数据的独立调用才读取主档
      * 2. 复制已有信息并覆盖页面编辑字段，不修改共享对象
+     *
      * @param securityCode 证券代码
      * @param changedField 页面编辑字段
      * @param loaded 本次已加载的证券信息
@@ -1957,8 +1961,9 @@ public class CrmwPoolAdjustService {
         if (req.getSecurityCode() == null || req.getSecurityCode().isEmpty()) {
             throw new BizException("证券代码不能为空");
         }
-        // 校验 CRMW 组合查询参数
+        // 1. 校验 CRMW 组合查询参数
         validateCrmwIdentity(req.getCrmwScode(), req.getCrmwStype());
+        // 2. 按 CRMW 组合及批次号查询调库日志
         List<IpAdjustLogBo> logs = crmwPoolAdjustMapper.queryAdjustLogList(
                 req.getSecurityCode(), req.getCrmwScode(), req.getCrmwStype(),
                 req.getAdjustBatchNo());
@@ -1966,7 +1971,7 @@ public class CrmwPoolAdjustService {
             return new ArrayList<>();
         }
 
-        // 查询投资池全路径名称，用于调库记录展示
+        // 3. 查询投资池全路径名称，用于调库记录展示
         Map<Long, String> poolFullNameMap = investmentPoolService.queryPoolFullNameMap();
 
         List<AdjustLogDto> result = new ArrayList<>();
@@ -1995,22 +2000,26 @@ public class CrmwPoolAdjustService {
      * 查询 CRMW 调库的审批步骤
      *
      * 执行顺序：
-     * 1. 按日志 ID 或调库批次号查询审批步骤，未指定查询标识时返回空列表
-     * 2. 将步骤记录转换成包含节点、处理人、动作和时间的展示数据
+     * 1. 读取调库日志 ID 和批次号，两个查询标识都未提供时返回空列表
+     * 2. 按已有标识查询对应的审批步骤，查不到记录时返回空列表
+     * 3. 将节点、处理人、动作、状态和处理时间转换为页面展示数据
      *
      * @param req 调库日志 ID 或调库批次号
-     * @return 审批步骤列表
+     * @return 审批步骤列表，未提供查询标识或查不到记录时返回空列表
      */
     public List<IpAdjustStepDto> queryCrmwAdjustStepList(CrmwPoolAdjustReq req) {
+        // 1. 读取调库日志 ID 和批次号，两个查询标识都未提供时返回空列表
         Long adjustLogId = req.getAdjustLogId();
         String adjustBatchNo = req.getAdjustBatchNo();
         if (adjustLogId == null && (adjustBatchNo == null || adjustBatchNo.isEmpty())) {
             return Collections.emptyList();
         }
+        // 2. 按已有标识查询对应的审批步骤，查不到记录时返回空列表
         List<IpAdjustStepBo> steps = crmwPoolAdjustMapper.queryAdjustStepByBatchList(adjustLogId, adjustBatchNo);
         if (steps.isEmpty()) {
             return Collections.emptyList();
         }
+        // 3. 将节点、处理人、动作、状态和处理时间转换为页面展示数据
         List<IpAdjustStepDto> result = new ArrayList<>();
         for (IpAdjustStepBo bo : steps) {
             IpAdjustStepDto dto = new IpAdjustStepDto();
@@ -2167,9 +2176,11 @@ public class CrmwPoolAdjustService {
 
     /**
      * 将标的 ABS 主体冲突写入 CRMW 调整说明，不提前中断下一步校验
+     *
      * 执行顺序：
      * 1. 按组汇总实际标的代码，复用统一身份校验
      * 2. 保留原失败原因，冲突组及其关联项统一标记不可调整
+     *
      * @param security 已回填本次主体的标的证券
      * @param items 完整校验结果
      */
@@ -2329,8 +2340,10 @@ public class CrmwPoolAdjustService {
 
     /**
      * 直接使用页面已选主体，后台没有页面数据时沿用原入口
+     *
      * 执行顺序：
      * 1. 有页面选择时透传，不查询评级候选
+     *
      * @param securityInfo 当前标的证券
      * @param guarantorCode 担保人代码
      * @param rightsHolderCode 权益人代码
@@ -2771,6 +2784,7 @@ public class CrmwPoolAdjustService {
      */
     private AdjustCheckDto.FlowOption resolveSpecialInboundFlowOption(InvestmentPoolBo targetPool,
                                                                       AdjustSharedData shared) {
+        // 1. 检查目标池和在池数据是否齐全，跳过信用债池
         if (targetPool == null || shared == null
                 || shared.getPoolRelationMap() == null || shared.getCurrentPoolIds() == null) {
             return null;
@@ -2779,6 +2793,7 @@ public class CrmwPoolAdjustService {
         if (isCreditBondPool(targetPool)) {
             return null;
         }
+        // 2. 找出组合当前所在的调入互斥池
         Map<String, List<Long>> targetRelations = shared.getPoolRelationMap().get(targetPool.getId());
         if (targetRelations == null) {
             return null;
@@ -2793,6 +2808,7 @@ public class CrmwPoolAdjustService {
         if (matchedPoolIds.isEmpty()) {
             return null;
         }
+        // 3. 加载启用的特殊审批流程并构造推荐候选
         FlowDefinitionBo flow = flowMapper.queryActiveFlowByKey(FLOW_KEY_SPECIAL_INBOUND);
         if (flow == null) {
             return null;
@@ -2870,7 +2886,7 @@ public class CrmwPoolAdjustService {
      * @param shared 当前申请共用的证券、投资池和状态数据
      * @param matchReasons 用于收集匹配原因的列表
      * @param unmatchReasons 用于收集不匹配原因的列表
-     * @return 没有不匹配原因时返回 true
+     * @return true=满足白名单流程条件，false=不满足白名单流程条件
      */
     private boolean isWhitelistFlowMatched(
             AdjustCheckReq req, AdjustSharedData shared, List<String> matchReasons, List<String> unmatchReasons) {
@@ -2942,24 +2958,25 @@ public class CrmwPoolAdjustService {
      * @param targetPool 当前调整项的目标池配置
      * @param matchReasons 用于收集匹配原因的列表
      * @param unmatchReasons 用于收集不匹配原因的列表
-     * @return 没有不匹配原因时返回 true
+     * @return true=满足简易入库流程条件，false=不满足简易入库流程条件
      */
     private boolean isSimpleInboundFlowMatched(
             AdjustCheckReq req, AdjustSharedData shared, InvestmentPoolBo targetPool,
             List<String> matchReasons, List<String> unmatchReasons) {
 
-        // ABS 只能走一般入库流程，不提供快速入库候选
+        // 1. 标的为 ABS 时直接记录不匹配原因
         if (CreditBondSpecialInboundRule.isAbs(shared.getSecurityInfo())) {
             unmatchReasons.add("ABS 不适用快速入库流程");
             return false;
         }
-        // 判断目标池是否属于信用债大库一至三级
+        // 2. 校验目标池是否为信用债大库一至三级池
         if (isCreditBondLevelOneToThree(targetPool)) {
             matchReasons.add("目标池属于信用债大库一、二、三级库");
         } else {
             unmatchReasons.add("目标池不是信用债大库一、二、三级库");
         }
 
+        // 3. 检查剩余期限并与同主体在目标池的最长剩余期限比较
         BigDecimal remainDays = shared.getSecurityInfo().getDateExists();
         if (remainDays == null) {
             unmatchReasons.add("剩余期限无法解析，date_exists 为空");
@@ -2999,6 +3016,7 @@ public class CrmwPoolAdjustService {
         }
         */
 
+        // 4. 根据失败原因判断简易流程是否匹配
         return unmatchReasons.isEmpty();
     }
 
@@ -3043,7 +3061,7 @@ public class CrmwPoolAdjustService {
      * 1. 确认池存在且类型为信用债池
      *
      * @param pool 投资池配置
-     * @return 是信用债池时返回 true
+     * @return true=目标池属于信用债大库，false=目标池不属于信用债大库
      */
     private boolean isCreditBondPool(InvestmentPoolBo pool) {
         if (pool == null) {
@@ -3059,7 +3077,7 @@ public class CrmwPoolAdjustService {
      * 1. 逐个查看当前所在池的类型，找到信用债池即返回 true
      *
      * @param shared 当前申请共用的证券、投资池和状态数据
-     * @return 当前至少在一个信用债池时返回 true
+     * @return true=证券当前至少在一个信用债池，false=证券当前不在任何信用债池
      */
     private boolean isSecurityInCreditBondPool(AdjustSharedData shared) {
         for (Long currentPoolId : shared.getCurrentPoolIds()) {
@@ -3079,7 +3097,7 @@ public class CrmwPoolAdjustService {
      * 1. 检查池类型和池内排序值是否在一至三之间
      *
      * @param pool 投资池配置
-     * @return 目标池为信用债大库一至三级时返回 true
+     * @return true=目标池为信用债大库一至三级，false=目标池不属于这三个档级
      */
     private boolean isCreditBondLevelOneToThree(InvestmentPoolBo pool) {
         return pool != null
@@ -3112,7 +3130,7 @@ public class CrmwPoolAdjustService {
      * 1. 检查证券资料中的担保人名称或代码是否非空
      *
      * @param securityInfo 标的证券资料
-     * @return 填有担保人名称或代码时返回 true
+     * @return true=有担保人名称或代码，false=没有担保人名称或代码
      */
     private boolean hasGuarantor(SecurityInfoBo securityInfo) {
         if (securityInfo == null) {
@@ -3161,10 +3179,11 @@ public class CrmwPoolAdjustService {
      * @return 默认调入流程候选
      */
     private AdjustCheckDto.FlowOption buildNormalInboundFlowOption(InvestmentPoolBo targetPool, String matchReason) {
-        // 取得流程展示名称
+        // 1. 取得默认调入流程名称并判断是否需要审批
         String flowName = resolveFlowName(targetPool.getInFlowName(), "默认调入流程");
         // 判断池配置是否为空流程
         boolean noApproval = isNoApprovalFlow(targetPool.getInFlowId(), targetPool.getInFlowKey());
+        // 2. 构建推荐且可选的候选并附上匹配原因
         FlowOptionParam p = new FlowOptionParam();
         p.setFlowType(FlowType.NORMAL_INBOUND.getCode());
         p.setFlowName(flowName);
@@ -3214,8 +3233,9 @@ public class CrmwPoolAdjustService {
      * @return 用于选择的池配置流程候选
      */
     private AdjustCheckDto.FlowOption buildPoolFlowOption(FlowOptionParam p) {
-        // 判断池配置是否为空流程
+        // 1. 根据流程 ID 和编码判断是否配置审批
         boolean noApproval = isNoApprovalFlow(p.getFlowId(), p.getFlowKey());
+        // 2. 复制候选信息，未配置审批时使用对应展示名称
         FlowOptionParam result = new FlowOptionParam();
         result.setFlowType(p.getFlowType());
         result.setFlowName(noApproval ? "不需要审批" : p.getFlowName());
@@ -3226,7 +3246,7 @@ public class CrmwPoolAdjustService {
         result.setSelectable(p.isSelectable());
         result.setMatchReasons(p.getMatchReasons());
         result.setUnmatchReasons(p.getUnmatchReasons());
-        // 构建流程候选项（统一入口）
+        // 3. 组装并返回流程候选
         return buildFlowOption(result);
     }
 
@@ -3238,7 +3258,7 @@ public class CrmwPoolAdjustService {
      *
      * @param flowId 选择的流程 ID
      * @param flowKey 选择的流程编码
-     * @return 两者都未填写时返回 true
+     * @return true=流程 ID 和流程 Key 均未填写，false=至少填写了一个流程标识
      */
     private boolean isNoApprovalFlow(Long flowId, String flowKey) {
         return flowId == null && (flowKey == null || flowKey.isEmpty());
@@ -4167,10 +4187,11 @@ public class CrmwPoolAdjustService {
      */
     private String inCheckVariety(AdjustCheckContext ctx) {
         InvestmentPoolBo pool = ctx.getTargetPool();
+        // 1. 未配置投资品种限制时通过
         if (pool == null || pool.getVarietyCodes() == null || pool.getVarietyCodes().isEmpty()) {
             return null;
         }
-        // 查证券品种大类
+        // 2. 查询标的证券所属品种并检查是否在允许范围内
         String categoryType = crmwPoolAdjustMapper.queryCategoryTypeBySecurityType(ctx.getSecurityInfo().getSecurityType());
         // 池配置品种为 JSON 数组（如 ["bond"]），判断是否包含证券品种
         if (categoryType == null || !pool.getVarietyCodes().contains("\"" + categoryType + "\"")) {
@@ -4327,7 +4348,7 @@ public class CrmwPoolAdjustService {
      * @return 当前调整项的规则检查上下文
      */
     private AdjustCheckContext buildCheckContext(AdjustCheckReq.CheckItem item, int poolCurrentCount, AdjustSharedData shared) {
-        // 从全量投资池 Map 中取出目标池及其父级池（用于构建错误消息中的池路径）
+        // 1. 组装目标池、父池、标的证券和共用池关系
         InvestmentPoolBo targetPool = shared.getPoolMap().get(item.getTargetPoolId());
         InvestmentPoolBo parentPool = (targetPool != null && targetPool.getParentId() != null)
                 ? shared.getPoolMap().get(targetPool.getParentId()) : null;
@@ -4350,13 +4371,13 @@ public class CrmwPoolAdjustService {
         ctx.setIssuerInObservePool(shared.isIssuerInObservePool());
         ctx.setRequestInPoolIds(shared.getRequestInPoolIds());
         ctx.setRequestOutPoolIds(shared.getRequestOutPoolIds());
-        // 调出时查询证券在目标池的入池时间，用于冻结期校验（调入时不需要）
+        // 2. 调出时查询组合入池时间，供冻结期校验
         if (AdjustMode.OUT.getCode().equals(item.getAdjustMode())) {
             ctx.setTargetPoolEntryTime(crmwPoolAdjustMapper.queryCrmwPoolEntryTime(
                     shared.getSecurityInfo().getWindCode(), shared.getCrmwScode(),
                     shared.getCrmwStype(), item.getTargetPoolId()));
         }
-        // 查证券品种大类，用于类型特有校验路由（dict_security_type.category_type）
+        // 3. 补充标的所属的投资品种
         ctx.setCategoryType(crmwPoolAdjustMapper.queryCategoryTypeBySecurityType(
                 shared.getSecurityInfo().getSecurityType()));
         return ctx;
@@ -4424,6 +4445,7 @@ public class CrmwPoolAdjustService {
     private AdjustCheckDto.CheckResultItem buildAutoResultItem(
             Long targetPoolId, String adjustMode, String itemTag, String adjustGroupKey, AdjustSharedData shared) {
 
+        // 1. 读取目标池和持仓数量，准备自动项的校验数据
         int poolCurrentCount = crmwPoolAdjustMapper.queryPoolCurrentCount(targetPoolId);
         InvestmentPoolBo pool = shared.getPoolMap().get(targetPoolId);
 
@@ -4436,6 +4458,7 @@ public class CrmwPoolAdjustService {
         // 构建调库校验上下文
         AdjustCheckContext ctx = buildCheckContext(fakeItem, poolCurrentCount, shared);
 
+        // 2. 按调入或调出方向执行规则，调出时还需确认组合在库
         List<String> failures = AdjustMode.IN.getCode().equals(adjustMode) ? checkInConditions(ctx) : checkOutConditions(ctx);
         if (AdjustMode.OUT.getCode().equals(adjustMode)
                 && !crmwPoolAdjustMapper.queryCrmwComboInPool(shared.getCrmwScode(),
@@ -4443,6 +4466,7 @@ public class CrmwPoolAdjustService {
             failures.add("信用缓释凭证与标的证券组合不在目标投资池中");
         }
 
+        // 3. 回填池全路径、所属手工分组和校验结果
         AdjustCheckDto.CheckResultItem resultItem = new AdjustCheckDto.CheckResultItem();
         resultItem.setTargetPoolId(targetPoolId);
         // 构建投资池全路径名称
@@ -4714,7 +4738,7 @@ public class CrmwPoolAdjustService {
      * @param snapshot 当前操作使用的快照
      * @param adjusterId 调库发起人 ID
      * @param adjusterName 调库发起人姓名
-     * @return 初始化时流程已经走完则返回 true
+     * @return true=流程初始化时已经到达结束节点，false=流程初始化后尚未到达结束节点
      */
     private boolean createInitialSteps(Long adjustLogId, String adjustBatchNo, FlowSnapshot snapshot,
                                        String adjusterId, String adjusterName) {
@@ -4815,7 +4839,7 @@ public class CrmwPoolAdjustService {
      * @param config 当前节点的审批配置
      * @param prevNode 上一个流程节点，当前判断不使用
      * @param startNode 流程开始节点，当前判断不使用
-     * @return 满足发起人提交条件时返回 true
+     * @return true=当前节点符合由发起人提交的条件，false=当前节点不符合由发起人提交的条件
      */
     private boolean isInitiatorStep(FlowSnapshot snapshot, FlowNodeBo node, NodeApprovalConfigBo config,
                                     FlowNodeBo prevNode, FlowNodeBo startNode) {
@@ -4838,7 +4862,7 @@ public class CrmwPoolAdjustService {
      * @param snapshot 当前操作使用的快照
      * @param node 当前流程节点
      * @param routeAction 需要匹配的流程动作编码
-     * @return 存在对应动作的出线时返回 true
+     * @return true=节点存在指定动作的出线，false=节点没有指定动作的出线
      */
     private boolean hasOutgoingRouteAction(FlowSnapshot snapshot, FlowNodeBo node, String routeAction) {
         if (snapshot == null || node == null || routeAction == null) {
@@ -5056,7 +5080,7 @@ public class CrmwPoolAdjustService {
      *
      * @param config 当前节点的审批配置
      * @param snapshot 当前操作使用的快照
-     * @return 实际审批人列表
+     * @return 实际审批人列表，未配置审批或处理人时返回空列表
      */
     private List<HandlerTarget> resolveApprovalHandlers(NodeApprovalConfigBo config, FlowSnapshot snapshot) {
         if (config == null || config.getId() == null) {
@@ -5134,7 +5158,7 @@ public class CrmwPoolAdjustService {
                                          CrmwPoolAdjustSubmitReq.AdjustItem flowSource,
                                          SubmitSharedData shared) {
         IpAdjustLogBo bo = new IpAdjustLogBo();
-        // 按关联标的的主数据保存日志，确保后续按实际标的落池
+        // 1. 确定实际调库标的并读取对应主数据
         String securityCode = resolveItemSecurityCode(req, item);
         SecurityInfoBo securityInfo = shared.securityInfo;
         if (!securityCode.equals(req.getSecurityCode())) {
@@ -5143,6 +5167,7 @@ public class CrmwPoolAdjustService {
                 throw new BizException("关联标的证券不存在或类型不正确：" + securityCode);
             }
         }
+        // 2. 填写凭证、标的、调整来源、目标池和流程等申请信息
         bo.setSecurityCode(securityCode);
         bo.setSecurityShortName(securityInfo.getShortName());
         bo.setSecurityType(securityInfo.getSecurityType());
@@ -5164,6 +5189,7 @@ public class CrmwPoolAdjustService {
         bo.setAdjustReason(req.getAdjustReason());
         bo.setAdjustAdvice(req.getAdjustAdvice());
         // 同一次提交共用统一提交时间，避免大批量逐条 NOW() 导致历史排序同组打散
+        // 3. 沿用整组申请共用的提交时间
         if (shared != null && shared.batchNoContext != null) {
             bo.setSubmitTime(shared.batchNoContext.submitTime);
         }
@@ -5239,6 +5265,7 @@ public class CrmwPoolAdjustService {
                                                        AdjustSharedData mainShared, AdjustCheckReq mainReq) {
         AdjustSharedData shared = new AdjustSharedData();
         // 关联码沿用主券已校验的评级主体，字段原样拷贝
+        // 1. 把主标的选定的主体和担保人带到关联标的
         SecurityInfoBo mainSecurityInfo = mainShared.getSecurityInfo();
         if (securityInfo != null && mainSecurityInfo != null) {
             securityInfo.setIssuer(mainSecurityInfo.getIssuer());
@@ -5250,6 +5277,7 @@ public class CrmwPoolAdjustService {
             securityInfo.setGuarantorId(mainSecurityInfo.getGuarantorId());
             securityInfo.setInnerGuarantorRating(mainSecurityInfo.getInnerGuarantorRating());
         }
+        // 2. 补充关联标的的当前池、在途流程和观察池状态
         shared.setSecurityInfo(securityInfo);
         shared.setCrmwScode(mainShared.getCrmwScode());
         shared.setCrmwStype(mainShared.getCrmwStype());
@@ -5263,6 +5291,7 @@ public class CrmwPoolAdjustService {
                 securityCode, shared.getCrmwScode(), shared.getCrmwStype(), null), mainShared.getPoolMap()));
         shared.setSecurityInObservePool(crmwPoolAdjustMapper.querySecurityInObservePool(securityCode));
         shared.setIssuerInObservePool(crmwPoolAdjustMapper.queryIssuerInObservePool(securityCode));
+        // 3. 补充评级状态及本次请求的调入调出范围
         shared.setIssuerRatingDowngraded(ratingDowngradeChecker.isIssuerDowngraded(securityInfo));
         shared.setOutlookRatingDowngraded(ratingDowngradeChecker.isOutlookNegative(securityInfo));
         shared.setGuarantorRatingDowngraded(ratingDowngradeChecker.isGuarantorDowngraded(mainReq.getGuarantorCode()));
@@ -5536,7 +5565,10 @@ public class CrmwPoolAdjustService {
      * 保存候选审批人的 ID 和姓名，供生成审批待办时使用
      */
     private static class HandlerTarget {
+        /** 审批处理人的用户 ID */
         final String handlerId;
+
+        /** 审批处理人的显示名称 */
         final String handlerName;
 
         /**

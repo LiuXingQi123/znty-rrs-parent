@@ -27,50 +27,62 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 基金池查询服务。
- * <p>负责基金池分页查询、基金类型选项查询和查询结果导出。</p>
+ * 查询和导出已生效的基金池记录
+ *
+ * 提供按投资池和基金条件筛选的分页查询，并返回当前在池基金使用的基金类型选项
+ * Excel 导出沿用列表筛选条件，使用投资池全路径区分同名子池
  */
 @Service
 public class FundPoolQueryService {
 
-    /** 基金池查询数据访问组件。 */
+    /** 基金池查询数据访问组件 */
     @Resource
     private FundPoolQueryMapper fundPoolQueryMapper;
 
-    /** 投资池服务。 */
+    /** 投资池服务 */
     @Resource
     private InvestmentPoolService investmentPoolService;
 
     /**
-     * 分页查询当前已生效的基金池状态。
+     * 分页查询当前已生效的基金池状态
+     *
+     * 执行顺序：
+     * 1. 按筛选条件分页查询当前有效的基金池记录
+     * 2. 回填投资池全路径名称
+     * 3. 返回本页记录和查询总条数
      *
      * @param req 基金池筛选及分页条件
      * @return 基金池分页记录
      */
     public PageResult<FundPoolQueryDto> queryFundPoolPage(FundPoolQueryReq req) {
-        // 开启分页
+        // 1. 按筛选条件分页查询当前有效的基金池记录
         PageHelper.startPage(req.getPageIndex(), req.getPageSize());
-        // 查询当前有效的基金池记录
+
         List<FundPoolQueryDto> list = fundPoolQueryMapper.queryFundPoolPage(req);
-        // 回填投资池全路径名称
+        // 2. 回填投资池全路径名称
         fillPoolFullName(list);
-        // 获取分页总数
+        // 3. 返回本页记录和查询总条数
         PageInfo<FundPoolQueryDto> pageInfo = new PageInfo<>(list);
         return new PageResult<>(list, pageInfo.getTotal(), req.getPageIndex(), req.getPageSize());
     }
 
     /**
-     * 按当前筛选条件生成基金池查询 Excel。
+     * 按当前筛选条件生成基金池查询 Excel
+     *
+     * 执行顺序：
+     * 1. 复用列表 SQL 全量查询命中记录
+     * 2. 回填投资池完整路径，保证与页面展示一致
+     * 3. 读取基金池查询导出模板
      *
      * @param req 与列表查询相同的筛选条件（可不传分页）
      * @return 可下载的 Excel 文件
      */
     public CommonFileDto exportFundPoolExcel(FundPoolQueryReq req) {
-        // 复用列表 SQL 全量查询命中记录
+        // 1. 复用列表 SQL 全量查询命中记录
         List<FundPoolQueryDto> list = fundPoolQueryMapper.queryFundPoolPage(req);
-        // 回填投资池完整路径，保证与页面展示一致
+        // 2. 回填投资池完整路径，保证与页面展示一致
         fillPoolFullName(list);
-        // 读取基金池查询导出模板
+        // 3. 读取基金池查询导出模板
         try (InputStream template = FundPoolQueryService.class.getResourceAsStream(
                 "/xlsx/fund_pool_query_export_template.xlsx");
              ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
@@ -100,7 +112,10 @@ public class FundPoolQueryService {
     }
 
     /**
-     * 查询基金池中出现的基金类型选项。
+     * 查询基金池中出现的基金类型选项
+     *
+     * 执行顺序：
+     * 1. 查询调整历史中出现的基金类型选项
      *
      * @return 当前已生效基金池中出现的基金类型
      */
@@ -109,7 +124,10 @@ public class FundPoolQueryService {
     }
 
     /**
-     * 转换页面展示字段为 Excel 行。
+     * 转换页面展示字段为 Excel 行
+     *
+     * 执行顺序：
+     * 1. 按列表顺序组装基金导出行
      *
      * @param list 页面展示数据
      * @return Excel 行数据
@@ -145,7 +163,11 @@ public class FundPoolQueryService {
     }
 
     /**
-     * 回填投资池全路径名称。
+     * 回填投资池全路径名称
+     *
+     * 执行顺序：
+     * 1. 查询投资池全路径名称映射
+     * 2. 用全路径名称替换列表中的投资池名称
      *
      * @param list 基金池记录列表
      */
@@ -153,9 +175,9 @@ public class FundPoolQueryService {
         if (list.isEmpty()) {
             return;
         }
-        // 查询投资池全路径名称映射
+        // 1. 查询投资池全路径名称映射
         Map<Long, String> poolFullNameMap = investmentPoolService.queryPoolFullNameMap();
-        // 用全路径名称替换列表中的投资池名称
+        // 2. 用全路径名称替换列表中的投资池名称
         for (FundPoolQueryDto dto : list) {
             String fullName = poolFullNameMap.get(dto.getTargetPoolId());
             if (fullName != null) {
@@ -165,7 +187,10 @@ public class FundPoolQueryService {
     }
 
     /**
-     * 格式化入池时间。
+     * 格式化入池时间
+     *
+     * 执行顺序：
+     * 1. 缺少入池时间时返回空字符串，否则按 yyyy-MM-dd HH:mm:ss 格式化
      *
      * @param value 入池时间
      * @return 格式化后的日期时间；为空时返回空字符串
@@ -175,7 +200,10 @@ public class FundPoolQueryService {
     }
 
     /**
-     * 格式化成立日期。
+     * 格式化成立日期
+     *
+     * 执行顺序：
+     * 1. 缺少成立日期时返回空字符串，否则按 yyyy-MM-dd 格式化
      *
      * @param value 成立日期
      * @return 格式化后的日期；为空时返回空字符串

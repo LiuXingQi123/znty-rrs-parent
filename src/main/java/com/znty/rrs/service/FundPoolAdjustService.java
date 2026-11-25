@@ -69,45 +69,66 @@ import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
-/** 基金池调整申请服务，独立承载基金调库规则与运行表写入 */
+/**
+ * 校验和提交基金池调入调出申请
+ *
+ * 为页面、批量调库和 Excel 导入共用基金在池状态、调库条件及流程候选的判断
+ * 提交时保存基金调库日志、附件和审批步骤，直通项或终审通过项复核后更新基金池状态
+ * {@link FundPoolAdjustFlowService} 在结束审批时调用本类完成生效前复核和落池
+ */
 @Service
 public class FundPoolAdjustService {
     /** 管理员用户 ID */
     private static final String ADMIN_USER_ID = "1";
+
     /** 基金调库附件关联表 */
     private static final String FUND_ADJUST_LOG_TABLE = "ip_adjust_log_fund";
+
     /** 基金品种编码 */
     private static final String FUND_VARIETY_TOKEN = "\"fund\"";
+
     /** 启用状态 */
     private static final String ENABLED = "enabled";
+
     /** 手工调整项 */
     private static final String ITEM_MANUAL = "manual";
+
     /** 联动调整项 */
     private static final String ITEM_LINKAGE = "linkage";
+
     /** 互斥调整项 */
     private static final String ITEM_MUTEX = "mutex";
 
     /** 基金池调整数据访问组件 */
     @Resource
     private FundPoolAdjustMapper fundPoolAdjustMapper;
+
     /** 通用投资池数据访问组件 */
     @Resource
     private InvestmentPoolMapper investmentPoolMapper;
+
     /** 通用流程定义数据访问组件 */
     @Resource
     private FlowMapper flowMapper;
+
     /** 投资池公共服务 */
     @Resource
     private InvestmentPoolService investmentPoolService;
+
     /** 附件公共服务 */
     @Resource
     private SysAttachmentService sysAttachmentService;
+
     /** 基金临时代码登记数据访问组件，用于 O32 人工处理判断 */
     @Resource
     private TempFundCodeMapper tempFundCodeMapper;
 
     /**
-     * 分页查询有效基金。
+     * 分页查询有效基金
+     *
+     * 执行顺序：
+     * 1. 按请求的页码和每页条数开启分页，并用筛选条件查询记录
+     * 2. 将本页记录和查询总条数一起返回
      *
      * @param req 基金代码、名称、类型及分页条件
      * @return 分页基金信息列表
@@ -120,7 +141,10 @@ public class FundPoolAdjustService {
     }
 
     /**
-     * 查询有效基金产品类型。
+     * 查询有效基金产品类型
+     *
+     * 执行顺序：
+     * 1. 查询调整历史中出现的基金类型选项
      *
      * @return 基金类型选项列表
      */
@@ -129,7 +153,11 @@ public class FundPoolAdjustService {
     }
 
     /**
-     * 查询基金只读基础信息。
+     * 查询基金只读基础信息
+     *
+     * 执行顺序：
+     * 1. 校验基金代码并读取基金基础信息
+     * 2. 查询基金只读基础信息
      *
      * @param req 需携带基金代码的查询条件
      * @return 基金只读基础信息
@@ -143,26 +171,32 @@ public class FundPoolAdjustService {
     }
 
     /**
-     * 查询当前用户可调整的基金池。
+     * 查询当前用户可调整的基金池
+     *
+     * 执行顺序：
+     * 1. 校验基金可调整状态并读取基金信息
+     * 2. 保留支持该基金市场的投资池及其祖先节点
+     * 3. 按调入和调出方向收集投资池互斥关系
+     * 4. 组装前端展示所需的池信息、当前数量及互斥池 ID
      *
      * @param req 需携带基金代码和当前用户 ID 的查询条件
      * @return 当前用户可调整的基金池列表
      */
     public List<FundPoolDto> queryAdjustPoolList(FundPoolAdjustReq req) {
-        // 校验基金可调整状态并读取基金信息
+        // 1. 校验基金可调整状态并读取基金信息
         FundInfoBo fund = requireFund(req.getFundCode(), true);
         List<InvestmentPoolBo> allPools = investmentPoolMapper.queryPoolList();
         if (!ADMIN_USER_ID.equals(req.getCurrentUserId())) {
             // 解析用户 ID 并按调整权限过滤可见投资池
             allPools = filterPoolsByPermission(allPools, parseUserId(req.getCurrentUserId()));
         }
-        // 保留支持该基金市场的投资池及其祖先节点
+        // 2. 保留支持该基金市场的投资池及其祖先节点
         allPools = retainFundPoolsAndAncestors(allPools, fund.getMarketCode());
         Map<Long, Integer> countMap = fundPoolAdjustMapper.queryPoolCurrentCountList().stream()
                 .collect(Collectors.toMap(FundPoolDto::getId, FundPoolDto::getCurrentCount));
         Map<Long, List<Long>> inMutexMap = new HashMap<>();
         Map<Long, List<Long>> outMutexMap = new HashMap<>();
-        // 按调入和调出方向收集投资池互斥关系
+        // 3. 按调入和调出方向收集投资池互斥关系
         for (PoolRelationBo relation : fundPoolAdjustMapper.queryAllPoolRelationList()) {
             if (RelationType.IN_MUTEX.getCode().equals(relation.getRelationType())) {
                 inMutexMap.computeIfAbsent(relation.getPoolId(), key -> new ArrayList<>())
@@ -173,7 +207,7 @@ public class FundPoolAdjustService {
             }
         }
         List<FundPoolDto> result = new ArrayList<>();
-        // 组装前端展示所需的池信息、当前数量及互斥池 ID
+        // 4. 组装前端展示所需的池信息、当前数量及互斥池 ID
         for (InvestmentPoolBo pool : allPools) {
             FundPoolDto dto = new FundPoolDto();
             dto.setId(pool.getId());
@@ -192,18 +226,22 @@ public class FundPoolAdjustService {
     }
 
     /**
-     * 查询基金当前所在池，不查询发行主体或债券池。
+     * 查询基金当前所在池，不查询发行主体或债券池
+     *
+     * 执行顺序：
+     * 1. 校验基金代码及基金记录是否存在
+     * 2. 用投资池全路径名称补全基金当前池展示信息
      *
      * @param req 需携带基金代码的查询条件
      * @return 基金当前池状态列表
      */
     public List<FundPoolStatusDto> queryFundPoolStatus(FundPoolAdjustReq req) {
         String fundCode = req.getFundCode();
-        // 校验基金代码及基金记录是否存在
+        // 1. 校验基金代码及基金记录是否存在
         requireFund(fundCode, false);
         List<FundPoolStatusDto> statuses = fundPoolAdjustMapper.queryFundPoolStatusList(fundCode.trim());
         Map<Long, String> fullNameMap = investmentPoolService.queryPoolFullNameMap();
-        // 用投资池全路径名称补全基金当前池展示信息
+        // 2. 用投资池全路径名称补全基金当前池展示信息
         for (FundPoolStatusDto status : statuses) {
             String fullName = fullNameMap.get(status.getTargetPoolId());
             if (fullName != null && !fullName.isEmpty()) {
@@ -214,7 +252,11 @@ public class FundPoolAdjustService {
     }
 
     /**
-     * 查询基金调库记录，详情页按批次展示完整上下文。
+     * 查询基金调库记录，详情页按批次展示完整上下文
+     *
+     * 执行顺序：
+     * 1. 检查基金代码不能为空
+     * 2. 查询调库记录列表（全量，不分页）
      *
      * @param req 需携带基金代码的查询条件
      * @return 基金调库记录列表
@@ -227,7 +269,10 @@ public class FundPoolAdjustService {
     }
 
     /**
-     * 查询基金调库审批步骤，批次号优先于单条记录 ID。
+     * 查询基金调库审批步骤，批次号优先于单条记录 ID
+     *
+     * 执行顺序：
+     * 1. 查询指定调库记录或同批次共用流程的步骤列表
      *
      * @param req 需携带批次号或调库记录 ID 的查询条件
      * @return 基金调库审批步骤列表
@@ -241,7 +286,11 @@ public class FundPoolAdjustService {
     }
 
     /**
-     * 基金调库最终审批落池前，按当前基金状态重新校验批次中的全部调整项。
+     * 基金调库最终审批落池前，按当前基金状态重新校验批次中的全部调整项
+     *
+     * 执行顺序：
+     * 1. 锁定待落池基金主档，与临时代码变更串行处理
+     * 2. 使用已锁定的当前主档复核基金状态
      *
      * @param logs 同一基金调库批次的日志列表
      */
@@ -250,9 +299,9 @@ public class FundPoolAdjustService {
             throw new BizException("基金调库批次记录不存在");
         }
         FundAdjustLogBo firstLog = logs.get(0);
-        // 锁定待落池基金主档，与临时代码变更串行处理
+        // 1. 锁定待落池基金主档，与临时代码变更串行处理
         Map<String, FundInfoBo> lockedFunds = lockFundList(Collections.singletonList(firstLog.getFundCode()));
-        // 使用已锁定的当前主档复核基金状态
+        // 2. 使用已锁定的当前主档复核基金状态
         FundInfoBo fund = requireLockedFund(firstLog.getFundCode(), lockedFunds);
         Map<Long, InvestmentPoolBo> poolMap = investmentPoolMapper.queryPoolList().stream()
                 .filter(pool -> pool.getId() != null)
@@ -275,7 +324,11 @@ public class FundPoolAdjustService {
     }
 
     /**
-     * 将基金调库审批通过的整批日志应用到当前基金池状态。
+     * 将基金调库审批通过的整批日志应用到当前基金池状态
+     *
+     * 执行顺序：
+     * 1. 逐项新增基金投资池状态
+     * 2. 删除基金投资池状态
      *
      * @param logs 已通过审批的同批次调库日志
      */
@@ -298,7 +351,15 @@ public class FundPoolAdjustService {
     }
 
     /**
-     * 执行基金调库校验并展开联动、互斥项。
+     * 执行基金调库校验并展开联动、互斥项
+     *
+     * 执行顺序：
+     * 1. 未选择目标投资池时终止处理
+     * 2. 校验基金可调整状态并读取基金信息
+     * 3. 查询投资池列表
+     * 4. 查询基金当前投资池 ID列表
+     * 5. 查询全部投资池关系列表
+     * 6. 逐项生成单条校验结果
      *
      * @param req 基金代码及手工选择的目标池调整项
      * @return 基金调库校验结果及联动、互斥项
@@ -331,7 +392,13 @@ public class FundPoolAdjustService {
     }
 
     /**
-     * 校验 Excel 导入调整项，补充调整权限和无报告附件入口的限制。
+     * 校验 Excel 导入调整项，补充调整权限和无报告附件入口的限制
+     *
+     * 执行顺序：
+     * 1. 执行基金调库校验并展开联动、互斥项
+     * 2. 查询投资池列表
+     * 3. 查询当前导入用户的调整权限，管理员沿用单笔申请的权限口径
+     * 4. 逐项校验投资池报告限制
      *
      * @param req 基金代码及本次导入的目标池调整项
      * @param adjusterId 当前导入用户 ID
@@ -344,6 +411,7 @@ public class FundPoolAdjustService {
                 .collect(Collectors.toMap(InvestmentPoolBo::getId, pool -> pool));
         // 查询当前导入用户的调整权限，管理员沿用单笔申请的权限口径
         Set<Long> adjustablePoolIds = ADMIN_USER_ID.equals(adjusterId)
+                // 查询用户直接或通过角色拥有调整权限的池，再解析数字用户 ID
                 ? poolMap.keySet() : queryAdjustablePoolIds(parseUserId(adjusterId));
         for (FundAdjustCheckDto.CheckResultItem result : dto.getItems()) {
             List<String> failures = new ArrayList<>(result.getFailReasons());
@@ -372,7 +440,11 @@ public class FundPoolAdjustService {
     }
 
     /**
-     * 原子提交 Excel 导入的来源分组，全部完成复核后才写入基金审批申请。
+     * 原子提交 Excel 导入的来源分组，全部完成复核后才写入基金审批申请
+     *
+     * 执行顺序：
+     * 1. 在任何申请写入之前识别跨来源分组的同基金同目标池冲突
+     * 2. 沿用多单统一锁定、全部复核后再写入的原子提交路径
      *
      * @param requests 已由导入模块按持久化快照构建的来源分组请求
      * @return 按来源分组返回的基金调库提交结果
@@ -382,14 +454,19 @@ public class FundPoolAdjustService {
         if (requests == null || requests.isEmpty()) {
             throw new BizException("至少提交一个基金 Excel 导入分组");
         }
-        // 在任何申请写入之前识别跨来源分组的同基金同目标池冲突
+        // 1. 在任何申请写入之前识别跨来源分组的同基金同目标池冲突
         validateExcelImportRequests(requests);
-        // 沿用多单统一锁定、全部复核后再写入的原子提交路径
+        // 2. 沿用多单统一锁定、全部复核后再写入的原子提交路径
         return submitAdjustLogList(requests, null, false);
     }
 
     /**
-     * 原子提交基金批量申请，支持整批共用附件及完整关系项复核。
+     * 原子提交基金批量申请，支持整批共用附件及完整关系项复核
+     *
+     * 执行顺序：
+     * 1. 批量调整申请列表为空时终止处理
+     * 2. 逐项校验提交级字段
+     * 3. 批量页面必须提交每只基金完整的主项和关系项
      *
      * @param requests 每只基金独立的单笔申请
      * @param submissionFiles 整批共用的上传文件上下文
@@ -424,7 +501,20 @@ public class FundPoolAdjustService {
         return submitAdjustLogList(requests, submissionFiles, true);
     }
 
-    /** 统一锁定基金并在全部复核通过后按单笔规则写入多单申请。 */
+    /**
+     * 统一锁定基金并在全部复核通过后按单笔规则写入多单申请
+     *
+     * 执行顺序：
+     * 1. 一次按主档主键顺序锁定整批基金，再读取最新业务状态
+     * 2. 批量页面按当前关系重新展开主项，核对分组、池、方向及来源标签
+     * 3. 复核基金申请并固定主档、投资池与一般流程快照，不写运行表
+     * 4. 逐项使用已复核上下文保存基金日志、审批快照、初始步骤和附件
+     *
+     * @param requests 已由导入模块按持久化快照构建的来源分组请求
+     * @param submissionFiles 已校验的上传文件上下文，可为空
+     * @param requireCompleteRelations 是否在基金主档锁内重新展开并核对关系项的完整性
+     * @return 基金调库提交列表
+     */
     private List<FundAdjustSubmitDto> submitAdjustLogList(List<FundPoolAdjustSubmitReq> requests,
                                                          SysAttachmentService.SubmissionFiles submissionFiles,
                                                          boolean requireCompleteRelations) {
@@ -448,7 +538,18 @@ public class FundPoolAdjustService {
         return results;
     }
 
-    /** 批量页面按当前关系重新展开主项，核对分组、池、方向及来源标签。 */
+    /**
+     * 批量页面按当前关系重新展开主项，核对分组、池、方向及来源标签
+     *
+     * 执行顺序：
+     * 1. 查询投资池列表
+     * 2. 查询基金当前投资池 ID列表
+     * 3. 查询全部投资池关系列表
+     * 4. 逐项生成单条校验结果
+     *
+     * @param req 基金调库申请及调整明细
+     * @param fund 当前基金主档
+     */
     private void validateBatchRelationItems(FundPoolAdjustSubmitReq req, FundInfoBo fund) {
         Map<Long, InvestmentPoolBo> poolMap = investmentPoolMapper.queryPoolList().stream()
                 .filter(pool -> pool.getId() != null)
@@ -495,7 +596,10 @@ public class FundPoolAdjustService {
     }
 
     /**
-     * 提交不含本地文件的基金调库申请。
+     * 提交不含本地文件的基金调库申请
+     *
+     * 执行顺序：
+     * 1. 提交基金调库日志与初始步骤
      *
      * @param req 基金调库申请及调整明细
      * @return 基金调库申请提交结果
@@ -507,7 +611,12 @@ public class FundPoolAdjustService {
     }
 
     /**
-     * 提交含 multipart 文件的基金调库申请。
+     * 提交含 multipart 文件的基金调库申请
+     *
+     * 执行顺序：
+     * 1. 解析前端 FormData 字段 {@code originalFileNameListJson}（JSON 数组字符串）
+     * 2. 创建本次提交的文件上下文（无前端原始文件名列表）
+     * 3. 将上传文件随基金调库申请一并提交
      *
      * @param req 基金调库申请及调整明细
      * @param files 本次上传的附件文件
@@ -525,7 +634,13 @@ public class FundPoolAdjustService {
     }
 
     /**
-     * 提交基金调库日志与初始步骤。
+     * 提交基金调库日志与初始步骤
+     *
+     * 执行顺序：
+     * 1. 先校验提交级必填字段，避免无效请求获取主档锁
+     * 2. 与临时代码变更共用主档锁，在任何基金日志或步骤写入前取得
+     * 3. 完成全部基金、权限、目标池、报告及流程复核并固定写入上下文
+     * 4. 将已通过复核的单笔申请写入基金专属运行表
      *
      * @param req 基金调库申请及调整明细
      * @param submissionFiles 已校验的上传文件上下文，可为空
@@ -533,34 +648,39 @@ public class FundPoolAdjustService {
      */
     private FundAdjustSubmitDto addAdjustLogInternal(FundPoolAdjustSubmitReq req,
                                                       SysAttachmentService.SubmissionFiles submissionFiles) {
-        // 先校验提交级必填字段，避免无效请求获取主档锁
+        // 1. 先校验提交级必填字段，避免无效请求获取主档锁
         validateSubmitRequest(req);
-        // 与临时代码变更共用主档锁，在任何基金日志或步骤写入前取得
+        // 2. 与临时代码变更共用主档锁，在任何基金日志或步骤写入前取得
         Map<String, FundInfoBo> lockedFunds = lockFundList(Collections.singletonList(req.getFundCode()));
-        // 完成全部基金、权限、目标池、报告及流程复核并固定写入上下文
+        // 3. 完成全部基金、权限、目标池、报告及流程复核并固定写入上下文
         PreparedSubmit prepared = prepareSubmit(req, lockedFunds);
-        // 将已通过复核的单笔申请写入基金专属运行表
+        // 4. 将已通过复核的单笔申请写入基金专属运行表
         return submitPrepared(prepared, submissionFiles);
     }
 
     /**
-     * 复核基金申请并固定主档、投资池与一般流程快照，不写运行表。
+     * 复核基金申请并固定主档、投资池与一般流程快照，不写运行表
+     *
+     * 执行顺序：
+     * 1. 校验调库申请的提交级必填字段
+     * 2. 确认申请中的基金仍处于可调库状态
+     * 3. 根据最新基金、池和关系数据校验全部提交明细
      *
      * @param req 待提交基金申请
      * @param lockedFunds 按主档主键顺序取得锁后的当前基金信息
      * @return 全部复核通过的提交上下文
      */
     private PreparedSubmit prepareSubmit(FundPoolAdjustSubmitReq req, Map<String, FundInfoBo> lockedFunds) {
-        // 校验调库申请的提交级必填字段
+        // 1. 校验调库申请的提交级必填字段
         validateSubmitRequest(req);
-        // 确认申请中的基金仍处于可调库状态
+        // 2. 确认申请中的基金仍处于可调库状态
         FundInfoBo fund = requireLockedFund(req.getFundCode(), lockedFunds);
         Map<Long, InvestmentPoolBo> poolMap = investmentPoolMapper.queryPoolList().stream()
                 .filter(pool -> pool.getId() != null)
                 .collect(Collectors.toMap(InvestmentPoolBo::getId, pool -> pool));
         Set<Long> currentPoolIds = new HashSet<>(fundPoolAdjustMapper.queryFundCurrentPoolIdList(fund.getFundCode()));
         List<PoolRelationBo> relations = fundPoolAdjustMapper.queryAllPoolRelationList();
-        // 根据最新基金、池和关系数据校验全部提交明细
+        // 3. 根据最新基金、池和关系数据校验全部提交明细
         validateSubmitItems(req, fund, poolMap, currentPoolIds, relations);
 
         Map<String, FundPoolAdjustSubmitReq.AdjustItem> manualByGroup = new HashMap<>();
@@ -597,7 +717,11 @@ public class FundPoolAdjustService {
     }
 
     /**
-     * 使用已复核上下文保存基金日志、审批快照、初始步骤和附件。
+     * 使用已复核上下文保存基金日志、审批快照、初始步骤和附件
+     *
+     * 执行顺序：
+     * 1. 逐项生成基金调库批次号
+     * 2. 构建基金调库日志，不信任前端基金名称和产品类型
      *
      * @param prepared 已完成全部复核的基金申请
      * @param submissionFiles 已校验的上传文件上下文，可为空
@@ -637,7 +761,10 @@ public class FundPoolAdjustService {
     }
 
     /**
-     * 校验 Excel 内部整批入口的请求边界与跨来源分组冲突。
+     * 校验 Excel 内部整批入口的请求边界与跨来源分组冲突
+     *
+     * 执行顺序：
+     * 1. 逐项校验提交级字段
      *
      * @param requests 按 Excel 来源分组构造的提交请求
      */
@@ -681,17 +808,24 @@ public class FundPoolAdjustService {
     }
 
     /**
-     * 校验提交级字段。
+     * 校验提交级字段
+     *
+     * 执行顺序：
+     * 1. 检查基金评分和投资类型，投资类型必须是已定义的值
+     * 2. 检查风管领导审批选项已填写，且取值只能为 0 或 1
+     * 3. 检查调整人 ID，未提交任何基金调库明细时终止处理
      *
      * @param req 待提交的基金调库申请
      */
     private void validateSubmitRequest(FundPoolAdjustSubmitReq req) {
+        // 1. 检查基金评分和投资类型
         if (req.getFundScore() == null) {
             throw new BizException("基金评分不能为空");
         }
         if (!FundInvestmentType.isValid(req.getFundInvestmentType())) {
             throw new BizException("基金投资类型不能为空且必须为合法枚举值");
         }
+        // 2. 检查风管领导审批选项
         if (req.getNeedRiskLeaderApproval() == null) {
             throw new BizException("请选择风管领导审批");
         }
@@ -699,6 +833,7 @@ public class FundPoolAdjustService {
                 && req.getNeedRiskLeaderApproval() != 1) {
             throw new BizException("风管领导审批仅允许为 0 或 1");
         }
+        // 3. 检查调整人和调库明细
         if (req.getAdjusterId() == null || req.getAdjusterId().trim().isEmpty()) {
             throw new BizException("调整人 ID 不能为空");
         }
@@ -708,7 +843,12 @@ public class FundPoolAdjustService {
     }
 
     /**
-     * 校验提交明细与重新读取后的基金、投资池和一般流程一致。
+     * 校验提交明细与重新读取后的基金、投资池和一般流程一致
+     *
+     * 执行顺序：
+     * 1. 非管理员需解析用户 ID 并查询可调整的投资池
+     * 2. 逐项执行单池通用基金调库校验
+     * 3. 校验一般流程快照，禁止快速和批量流程替代
      *
      * @param req 待提交的基金调库申请
      * @param fund 最新基金主档
@@ -721,6 +861,7 @@ public class FundPoolAdjustService {
                                      List<PoolRelationBo> relations) {
         // 非管理员需解析用户 ID 并查询可调整的投资池
         Set<Long> adjustablePoolIds = ADMIN_USER_ID.equals(req.getAdjusterId())
+                // 管理员使用全部投资池，其他用户先解析 ID，再查询本人和角色获准调整的池
                 ? poolMap.keySet() : queryAdjustablePoolIds(parseUserId(req.getAdjusterId()));
         Set<String> keys = new HashSet<>();
         for (FundPoolAdjustSubmitReq.AdjustItem item : req.getItems()) {
@@ -755,7 +896,10 @@ public class FundPoolAdjustService {
     }
 
     /**
-     * 校验一般流程快照，禁止快速和批量流程替代。
+     * 校验一般流程快照，禁止快速和批量流程替代
+     *
+     * 执行顺序：
+     * 1. 确认目标池的一般流程已发布且包含人工审批节点
      *
      * @param item 手工调整项及其选择的流程
      * @param pool 目标投资池的流程配置
@@ -780,12 +924,18 @@ public class FundPoolAdjustService {
     }
 
     /**
-     * 校验投资池报告限制。
+     * 校验投资池报告限制
+     *
+     * 执行顺序：
+     * 1. 手工调整项按调入或调出方向读取报告限制，没有报告限制时直接通过
+     * 2. 需要报告时，检查已上传报告或已选择报告库附件
+     * 3. 要求内部报告时校验内部库来源，其他报告限制下检查已选择的报告库附件是否有效
      *
      * @param item 待提交调整项及其报告附件
      * @param pool 目标投资池的报告限制配置
      */
     private void validateReportRestriction(FundPoolAdjustSubmitReq.AdjustItem item, InvestmentPoolBo pool) {
+        // 1. 手工调整项按调入或调出方向读取报告限制，没有报告限制时直接通过
         if (!ITEM_MANUAL.equals(item.getItemTag())) {
             return;
         }
@@ -794,12 +944,14 @@ public class FundPoolAdjustService {
         if (restriction == null || "none".equals(restriction)) {
             return;
         }
+        // 2. 需要报告时，检查已上传报告或已选择报告库附件
         boolean hasManual = item.getReportFileIndexes() != null && !item.getReportFileIndexes().isEmpty();
         boolean hasSource = item.getReportSourceAttachmentIds() != null
                 && !item.getReportSourceAttachmentIds().isEmpty();
         if (!hasManual && !hasSource) {
             throw new BizException("投资池要求提交基金报告：" + pool.getPoolName());
         }
+        // 3. 要求内部报告时校验内部库来源，其他报告限制下检查已选择的报告库附件是否有效
         if ("internal".equals(restriction)) {
             if (!hasSource) {
                 throw new BizException("投资池要求选择有效的内部基金报告：" + pool.getPoolName());
@@ -811,7 +963,14 @@ public class FundPoolAdjustService {
     }
 
     /**
-     * 生成单条校验结果。
+     * 生成单条校验结果
+     *
+     * 执行顺序：
+     * 1. 用目标池和调整方向定位唯一校验结果
+     * 2. 构建目标池的完整层级名称供校验结果展示
+     * 3. 对存在的目标池执行基金调库规则校验
+     * 4. 汇总弹性限制池提示，不将其计入阻断原因
+     * 5. 为可选择的目标池生成一般流程候选项
      *
      * @param resultMap 按目标池与方向去重的校验结果
      * @param fund 当前基金主档
@@ -827,7 +986,7 @@ public class FundPoolAdjustService {
                                 Long poolId, String adjustMode, String itemTag, String groupKey,
                                 Map<Long, InvestmentPoolBo> poolMap, Set<Long> currentPoolIds,
                                 List<PoolRelationBo> relations) {
-        // 用目标池和调整方向定位唯一校验结果
+        // 1. 用目标池和调整方向定位唯一校验结果
         String key = itemKey(poolId, adjustMode);
         if (resultMap.containsKey(key)) {
             return;
@@ -838,27 +997,31 @@ public class FundPoolAdjustService {
         result.setFundShortName(fund.getFundShortName());
         result.setSecurityType(fund.getSecurityType());
         result.setTargetPoolId(poolId);
-        // 构建目标池的完整层级名称供校验结果展示
+        // 2. 构建目标池的完整层级名称供校验结果展示
         result.setPoolName(pool == null ? null : buildPoolPath(poolId, poolMap));
         result.setPoolType(pool == null ? null : pool.getPoolType());
         result.setAdjustMode(adjustMode);
         result.setItemTag(itemTag);
         result.setAdjustGroupKey(groupKey);
-        // 对存在的目标池执行基金调库规则校验
+        // 3. 对存在的目标池执行基金调库规则校验
         List<String> failures = pool == null
                 ? new ArrayList<>(Collections.singletonList("投资池不存在或已删除"))
+                // 执行单池通用基金调库校验
                 : validatePoolAdjust(fund, pool, adjustMode, currentPoolIds, relations);
         result.setFailReasons(failures);
-        // 汇总弹性限制池提示，不将其计入阻断原因
+        // 4. 汇总弹性限制池提示，不将其计入阻断原因
         result.setWarnings(resolveSoftRelationWarnings(poolId, adjustMode, currentPoolIds, poolMap, relations));
         result.setCanAdjust(failures.isEmpty());
-        // 为可选择的目标池生成一般流程候选项
+        // 5. 为可选择的目标池生成一般流程候选项
         result.setFlowOptions(buildNormalFlowOptions(fund, pool, adjustMode, failures));
         resultMap.put(key, result);
     }
 
     /**
-     * 展开联动与互斥关系。
+     * 展开联动与互斥关系
+     *
+     * 执行顺序：
+     * 1. 逐项生成单条校验结果
      *
      * @param resultMap 已生成的调整项校验结果
      * @param fund 当前基金主档
@@ -903,7 +1066,10 @@ public class FundPoolAdjustService {
     }
 
     /**
-     * 执行单池通用基金调库校验。
+     * 执行单池通用基金调库校验
+     *
+     * 执行顺序：
+     * 1. 以证券当前所在的池和本次调整方向校验目标池，本次不排除任何审批批次
      *
      * @param fund 当前基金主档
      * @param pool 目标投资池
@@ -919,7 +1085,10 @@ public class FundPoolAdjustService {
     }
 
     /**
-     * 校验基金单池调整规则，可排除当前正在审批的批次。
+     * 校验基金单池调整规则，可排除当前正在审批的批次
+     *
+     * 执行顺序：
+     * 1. 用传入的批次号排除正在审批的本批记录，并复核目标池的一般流程配置
      *
      * @param fund 当前基金主档
      * @param pool 目标投资池
@@ -937,7 +1106,16 @@ public class FundPoolAdjustService {
     }
 
     /**
-     * 执行基金单池规则校验，可控制是否复核当前发布的一般流程。
+     * 执行基金单池规则校验，可控制是否复核当前发布的一般流程
+     *
+     * 执行顺序：
+     * 1. 校验目标池状态及对基金品种、基金市场的准入配置
+     * 2. 对照当前池状态判断调入或调出方向是否仍然有效
+     * 3. 调入前检查目标池是否仍有剩余容量
+     * 4. 阻止同一基金在目标池存在未完成调库流程时再次申请
+     * 5. 校验目标池配置的来源池及调入调出限制池
+     * 6. 配置开放日限制的投资池仅在开放区间内允许调整
+     * 7. 调出前核对基金入池时间是否满足冻结期要求
      *
      * @param fund 当前基金主档
      * @param pool 目标投资池
@@ -956,7 +1134,7 @@ public class FundPoolAdjustService {
             failures.add("调整方向不合法");
             return failures;
         }
-        // 校验目标池状态及对基金品种、基金市场的准入配置
+        // 1. 校验目标池状态及对基金品种、基金市场的准入配置
         if (!ENABLED.equals(pool.getStatus())) {
             failures.add("投资池未启用");
         }
@@ -970,7 +1148,7 @@ public class FundPoolAdjustService {
         if (pool.getMarketCodes() == null || !pool.getMarketCodes().contains(marketToken)) {
             failures.add("基金市场不在投资池允许范围内");
         }
-        // 对照当前池状态判断调入或调出方向是否仍然有效
+        // 2. 对照当前池状态判断调入或调出方向是否仍然有效
         boolean currentlyIn = currentPoolIds.contains(pool.getId());
         if (AdjustMode.IN.getCode().equals(adjustMode) && currentlyIn) {
             failures.add("基金已在目标投资池中");
@@ -978,25 +1156,25 @@ public class FundPoolAdjustService {
         if (AdjustMode.OUT.getCode().equals(adjustMode) && !currentlyIn) {
             failures.add("基金当前不在目标投资池中");
         }
-        // 调入前检查目标池是否仍有剩余容量
+        // 3. 调入前检查目标池是否仍有剩余容量
         if (AdjustMode.IN.getCode().equals(adjustMode) && pool.getMaxCapacity() != null
                 && fundPoolAdjustMapper.queryPoolCurrentCount(pool.getId()) >= pool.getMaxCapacity()) {
             failures.add("目标投资池容量已满");
         }
-        // 阻止同一基金在目标池存在未完成调库流程时再次申请
+        // 4. 阻止同一基金在目标池存在未完成调库流程时再次申请
         if (fundPoolAdjustMapper.queryFundHasPendingProcess(fund.getFundCode(), pool.getId(), excludedBatchNo)) {
             failures.add("该基金在目标投资池存在待处理流程");
         }
-        // 校验目标池配置的来源池及调入调出限制池
+        // 5. 校验目标池配置的来源池及调入调出限制池
         validateRelationRestrictions(failures, pool.getId(), adjustMode, currentPoolIds, relations);
-        // 配置开放日限制的投资池仅在开放区间内允许调整
+        // 6. 配置开放日限制的投资池仅在开放区间内允许调整
         if (Integer.valueOf(1).equals(pool.getOpenDayAdjust())) {
             String today = new SimpleDateFormat("yyyy-MM-dd").format(new Date());
             if (!fundPoolAdjustMapper.queryPoolInOpenDay(pool.getId(), today)) {
                 failures.add("当前日期不在投资池开放日区间内");
             }
         }
-        // 调出前核对基金入池时间是否满足冻结期要求
+        // 7. 调出前核对基金入池时间是否满足冻结期要求
         if (AdjustMode.OUT.getCode().equals(adjustMode) && pool.getFrozenPeriodIn() != null
                 && pool.getFrozenPeriodIn() > 0) {
             Date entryTime = fundPoolAdjustMapper.queryFundPoolEntryTime(fund.getFundCode(), pool.getId());
@@ -1019,7 +1197,11 @@ public class FundPoolAdjustService {
     }
 
     /**
-     * 校验来源池、限制池关系。
+     * 校验来源池、限制池关系
+     *
+     * 执行顺序：
+     * 1. 只检查目标池配置的关系
+     * 2. 调入时检查是否缺少来源池或命中调入限制池，调出时检查是否命中调出限制池，将失败原因加入列表
      *
      * @param failures 待追加阻断原因的结果列表
      * @param poolId 目标投资池 ID
@@ -1052,7 +1234,11 @@ public class FundPoolAdjustService {
     }
 
     /**
-     * 解析弹性限制关系警告。
+     * 解析弹性限制关系警告
+     *
+     * 执行顺序：
+     * 1. 按调入或调出方向选择弹性限制关系类型
+     * 2. 遍历匹配本目标池的关系，命中当前所在池时加入警告
      *
      * @param poolId 目标投资池 ID
      * @param adjustMode 调入或调出方向
@@ -1079,7 +1265,11 @@ public class FundPoolAdjustService {
     }
 
     /**
-     * 构建目标池唯一的一般流程候选。
+     * 构建目标池唯一的一般流程候选
+     *
+     * 执行顺序：
+     * 1. 投资池为空时返回空列表
+     * 2. 仅为已发布且可用的一般流程生成候选项
      *
      * @param fund 当前基金主档
      * @param pool 目标投资池
@@ -1113,7 +1303,11 @@ public class FundPoolAdjustService {
     }
 
     /**
-     * 构建基金调库日志，不信任前端基金名称和产品类型。
+     * 构建基金调库日志，不信任前端基金名称和产品类型
+     *
+     * 执行顺序：
+     * 1. 按手工、联动或互斥来源确定日志调整类型
+     * 2. 将目标投资池全路径写入调库日志快照
      *
      * @param req 基金调库申请
      * @param fund 最新基金主档
@@ -1138,12 +1332,12 @@ public class FundPoolAdjustService {
         log.setFundScore(req.getFundScore());
         log.setFundInvestmentType(req.getFundInvestmentType());
         log.setNeedRiskLeaderApproval(req.getNeedRiskLeaderApproval());
-        // 按手工、联动或互斥来源确定日志调整类型
+        // 1. 按手工、联动或互斥来源确定日志调整类型
         log.setAdjustType(resolveAdjustType(req.getAdjustType(), item.getItemTag()));
         log.setAdjustMode(item.getAdjustMode());
         log.setAdjustBatchNo(batchNo);
         log.setTargetPoolId(pool.getId());
-        // 将目标投资池全路径写入调库日志快照
+        // 2. 将目标投资池全路径写入调库日志快照
         log.setTargetPoolName(buildPoolPath(pool.getId(), poolMap));
         log.setPoolType(pool.getPoolType());
         log.setFlowId(snapshot.definition.getId());
@@ -1159,11 +1353,14 @@ public class FundPoolAdjustService {
     }
 
     /**
-     * 构建投资池全路径名称。
+     * 构建投资池全路径名称
+     *
+     * 执行顺序：
+     * 1. 递归取得父级路径以拼接完整池名称
      *
      * @param poolId 当前投资池 ID
      * @param poolMap 当前投资池及其祖先节点映射
-     * @return 投资池全路径名称
+     * @return 投资池全路径名称，池 ID 未匹配到记录时返回空字符串
      */
     private String buildPoolPath(Long poolId, Map<Long, InvestmentPoolBo> poolMap) {
         InvestmentPoolBo pool = poolMap.get(poolId);
@@ -1180,7 +1377,11 @@ public class FundPoolAdjustService {
     }
 
     /**
-     * 绑定基金专属分类附件。
+     * 绑定基金专属分类附件
+     *
+     * 执行顺序：
+     * 1. 将本次上传的报告和材料按基金附件分类绑定
+     * 2. 将已选择的来源报告和材料复制到当前调库记录
      *
      * @param logId 当前基金调库日志 ID
      * @param item 当前调整项及其附件索引
@@ -1189,14 +1390,14 @@ public class FundPoolAdjustService {
      */
     private void bindAttachments(Long logId, FundPoolAdjustSubmitReq.AdjustItem item,
                                  SysAttachmentService.SubmissionFiles submissionFiles, String uploaderId) {
-        // 将本次上传的报告和材料按基金附件分类绑定
+        // 1. 将本次上传的报告和材料按基金附件分类绑定
         if (submissionFiles != null) {
             sysAttachmentService.bindAttachments(FUND_ADJUST_LOG_TABLE, logId, item.getReportFileIndexes(),
                     AttachmentCategory.FUND_REPORT_HAND.getCode(), submissionFiles);
             sysAttachmentService.bindAttachments(FUND_ADJUST_LOG_TABLE, logId, item.getMaterialFileIndexes(),
                     AttachmentCategory.FUND_MATERIAL_HAND.getCode(), submissionFiles);
         }
-        // 将已选择的来源报告和材料复制到当前调库记录
+        // 2. 将已选择的来源报告和材料复制到当前调库记录
         sysAttachmentService.copyReportAttachments(FUND_ADJUST_LOG_TABLE, logId,
                 item.getReportSourceAttachmentIds(), AttachmentPurpose.CREDIT_REPORT.getCode(), uploaderId);
         sysAttachmentService.copyReportAttachments(FUND_ADJUST_LOG_TABLE, logId,
@@ -1204,17 +1405,23 @@ public class FundPoolAdjustService {
     }
 
     /**
-     * 构建已发布流程快照。
+     * 构建已发布流程快照
+     *
+     * 执行顺序：
+     * 1. 读取处于启用状态的流程定义及其已发布版本
+     * 2. 固定当前发布版本的节点、连线、审批配置和处理人
+     * 3. 将当前有效临时代码状态带入快照，供 O32 节点按人工方式处理
+     * 4. 确认流程包含实际人工审批节点后返回快照
      *
      * @param flowId 一般审批流程定义 ID
      * @param fundCode 当前基金代码，用于判断 O32 是否需人工处理
-     * @return 已发布流程快照
+     * @return 已发布流程的快照，流程 ID 缺失、流程未启用或没有启用版本时返回 null
      */
     private FlowSnapshot buildFlowSnapshot(Long flowId, String fundCode) {
         if (flowId == null) {
             return null;
         }
-        // 读取处于启用状态的流程定义及其已发布版本
+        // 1. 读取处于启用状态的流程定义及其已发布版本
         FlowDefinitionBo definition = flowMapper.queryFlowById(flowId);
         if (definition == null || !FlowStatus.ACTIVE.getCode().equals(definition.getStatus())) {
             return null;
@@ -1229,7 +1436,7 @@ public class FundPoolAdjustService {
         if (activeVersion == null) {
             return null;
         }
-        // 固定当前发布版本的节点、连线、审批配置和处理人
+        // 2. 固定当前发布版本的节点、连线、审批配置和处理人
         List<FlowNodeBo> nodes = flowMapper.queryFlowNodeListByVersionId(activeVersion.getId());
         List<FlowEdgeBo> edges = flowMapper.queryFlowEdgeListByVersionId(activeVersion.getId());
         Map<Long, NodeApprovalConfigBo> configMap = new HashMap<>();
@@ -1241,17 +1448,20 @@ public class FundPoolAdjustService {
             handlerMap.computeIfAbsent(handler.getApprovalConfigId(), key -> new ArrayList<>()).add(handler);
         }
         FlowSnapshot snapshot = new FlowSnapshot(definition, nodes, edges, configMap, handlerMap);
-        // 将当前有效临时代码状态带入快照，供 O32 节点按人工方式处理
+        // 3. 将当前有效临时代码状态带入快照，供 O32 节点按人工方式处理
         snapshot.temporaryFund = tempFundCodeMapper.queryTemporaryCodeCountByFundCode(fundCode) > 0;
-        // 确认流程包含实际人工审批节点后返回快照
+        // 4. 确认流程包含实际人工审批节点后返回快照
         return hasManualApprovalNode(snapshot) ? snapshot : null;
     }
 
     /**
-     * 判断基金调库一般流程是否包含至少一个实际人工审批节点。
+     * 判断基金调库一般流程是否包含至少一个实际人工审批节点
+     *
+     * 执行顺序：
+     * 1. 遍历审批节点，排除系统自动节点和发起人提交节点，找到一个其余审批节点即返回 true
      *
      * @param snapshot 已发布流程的节点及审批配置快照
-     * @return 是否包含实际人工审批节点
+     * @return true=流程包含实际人工审批节点，false=流程没有实际人工审批节点
      */
     private boolean hasManualApprovalNode(FlowSnapshot snapshot) {
         for (FlowNodeBo node : snapshot.nodes) {
@@ -1264,6 +1474,7 @@ public class FundPoolAdjustService {
             // 识别通过提交连线流转的发起人节点
             boolean submitNode = config != null
                     && ApprovalStrategy.INITIATOR.getCode().equals(config.getApprovalStrategy())
+                    // 判断流程节点是否存在指定动作的后续连线
                     && hasOutgoingRouteAction(snapshot, node, ProcessAction.SUBMIT.getCode());
             if (!autoNode && !submitNode) {
                 return true;
@@ -1273,11 +1484,14 @@ public class FundPoolAdjustService {
     }
 
     /**
-     * 判断基金调库审批节点是否由系统自动通过。
+     * 判断基金调库审批节点是否由系统自动通过
+     *
+     * 执行顺序：
+     * 1. 配置为自动通过，或配置为 O32 且基金使用正式代码时，判为系统自动通过
      *
      * @param config 当前节点的审批配置
      * @param temporaryFund 当前基金是否为有效临时代码
-     * @return 是否由系统自动通过
+     * @return true=此节点满足系统自动通过条件，false=此节点不满足系统自动通过条件
      */
     private boolean isSystemAutoApproval(NodeApprovalConfigBo config, boolean temporaryFund) {
         return config != null && (ApprovalStrategy.AUTO.getCode().equals(config.getApprovalStrategy())
@@ -1285,7 +1499,11 @@ public class FundPoolAdjustService {
     }
 
     /**
-     * 创建开始、发起人和首个人工审批步骤。
+     * 创建开始、发起人和首个人工审批步骤
+     *
+     * 执行顺序：
+     * 1. 定位流程开始节点以创建起始步骤
+     * 2. 写入系统自动处理的流程开始步骤
      *
      * @param logId 当前基金调库日志 ID
      * @param batchNo 当前调库批次号
@@ -1295,12 +1513,12 @@ public class FundPoolAdjustService {
      */
     private void createInitialSteps(Long logId, String batchNo, FlowSnapshot snapshot,
                                     String adjusterId, String adjusterName) {
-        // 定位流程开始节点以创建起始步骤
+        // 1. 定位流程开始节点以创建起始步骤
         FlowNodeBo current = findNode(snapshot.nodes, NodeType.START.getCode());
         if (current == null) {
             throw new BizException("一般审批流程缺少开始节点");
         }
-        // 写入系统自动处理的流程开始步骤
+        // 2. 写入系统自动处理的流程开始步骤
         insertStep(logId, batchNo, current, null, StepStatus.AUTO_PROCESS.getCode(),
                 null, null, ProcessAction.AUTO_PROCESS.getCode(), new Date());
         Set<Long> visited = new HashSet<>();
@@ -1319,6 +1537,7 @@ public class FundPoolAdjustService {
             }
             // 判断非审批节点或系统自动审批节点是否可直接跳过
             if (!NodeType.APPROVAL.getCode().equals(current.getNodeType())
+                    // 判断基金调库审批节点是否由系统自动通过
                     || isSystemAutoApproval(config, snapshot.temporaryFund)) {
                 // 为无需人工处理的节点记录自动完成步骤
                 insertStep(logId, batchNo, current, config, StepStatus.AUTO_PROCESS.getCode(),
@@ -1327,6 +1546,7 @@ public class FundPoolAdjustService {
             }
             // 判断当前节点是否为提交后自动流转的发起人节点
             if (config != null && ApprovalStrategy.INITIATOR.getCode().equals(config.getApprovalStrategy())
+                    // 判断流程节点是否存在指定动作的后续连线
                     && hasOutgoingRouteAction(snapshot, current, ProcessAction.SUBMIT.getCode())) {
                 // 记录发起人已提交的审批步骤
                 insertStep(logId, batchNo, current, config, StepStatus.SUBMIT.getCode(),
@@ -1351,18 +1571,25 @@ public class FundPoolAdjustService {
     }
 
     /**
-     * 解析审批节点处理人。
+     * 解析审批节点处理人
+     *
+     * 执行顺序：
+     * 1. 审批配置或配置 ID 缺失时返回空列表
+     * 2. 读取节点配置的人员，按角色配置展开该角色及其子角色中的用户
+     * 3. 按用户 ID 去重并返回候选处理人
      *
      * @param config 当前节点的审批配置
      * @param snapshot 包含处理人配置的流程快照
-     * @return 审批节点处理人列表
+     * @return 去重后的审批候选人，没有有效配置或候选人时返回空列表
      */
     private List<HandlerTarget> resolveHandlers(NodeApprovalConfigBo config, FlowSnapshot snapshot) {
+        // 1. 审批配置或配置 ID 缺失时返回空列表
         if (config == null || config.getId() == null) {
             return Collections.emptyList();
         }
         LinkedHashMap<String, HandlerTarget> targets = new LinkedHashMap<>();
         List<RoleBo> allRoles = null;
+        // 2. 读取节点配置的人员，按角色配置展开该角色及其子角色中的用户
         for (NodeApprovalHandlerBo handler : snapshot.handlerMap.getOrDefault(config.getId(), Collections.emptyList())) {
             if (handler == null || handler.getHandlerId() == null) {
                 continue;
@@ -1388,11 +1615,16 @@ public class FundPoolAdjustService {
                 }
             }
         }
+        // 3. 按用户 ID 去重并返回候选处理人
         return new ArrayList<>(targets.values());
     }
 
     /**
-     * 递归收集角色及其子角色 ID。
+     * 递归收集角色及其子角色 ID
+     *
+     * 执行顺序：
+     * 1. 跳过空角色和已访问的角色，将当前角色加入结果
+     * 2. 按父角色关系递归收集未访问的子角色
      *
      * @param roleId 当前角色 ID
      * @param roleIds 已收集的角色 ID
@@ -1417,7 +1649,10 @@ public class FundPoolAdjustService {
     }
 
     /**
-     * 新增基金调库步骤。
+     * 新增基金调库步骤
+     *
+     * 执行顺序：
+     * 1. 新增调库审批步骤
      *
      * @param logId 当前基金调库日志 ID
      * @param batchNo 当前调库批次号
@@ -1450,7 +1685,11 @@ public class FundPoolAdjustService {
     }
 
     /**
-     * 沿非驳回主路径查找下一节点。
+     * 沿非驳回主路径查找下一节点
+     *
+     * 执行顺序：
+     * 1. 查找从当前节点出发且动作不是驳回的连线
+     * 2. 沿连线查找目标节点，未找到时返回 null
      *
      * @param snapshot 当前流程快照
      * @param current 当前流程节点
@@ -1471,12 +1710,15 @@ public class FundPoolAdjustService {
     }
 
     /**
-     * 判断流程节点是否存在指定动作的后续连线。
+     * 判断流程节点是否存在指定动作的后续连线
+     *
+     * 执行顺序：
+     * 1. 逐条核对连线的起点和动作编码，两者均匹配时返回 true
      *
      * @param snapshot 当前流程快照
      * @param node 待检查的流程节点
      * @param routeAction 需要查找的流转动作
-     * @return 是否存在指定动作的后续连线
+     * @return true=节点存在指定动作的出线，false=节点没有指定动作的出线
      */
     private boolean hasOutgoingRouteAction(FlowSnapshot snapshot, FlowNodeBo node, String routeAction) {
         for (FlowEdgeBo edge : snapshot.edges) {
@@ -1488,7 +1730,10 @@ public class FundPoolAdjustService {
     }
 
     /**
-     * 按类型查找流程节点。
+     * 按类型查找流程节点
+     *
+     * 执行顺序：
+     * 1. 按列表顺序查找类型相同的第一个节点，没有匹配时返回 null
      *
      * @param nodes 当前流程的节点列表
      * @param nodeType 需要查找的节点类型
@@ -1504,7 +1749,11 @@ public class FundPoolAdjustService {
     }
 
     /**
-     * 按调整权限过滤投资池并保留祖先。
+     * 按调整权限过滤投资池并保留祖先
+     *
+     * 执行顺序：
+     * 1. 查询当前用户可直接调整的投资池 ID
+     * 2. 按调整权限过滤投资池并保留祖先
      *
      * @param pools 全部投资池
      * @param userId 当前用户 ID
@@ -1527,7 +1776,11 @@ public class FundPoolAdjustService {
     }
 
     /**
-     * 查询用户直接或通过角色拥有调整权限的池。
+     * 查询用户直接或通过角色拥有调整权限的池
+     *
+     * 执行顺序：
+     * 1. 汇总用户所属角色及池级可调整人员配置
+     * 2. 按类型查询权限列表
      *
      * @param userId 当前用户 ID
      * @return 用户可调整的池 ID 集合
@@ -1553,7 +1806,10 @@ public class FundPoolAdjustService {
     }
 
     /**
-     * 保留支持基金和基金市场的池及其祖先。
+     * 保留支持基金和基金市场的池及其祖先
+     *
+     * 执行顺序：
+     * 1. 仅保留支持基金品种及当前市场的启用池，并补齐其祖先节点
      *
      * @param pools 待筛选的投资池列表
      * @param marketCode 当前基金所属市场编码
@@ -1581,7 +1837,10 @@ public class FundPoolAdjustService {
     }
 
     /**
-     * 按主档主键顺序取得整批基金锁，并保持代码大小写与数据库匹配口径一致。
+     * 按主档主键顺序取得整批基金锁，并保持代码大小写与数据库匹配口径一致
+     *
+     * 执行顺序：
+     * 1. 通过主档行锁串行处理业务变更，并清除锁前的 MyBatis 查询缓存
      *
      * @param fundCodes 本次写入涉及的基金代码
      * @return 以代码索引的已锁定当前基金主档
@@ -1606,7 +1865,11 @@ public class FundPoolAdjustService {
     }
 
     /**
-     * 使用已锁定的当前主档校验基金可调整状态。
+     * 使用已锁定的当前主档校验基金可调整状态
+     *
+     * 执行顺序：
+     * 1. 基金不存在或已删除时终止处理
+     * 2. 已终止或退市基金不能发起调库时终止处理
      *
      * @param fundCode 待提交或终审的基金代码
      * @param lockedFunds 当前事务已锁定的基金主档
@@ -1624,7 +1887,13 @@ public class FundPoolAdjustService {
     }
 
     /**
-     * 读取并校验基金。
+     * 读取并校验基金
+     *
+     * 执行顺序：
+     * 1. 检查基金代码不能为空
+     * 2. 按代码查询基金
+     * 3. 基金不存在或已删除时终止处理
+     * 4. 已终止或退市基金不能发起调库时终止处理
      *
      * @param fundCode 基金代码
      * @param requireActive 是否要求基金仍可发起调库
@@ -1645,7 +1914,10 @@ public class FundPoolAdjustService {
     }
 
     /**
-     * 读取投资池。
+     * 读取投资池
+     *
+     * 执行顺序：
+     * 1. 投资池不存在或已删除时终止处理
      *
      * @param poolMap 当前投资池映射
      * @param poolId 目标投资池 ID
@@ -1660,7 +1932,10 @@ public class FundPoolAdjustService {
     }
 
     /**
-     * 解析数字用户 ID。
+     * 解析数字用户 ID
+     *
+     * 执行顺序：
+     * 1. 检查当前用户 ID 不能为空
      *
      * @param userId 当前用户 ID 字符串
      * @return 解析后的用户 ID
@@ -1677,7 +1952,10 @@ public class FundPoolAdjustService {
     }
 
     /**
-     * 生成基金调库批次号。
+     * 生成基金调库批次号
+     *
+     * 执行顺序：
+     * 1. 取当前时间和 UUID 的前 8 位大写字符，拼成以 FUND 开头的批次号
      *
      * @return 基金调库批次号
      */
@@ -1687,7 +1965,10 @@ public class FundPoolAdjustService {
     }
 
     /**
-     * 获取非空分组标识。
+     * 获取非空分组标识
+     *
+     * 执行顺序：
+     * 1. 检查调库分组标识不能为空
      *
      * @param item 当前调整项
      * @return 非空分组标识
@@ -1700,7 +1981,10 @@ public class FundPoolAdjustService {
     }
 
     /**
-     * 生成池及方向唯一键。
+     * 生成池及方向唯一键
+     *
+     * 执行顺序：
+     * 1. 用竖线连接池 ID 和调库方向，供同一池同一方向去重
      *
      * @param poolId 目标投资池 ID
      * @param adjustMode 调入或调出方向
@@ -1711,7 +1995,11 @@ public class FundPoolAdjustService {
     }
 
     /**
-     * 按调整项来源解析调整类型。
+     * 按调整项来源解析调整类型
+     *
+     * 执行顺序：
+     * 1. 联动和互斥项使用各自的调整类型
+     * 2. 主项使用请求调整类型，未填写时按手工调整处理
      *
      * @param requested 请求中填写的调整类型
      * @param itemTag 手工、联动或互斥来源
@@ -1727,21 +2015,32 @@ public class FundPoolAdjustService {
         return requested == null || requested.trim().isEmpty() ? "手工调整" : requested.trim();
     }
 
-    /** 写入前已完成复核的基金申请上下文 */
+    /**
+     * 保存已通过复核的基金调库提交数据
+     *
+     * 在写入前保留当前基金主档和投资池配置，以及各来源组手工主项所用的流程快照
+     */
     private static class PreparedSubmit {
         /** 来源分组的申请字段与明细 */
         private final FundPoolAdjustSubmitReq req;
+
         /** 当前基金主档 */
         private final FundInfoBo fund;
+
         /** 当前投资池映射 */
         private final Map<Long, InvestmentPoolBo> poolMap;
+
         /** 来源组手工主项 */
         private final Map<String, FundPoolAdjustSubmitReq.AdjustItem> manualByGroup;
+
         /** 来源组已发布流程快照 */
         private final Map<String, FlowSnapshot> snapshotByGroup;
 
         /**
-         * 保存已复核的主档、目标池与一般流程快照。
+         * 保存已复核的主档、目标池与一般流程快照
+         *
+         * 执行顺序：
+         * 1. 保存来源分组申请、基金主档、池配置，以及各组的手工主项和一般流程快照
          *
          * @param req 来源分组申请
          * @param fund 当前基金主档
@@ -1760,23 +2059,35 @@ public class FundPoolAdjustService {
         }
     }
 
-    /** 已发布流程快照 */
+    /**
+     * 保存基金调库发起审批所用的已发布流程快照
+     *
+     * 将流程定义、审批图和处理人配置一起保存，并记录临时基金标记供 O32 节点决定是否转人工
+     */
     private static class FlowSnapshot {
         /** 流程定义 */
         private final FlowDefinitionBo definition;
+
         /** 流程节点 */
         private final List<FlowNodeBo> nodes;
+
         /** 流程连线 */
         private final List<FlowEdgeBo> edges;
+
         /** 审批配置 */
         private final Map<Long, NodeApprovalConfigBo> configMap;
+
         /** 审批处理人 */
         private final Map<Long, List<NodeApprovalHandlerBo>> handlerMap;
+
         /** 当前基金的有效临时代码标记，决定 O32 节点是否转人工 */
         private boolean temporaryFund;
 
         /**
-         * 保存流程定义、节点、连线及审批配置快照。
+         * 保存流程定义、节点、连线及审批配置快照
+         *
+         * 执行顺序：
+         * 1. 记录基金调库的流程定义、节点、连线和审批索引
          *
          * @param definition 流程定义
          * @param nodes 流程节点
@@ -1795,15 +2106,23 @@ public class FundPoolAdjustService {
         }
     }
 
-    /** 流程处理人 */
+    /**
+     * 保存基金调库申请的候选审批处理人
+     *
+     * 按用户 ID 与姓名记录从节点配置解析出的人员，供创建初始审批步骤使用
+     */
     private static class HandlerTarget {
         /** 人员 ID */
         private final String id;
+
         /** 人员姓名 */
         private final String name;
 
         /**
-         * 保存审批处理人的 ID 和姓名。
+         * 保存审批处理人的 ID 和姓名
+         *
+         * 执行顺序：
+         * 1. 记录审批处理人的 ID 和姓名
          *
          * @param id 处理人 ID
          * @param name 处理人姓名

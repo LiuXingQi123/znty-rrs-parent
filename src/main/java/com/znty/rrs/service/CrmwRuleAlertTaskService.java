@@ -28,14 +28,12 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * CRMW规则提醒定时任务，只负责扫描风险、维护待办及返回任务结果
+ * CRMW规则提醒
  *
- * 业务示例：
- * 1. 标的债券：A 公司发行的债券，是接受信用保护的对象
- * 2. CRMW 凭证：由 B 机构创设／提供信用保护，用于保护上述标的债券
- * 3. 创设方／保护方内评：指 B 机构最新的主体内评，不是 A 公司的主体内评，也不是凭证自身的证券评级
- *
- * 本任务取 CRMW 凭证主档的发行主体代码定位 B 机构，并检查 B 机构的内评和观察名单状态
+ * 执行顺序：
+ * 1. 扫描生效的 CRMW 组合，以凭证主档的发行主体定位创设或保护主体
+ * 2. 读取该主体的最新内评及观察池状态，按命中的风险生成或刷新提醒
+ * 3. 合规或出库后的旧提醒置为失效，汇总本轮结果，发生异常时整轮回滚
  */
 @Slf4j
 @Service
@@ -43,11 +41,14 @@ public class CrmwRuleAlertTaskService implements RrsScheduledTask {
 
     /** 定时任务编码 */
     public static final String TASK_CODE = "crmw_rule_alert";
+
     /** 定时任务名称 */
     public static final String TASK_NAME = "CRMW规则提醒";
+
     /** 任务扫描及待办生成数据访问 */
     @Resource
     private CrmwRuleAlertTaskMapper crmwRuleAlertTaskMapper;
+
     /** 复用主体内评档位顺序，不使用信用债准入矩阵 */
     @Resource
     private CreditBondGradeRuleMapper creditBondGradeRuleMapper;
@@ -123,7 +124,7 @@ public class CrmwRuleAlertTaskService implements RrsScheduledTask {
             return ScheduledTaskResult.failure(TASK_CODE, TASK_NAME, e.getMessage(),
                     startTime, duration, detail.build());
         } catch (Exception e) {
-            // 4. 系统异常同样撤销本轮提醒变更，并记录异常上下文
+            // 5. 系统异常同样撤销本轮提醒变更，并记录异常上下文
             markTransactionRollbackOnly();
             long duration = System.currentTimeMillis() - begin;
             log.error("{}异常", TASK_NAME, e);
@@ -290,10 +291,15 @@ public class CrmwRuleAlertTaskService implements RrsScheduledTask {
         }
     }
 
-    /** 本轮CRMW扫描任务汇总 */
+    /**
+     * 保存本轮 CRMW 规则提醒扫描的结果
+     *
+     * 保留本轮处理说明和执行结束后仍待处理的提醒数量，供任务结果展示
+     */
     private static final class RuleAlertSummary {
         /** 本轮扫描结果摘要 */
         private String message;
+
         /** 执行结束后仍待处理的提醒数量 */
         private int openCount;
     }

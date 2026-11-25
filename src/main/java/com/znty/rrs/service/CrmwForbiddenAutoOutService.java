@@ -29,14 +29,12 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * CRMW关联禁投自动出库，只清退已经在库的组合
+ * CRMW关联禁投自动出库
  *
- * 业务示例：
- * 1. 标的债券：A 公司发行的债券，是接受信用保护的对象
- * 2. CRMW 凭证：由 B 机构创设／提供信用保护
- * 3. 标的债券、A 公司、CRMW 凭证、B 机构任一已在禁止库时，退出对应凭证与标的的在库组合
- *
- * 禁止库入库记录由原业务生成，本任务不重复入禁止库，不改变另一端的禁投状态
+ * 执行顺序：
+ * 1. 扫描已在 CRMW 池生效的凭证和标的债券组合
+ * 2. 核对标的债券及发行主体、凭证及创设或保护主体，任一已在禁止库时进入出库处理
+ * 3. 逐组合独立提交出库并写调库日志，单条失败记录原因后继续，汇总结果
  */
 @Slf4j
 @Service
@@ -44,14 +42,18 @@ public class CrmwForbiddenAutoOutService implements RrsScheduledTask {
 
     /** 定时任务编码 */
     public static final String TASK_CODE = "crmw_forbidden_auto_out";
+
     /** 定时任务展示名称 */
     public static final String TASK_NAME = "CRMW关联禁投自动出库";
+
     /** 扫描及原组合状态更新 */
     @Resource
     private CrmwForbiddenAutoOutMapper crmwForbiddenAutoOutMapper;
+
     /** CRMW自动出库日志写入 */
     @Resource
     private CrmwPoolAdjustMapper crmwPoolAdjustMapper;
+
     /** 按需取得本任务的Spring代理，让本类公开事务方法通过代理执行 */
     @Resource
     private ObjectProvider<CrmwForbiddenAutoOutService> selfProvider;
@@ -270,12 +272,18 @@ public class CrmwForbiddenAutoOutService implements RrsScheduledTask {
         return 1;
     }
 
-    /** 本轮扫描、已提交出库和失败数量 */
+    /**
+     * 汇总本轮禁投规则触发的 CRMW 调出结果
+     *
+     * 区分本轮扫描的有效组合、实际提交出库的组合，以及主档异常或处理失败的组合
+     */
     private static class AutoOutSummary {
         /** 本轮扫描的有效组合数量 */
         private int scannedCount;
+
         /** 已提交的实际出库数量 */
         private int outCount;
+
         /** 主档异常或出库失败的组合数量 */
         private int failedCount;
     }

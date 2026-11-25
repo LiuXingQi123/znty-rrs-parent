@@ -2,19 +2,40 @@ package com.znty.rrs.service;
 
 import org.springframework.stereotype.Service;
 
-/** 恒生池全量数据导出（含已到期） */
+/**
+ * 恒生池全量数据导出（含已到期）
+ *
+ * 执行顺序：
+ * 1. 由 {@link AbstractHsPoolExcelExportService} 读取配置并确定要导出的叶子池
+ * 2. 查询当前生效的普通证券和独立 CRMW 组合，仍在池的到期普通证券一并导出
+ * 3. 按池生成恒生格式工作簿，写入主文件并归档已存在的旧版
+ */
 @Service
 public class HsPoolFullIncludingExpiredExcelExportService extends AbstractHsPoolExcelExportService {
     /** 恒生池全量数据导出（含已到期）任务编码 */
     public static final String TASK_CODE = "hs_pool_full_including_expired_excel_export";
 
-    /** 返回恒生池全量数据导出（含已到期）任务编码 */
+    /**
+     * 返回恒生池全量数据导出（含已到期）任务编码
+     *
+     * 执行顺序：
+     * 1. 返回当前任务定义的固定编码
+     *
+     * @return 任务编码
+     */
     @Override
     public String getTaskCode() {
         return TASK_CODE;
     }
 
-    /** 返回恒生池全量数据导出（含已到期）任务参数说明 */
+    /**
+     * 返回恒生池全量数据导出（含已到期）任务参数说明
+     *
+     * 执行顺序：
+     * 1. 返回当前任务定义的参数说明
+     *
+     * @return 任务参数说明
+     */
     @Override
     public String getParamHelp() {
         return "参数格式：可选 JSON 对象，例如 <code>{\"poolIds\":[15,16],\"exportEmptyPool\":true,\"exportPoolWithoutHsName\":false,\"outputDir\":\"D:/exports\"}</code>。\n"
@@ -25,19 +46,40 @@ public class HsPoolFullIncludingExpiredExcelExportService extends AbstractHsPool
                 + "导出内容：当前已生效的非主体证券和 CRMW；普通证券包含已到期数据，独立 CRMW 组合不校验摘牌日；恒生池名称可用竖线配置多个 Sheet 名。";
     }
 
-    /** 返回全量导出标记 */
+    /**
+     * 返回全量导出标记
+     *
+     * 执行顺序：
+     * 1. 按此任务的固定设置返回 false，表示按全量导出
+     *
+     * @return true=按增量导出，false=按全量导出
+     */
     @Override
     protected boolean isIncrement() {
         return false;
     }
 
-    /** 返回包含已到期普通证券的配置 */
+    /**
+     * 返回包含已到期普通证券的配置
+     *
+     * 执行顺序：
+     * 1. 按此任务的固定设置返回 true，表示全量导出包含已到期普通证券
+     *
+     * @return true=全量导出包含已到期普通证券，false=全量导出排除已到期普通证券
+     */
     @Override
     protected boolean includeExpiredForFullExport() {
         return true;
     }
 
-    /** 返回导出文件名前缀 */
+    /**
+     * 返回导出文件名前缀
+     *
+     * 执行顺序：
+     * 1. 返回含到期证券的全量导出任务固定使用的 hs_pool_full_including_expired
+     *
+     * @return 导出文件名前缀
+     */
     @Override
     protected String filePrefix() {
         return "hs_pool_full_including_expired";

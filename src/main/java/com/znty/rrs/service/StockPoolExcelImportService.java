@@ -45,46 +45,67 @@ import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
-/** 股票 Excel 导入编排，调库规则及审批写入委托股票专属服务。 */
+/**
+ * 处理股票池 Excel 导入的预览、校验和提交
+ *
+ * 解析上传文件并保存导入批次和明细，供页面查看和跟踪逐行结果
+ * 导入时选择清空目标池，会把需要调出的原在池股票加入校验结果
+ * 实际调库校验和提交由 {@link StockPoolAdjustService} 处理，导入任务记录每行校验和保存结果
+ */
 @Service
 public class StockPoolExcelImportService {
-    /** 股票导入业务类型。 */
+    /** 股票导入业务类型 */
     private static final String BIZ_TYPE = "stock_pool_excel";
-    /** 四列固定表头。 */
+
+    /** 四列固定表头 */
     private static final List<String> HEADERS = Arrays.asList("父池名称", "子池名称", "股票名称", "股票代码");
-    /** 最大上传字节数。 */
+
+    /** 最大上传字节数 */
     private static final int MAX_FILE_BYTES = 5 * 1024 * 1024;
-    /** 最大非空数据行数。 */
+
+    /** 最大非空数据行数 */
     private static final int MAX_ROWS = 2000;
-    /** JSON 快照序列化组件。 */
+
+    /** JSON 快照序列化组件 */
     private final ObjectMapper objectMapper = new ObjectMapper();
-    /** 导入临时表及股票池查询组件。 */
+
+    /** 导入临时表及股票池查询组件 */
     @Resource
     private StockPoolExcelImportMapper stockPoolExcelImportMapper;
-    /** 股票专属业务校验及整批提交组件。 */
+
+    /** 股票专属业务校验及整批提交组件 */
     @Resource
     private StockPoolAdjustService stockPoolAdjustService;
-    /** 股票主档及在途流程查询组件。 */
+
+    /** 股票主档及在途流程查询组件 */
     @Resource
     private StockPoolAdjustMapper stockPoolAdjustMapper;
-    /** 投资池完整路径查询组件。 */
+
+    /** 投资池完整路径查询组件 */
     @Resource
     private InvestmentPoolMapper investmentPoolMapper;
-    /** 原始上传文件名处理组件。 */
+
+    /** 原始上传文件名处理组件 */
     @Resource
     private SysAttachmentService sysAttachmentService;
 
     /**
-     * 上传固定四列模板并保存原始文本，上传后导入参数锁定。
+     * 上传固定四列模板并保存原始文本，上传后导入参数锁定
+     *
+     * 执行顺序：
+     * 1. 校验上传方向、用户及清空选项
+     * 2. 固定导入业务选项，不接受校验或提交时覆盖
+     * 3. 返回批次及首屏原始明细
      *
      * @param req 上传方向、清空参数及当前操作人
      * @param file 四列股票导入 Excel 文件
      * @param originalFileNameListJson 上传文件原始名称列表 JSON，可为空
+     * @return 股票 Excel 导入结果
      */
     @Transactional(rollbackFor = Exception.class)
     public StockPoolExcelImportDto uploadExcel(StockPoolExcelImportReq req, MultipartFile file,
                                              String originalFileNameListJson) {
-        // 校验上传方向、用户及清空选项
+        // 1. 校验上传方向、用户及清空选项
         validateUpload(req, file);
         List<Map<String, String>> rows = ExcelImportHelper.parseFirstSheet(file, MAX_ROWS);
         if (!rows.get(0).keySet().containsAll(HEADERS)) {
@@ -102,7 +123,7 @@ public class StockPoolExcelImportService {
         batch.setFld001(req.getDirection());
         batch.setFld011(req.getAdjustReason());
         batch.setFld012(req.getAdjustAdvice());
-        // 固定导入业务选项，不接受校验或提交时覆盖
+        // 2. 固定导入业务选项，不接受校验或提交时覆盖
         batch.setOptionJson(writeJson(reqOptions(req)));
         batch.setTotalCount(rows.size());
         batch.setPassCount(0);
@@ -150,28 +171,39 @@ public class StockPoolExcelImportService {
         }
         req.setImpId(impId);
         req.setPageIndex(1);
-        // 返回批次及首屏原始明细
+        // 3. 返回批次及首屏原始明细
         return queryTask(req);
     }
 
     /**
-     * 查询股票批次及服务器快照。
+     * 查询股票批次及服务器快照
+     *
+     * 执行顺序：
+     * 1. 仅加载股票业务的有效批次
+     * 2. 解析批次状态与快照
      *
      * @param req 导入批次号及原始明细分页条件
+     * @return 股票 Excel 导入结果
      */
     public StockPoolExcelImportDto queryTask(StockPoolExcelImportReq req) {
-        // 仅加载股票业务的有效批次
+        // 1. 仅加载股票业务的有效批次
         SysImpTmpBo batch = requireBatch(req, false);
-        // 解析批次状态与快照
+        // 2. 解析批次状态与快照
         StockPoolExcelImportDto dto = toTaskDto(batch);
         dto.setItems(queryItemPage(req));
         return dto;
     }
 
     /**
-     * 分页查询股票原始明细。
+     * 分页查询股票原始明细
+     *
+     * 执行顺序：
+     * 1. 拒绝非股票或已取消批次
+     * 2. 按请求的页码和每页条数开启分页，并用筛选条件查询记录
+     * 3. 将本页记录和查询总条数一起返回
      *
      * @param req 导入批次号、校验结果筛选及分页条件
+     * @return 股票 Excel 导入明细及分页信息
      */
     public PageResult<StockPoolExcelImportItemDto> queryItemPage(StockPoolExcelImportReq req) {
         // 拒绝非股票或已取消批次
@@ -188,23 +220,33 @@ public class StockPoolExcelImportService {
     }
 
     /**
-     * 校验原始行、清空差集及跨来源组冲突。
+     * 校验原始行、清空差集及跨来源组冲突
+     *
+     * 执行顺序：
+     * 1. 锁定批次，禁止与提交和取消交叉执行
+     * 2. 已提交批次不能重校验
+     * 3. 用户身份用于实时权限复核
+     * 4. 解析上传时固定的参数
+     * 5. 主项失败的关系项不可单独提交
+     * 6. 以完整服务器快照保存校验结果
+     * 7. 回查最新行状态及校验结果
      *
      * @param req 待校验批次号及实时权限复核的操作人
+     * @return 股票 Excel 导入结果
      */
     @Transactional(rollbackFor = Exception.class)
     public StockPoolExcelImportDto checkImport(StockPoolExcelImportReq req) {
-        // 锁定批次，禁止与提交和取消交叉执行
+        // 1. 锁定批次，禁止与提交和取消交叉执行
         SysImpTmpBo batch = requireBatch(req, true);
-        // 已提交批次不能重校验
+        // 2. 已提交批次不能重校验
         requireUnsubmitted(batch);
         List<SysImpTmpDetlBo> rows = stockPoolExcelImportMapper.queryBatchItemList(batch.getImpId());
         if (rows.isEmpty()) {
             throw new BizException("导入明细为空");
         }
-        // 用户身份用于实时权限复核
+        // 3. 用户身份用于实时权限复核
         String userId = currentUserId(req, batch);
-        // 解析上传时固定的参数
+        // 4. 解析上传时固定的参数
         JsonNode options = readJson(batch.getOptionJson());
         boolean allowRelations = options.path("allowLinkMutex").asBoolean();
         // 失败行未进入股票完整规则时也展示目标池的真实全路径
@@ -226,7 +268,7 @@ public class StockPoolExcelImportService {
         }
         // 任何方向的同股票同池跨组冲突均阻断所有相关来源组
         markConflicts(checks);
-        // 主项失败的关系项不可单独提交
+        // 5. 主项失败的关系项不可单独提交
         blockFailedSourceGroups(checks);
         int pass = 0;
         for (SysImpTmpDetlBo row : rows) {
@@ -250,31 +292,41 @@ public class StockPoolExcelImportService {
         batch.setChkDscr("导入行通过 " + pass + " 条，失败 " + (rows.size() - pass) + " 条；不可调整项 " + failedChecks + " 条");
         ObjectNode snapshot = objectMapper.createObjectNode();
         snapshot.set("checkItems", objectMapper.valueToTree(checks));
-        // 以完整服务器快照保存校验结果
+        // 6. 以完整服务器快照保存校验结果
         batch.setResultJson(writeJson(snapshot));
         batch.setUpdtTime(new Date());
         stockPoolExcelImportMapper.editBatchCheckResult(batch);
-        // 回查最新行状态及校验结果
+        // 7. 回查最新行状态及校验结果
         return queryTask(req);
     }
 
     /**
-     * 仅从持久化快照提交通过项，客户端只选择一般流程。
+     * 仅从持久化快照提交通过项，客户端只选择一般流程
+     *
+     * 执行顺序：
+     * 1. 原因建议使用 TEXT 业务槽，仍限制用户输入长度
+     * 2. 提交与校验、取消共用批次锁
+     * 3. 防止重复提交
+     * 4. 业务身份与可提交结果只读取服务器快照
+     * 5. 全部请求先复核后写入，禁止本批新申请干扰后续来源行
+     * 6. 保存可恢复的提交结果，序列化失败不能静默丢失快照
+     * 7. 返回审批申请结果，池状态仍由最终审批落地
      *
      * @param req 批次号、已有候选流程选择及提交说明
+     * @return 股票 Excel 导入结果
      */
     @Transactional(rollbackFor = Exception.class, isolation = Isolation.READ_COMMITTED)
     public StockPoolExcelImportDto submitImport(StockPoolExcelImportReq req) {
-        // 原因建议使用 TEXT 业务槽，仍限制用户输入长度
+        // 1. 原因建议使用 TEXT 业务槽，仍限制用户输入长度
         validateReasonAdvice(req);
-        // 提交与校验、取消共用批次锁
+        // 2. 提交与校验、取消共用批次锁
         SysImpTmpBo batch = requireBatch(req, true);
-        // 防止重复提交
+        // 3. 防止重复提交
         requireUnsubmitted(batch);
         if ("0".equals(batch.getChkRslt()) || batch.getResultJson() == null) {
             throw new BizException("请先校验导入数据");
         }
-        // 业务身份与可提交结果只读取服务器快照
+        // 4. 业务身份与可提交结果只读取服务器快照
         List<StockPoolExcelImportCheckItemDto> checks = readChecks(batch.getResultJson());
         // 根据客户端选择核对服务器候选，忽略其业务字段
         applySelectedFlows(checks, req.getCheckItems());
@@ -287,7 +339,7 @@ public class StockPoolExcelImportService {
         }
         // 联动选项只读取上传时保存的服务器参数
         boolean allowRelations = readJson(batch.getOptionJson()).path("allowLinkMutex").asBoolean();
-        // 全部请求先复核后写入，禁止本批新申请干扰后续来源行
+        // 5. 全部请求先复核后写入，禁止本批新申请干扰后续来源行
         List<StockAdjustSubmitDto> results = stockPoolAdjustService.addExcelImportAdjustLogList(requests, allowRelations);
         List<Long> logIds = new ArrayList<>();
         List<String> batchNos = new ArrayList<>();
@@ -311,7 +363,7 @@ public class StockPoolExcelImportService {
         snapshot.set("logIds", objectMapper.valueToTree(logIds));
         snapshot.set("adjustBatchNoList", objectMapper.valueToTree(batchNos));
         snapshot.put("submitted", true);
-        // 保存可恢复的提交结果，序列化失败不能静默丢失快照
+        // 6. 保存可恢复的提交结果，序列化失败不能静默丢失快照
         batch.setResultJson(writeJson(snapshot));
         batch.setSaveRslt("1");
         batch.setSaveDscr("提交成功，共 " + logIds.size() + " 条股票调库记录");
@@ -323,31 +375,41 @@ public class StockPoolExcelImportService {
         }
         batch.setUpdtTime(new Date());
         stockPoolExcelImportMapper.editBatchSaveResult(batch);
-        // 返回审批申请结果，池状态仍由最终审批落地
+        // 7. 返回审批申请结果，池状态仍由最终审批落地
         return toTaskDto(batch);
     }
 
     /**
-     * 取消未提交批次，返回取消前完整上下文及取消状态。
+     * 取消未提交批次，返回取消前完整上下文及取消状态
+     *
+     * 执行顺序：
+     * 1. 与提交串行化后取消批次
+     * 2. 已提交申请不能经导入重置取消
+     * 3. 保留取消结果供页面重置
      *
      * @param req 待取消的未提交批次号
+     * @return 股票 Excel 导入结果
      */
     @Transactional(rollbackFor = Exception.class)
     public StockPoolExcelImportDto cancelImport(StockPoolExcelImportReq req) {
-        // 与提交串行化后取消批次
+        // 1. 与提交串行化后取消批次
         SysImpTmpBo batch = requireBatch(req, true);
-        // 已提交申请不能经导入重置取消
+        // 2. 已提交申请不能经导入重置取消
         requireUnsubmitted(batch);
         stockPoolExcelImportMapper.deleteItemsByImpIdSoft(batch.getImpId());
         stockPoolExcelImportMapper.deleteBatchSoft(batch.getImpId());
         batch.setSaveRslt("3");
         batch.setSaveDscr("已取消");
-        // 保留取消结果供页面重置
+        // 3. 保留取消结果供页面重置
         return toTaskDto(batch);
     }
 
     /**
-     * 解析一行目标池和四列数据，复用完整股票校验。
+     * 解析一行目标池和四列数据，复用完整股票校验
+     *
+     * 执行顺序：
+     * 1. 校验股票代码和目标池，回填已查询的股票主档及池信息
+     * 2. 根据导入数据创建调整主项，有行级错误时返回该失败项，否则走整组校验
      *
      * @param row 持久化原始明细，包含 Excel 物理行号和代码、父子池原文
      * @param batch 包含锁定调整方向的导入批次
@@ -355,6 +417,7 @@ public class StockPoolExcelImportService {
      * @param allowRelations 是否保留股票校验产生的联动和互斥项
      * @param reserveCodes 按目标池归集的保留代码，其他字段失败仍保留可识别的池和代码
      * @param poolNames 目标池 ID 与完整路径的映射
+     * @return 股票投资池Excel 导入校验明细列表
      */
     private List<StockPoolExcelImportCheckItemDto> checkRow(SysImpTmpDetlBo row, SysImpTmpBo batch,
             String userId, boolean allowRelations, Map<Long, Set<String>> reserveCodes,
@@ -416,11 +479,15 @@ public class StockPoolExcelImportService {
     }
 
     /**
-     * 为清空差集成员生成独立调出来源组。
+     * 为清空差集成员生成独立调出来源组
+     *
+     * 执行顺序：
+     * 1. 逐项复用股票准入、调整权限和无附件报告限制，并映射来源组
      *
      * @param reserveCodes 本批目标池及 Excel 可识别股票的保留集合
      * @param userId 本次权限复核的操作人 ID
      * @param allowRelations 是否保留清空项产生的联动和互斥项
+     * @return 股票投资池Excel 导入校验明细列表
      */
     private List<StockPoolExcelImportCheckItemDto> checkClearItems(Map<Long, Set<String>> reserveCodes,
             String userId, boolean allowRelations) {
@@ -449,11 +516,17 @@ public class StockPoolExcelImportService {
     }
 
     /**
-     * 复用股票准入、调整权限和无附件报告限制，并映射来源组。
+     * 复用股票准入、调整权限和无附件报告限制，并映射来源组
+     *
+     * 执行顺序：
+     * 1. 股票业务方向使用现有枚举 code，导入 API 保持 in/out
+     * 2. 校验 Excel 导入调整项，补充调整权限和无报告附件入口的限制
+     * 3. 校验当前用户目标池 Excel 权限，沿用证券管理员 ID=1 口径
      *
      * @param source 手工或清空主项，携带来源标识
      * @param userId 用于导入和调整权限复核的操作人 ID
      * @param allowRelations 是否保留该来源组的联动和互斥项
+     * @return 股票投资池Excel 导入校验明细列表
      */
     private List<StockPoolExcelImportCheckItemDto> checkSourceGroup(StockPoolExcelImportCheckItemDto source,
             String userId, boolean allowRelations) {
@@ -524,12 +597,17 @@ public class StockPoolExcelImportService {
     }
 
     /**
-     * 跨来源组同股票同池不得合并，全部相关组失败并定位来源。
+     * 跨来源组同股票同池不得合并，全部相关组失败并定位来源
+     *
+     * 执行顺序：
+     * 1. 按股票和目标池归集不同来源组，调整方向不参与去重
+     * 2. 为所有冲突来源组生成包含 Excel 行号或清空来源的定位说明
+     * 3. 将冲突回写到相关来源组的全部主项和关系项
      *
      * @param checks 待检查同股票同目标池跨来源组冲突的校验项
      */
     private void markConflicts(List<StockPoolExcelImportCheckItemDto> checks) {
-        // 按股票和目标池归集不同来源组，调整方向不参与去重
+        // 1. 按股票和目标池归集不同来源组，调整方向不参与去重
         Map<String, Map<String, StockPoolExcelImportCheckItemDto>> targets = new LinkedHashMap<>();
         for (StockPoolExcelImportCheckItemDto item : checks) {
             if (item.getTargetPoolId() != null && item.getStockCode() != null && !item.getStockCode().isEmpty()) {
@@ -537,7 +615,7 @@ public class StockPoolExcelImportService {
                         .putIfAbsent(item.getAdjustGroupKey(), item);
             }
         }
-        // 为所有冲突来源组生成包含 Excel 行号或清空来源的定位说明
+        // 2. 为所有冲突来源组生成包含 Excel 行号或清空来源的定位说明
         Map<String, List<String>> groupErrors = new HashMap<>();
         for (Map<String, StockPoolExcelImportCheckItemDto> sources : targets.values()) {
             if (sources.size() < 2) {
@@ -556,7 +634,7 @@ public class StockPoolExcelImportService {
                 groupErrors.computeIfAbsent(group, key -> new ArrayList<>()).add(reason);
             }
         }
-        // 将冲突回写到相关来源组的全部主项和关系项
+        // 3. 将冲突回写到相关来源组的全部主项和关系项
         for (StockPoolExcelImportCheckItemDto item : checks) {
             if (groupErrors.containsKey(item.getAdjustGroupKey())) {
                 item.setCanAdjust(false);
@@ -566,7 +644,10 @@ public class StockPoolExcelImportService {
     }
 
     /**
-     * 失败主项的联动互斥项禁止独立提交。
+     * 失败主项的联动互斥项禁止独立提交
+     *
+     * 执行顺序：
+     * 1. 收集校验失败的手工和清空主项，阻断其同组联动、互斥项
      *
      * @param checks 需同步主项与关系项可提交状态的校验项
      */
@@ -583,7 +664,11 @@ public class StockPoolExcelImportService {
     }
 
     /**
-     * 从客户端仅读取服务器已保存项的一般流程选择。
+     * 从客户端仅读取服务器已保存项的一般流程选择
+     *
+     * 执行顺序：
+     * 1. 按分组键和来源行等标识定位服务端明细
+     * 2. 校验客户端选中的流程，再把合法选择写回对应明细
      *
      * @param stored 服务器持久化的校验项及可选流程候选
      * @param requested 客户端流程选择，仅用于匹配已有候选
@@ -625,11 +710,18 @@ public class StockPoolExcelImportService {
     }
 
     /**
-     * 依来源组构造股票提交请求，清空项排在导入项前。
+     * 依来源组构造股票提交请求，清空项排在导入项前
+     *
+     * 执行顺序：
+     * 1. 查询批次明细列表
+     * 2. 提交身份用于再次复核导入权限
+     * 3. 按代码查询股票
+     * 4. 校验当前用户目标池 Excel 权限，沿用证券管理员 ID=1 口径
      *
      * @param checks 已匹配流程并阻断失败来源组的服务器校验项
      * @param batch 包含锁定方向、操作人及调整说明的导入批次
      * @param req 本次提交的操作人和可编辑调整说明
+     * @return 股票投资池调库提交列表
      */
     private List<StockPoolAdjustSubmitReq> buildSubmitRequests(List<StockPoolExcelImportCheckItemDto> checks,
                                                             SysImpTmpBo batch, StockPoolExcelImportReq req) {
@@ -690,7 +782,10 @@ public class StockPoolExcelImportService {
     }
 
     /**
-     * 校验当前用户目标池 Excel 权限，沿用证券管理员 ID=1 口径。
+     * 校验当前用户目标池 Excel 权限，沿用证券管理员 ID=1 口径
+     *
+     * 执行顺序：
+     * 1. 校验和提交共用股票服务的 Excel 权限口径
      *
      * @param userId 当前操作人 ID
      * @param poolId 需要 Excel 导入权限的实际目标池 ID
@@ -701,7 +796,12 @@ public class StockPoolExcelImportService {
     }
 
     /**
-     * 校验文件、方向及已选清空参数。
+     * 校验文件、方向及已选清空参数
+     *
+     * 执行顺序：
+     * 1. 检查调库方向和当前用户 ID，再校验原因和意见的长度
+     * 2. 上传文件为空或大小超过 5 MB 时终止处理
+     * 3. 调出时不能同时要求清空目标池
      *
      * @param req 上传方向、当前操作人及统一清空参数
      * @param file 待检查大小及空内容的上传文件
@@ -727,9 +827,13 @@ public class StockPoolExcelImportService {
     }
 
     /**
-     * 构造上传时固定的业务选项。
+     * 构造上传时固定的业务选项
+     *
+     * 执行顺序：
+     * 1. 将清空目标池与允许联动互斥两个开关保存为本次导入选项
      *
      * @param req 包含清空开关、关系开关及固定选项的上传请求
+     * @return 选项映射
      */
     private Map<String, Object> reqOptions(StockPoolExcelImportReq req) {
         Map<String, Object> options = new LinkedHashMap<>();
@@ -739,10 +843,16 @@ public class StockPoolExcelImportService {
     }
 
     /**
-     * 查询或锁定有效股票批次。
+     * 查询或锁定有效股票批次
+     *
+     * 执行顺序：
+     * 1. 检查导入批次号不能为空
+     * 2. 股票导入批次不存在或已取消时终止处理
+     * 3. 查询批次
      *
      * @param req 包含股票导入批次号的请求
      * @param lock 是否取得批次行锁，校验、提交和取消均需加锁
+     * @return Excel 导入批次
      */
     private SysImpTmpBo requireBatch(StockPoolExcelImportReq req, boolean lock) {
         if (req == null || req.getImpId() == null || req.getImpId().trim().isEmpty()) {
@@ -759,7 +869,10 @@ public class StockPoolExcelImportService {
     }
 
     /**
-     * 已提交批次禁止修改和取消。
+     * 已提交批次禁止修改和取消
+     *
+     * 执行顺序：
+     * 1. 该批次已提交时终止处理
      *
      * @param batch 需要确认尚未提交的导入批次
      */
@@ -770,10 +883,14 @@ public class StockPoolExcelImportService {
     }
 
     /**
-     * 确定本次实时权限复核的用户身份。
+     * 确定本次实时权限复核的用户身份
+     *
+     * 执行顺序：
+     * 1. 检查当前用户 ID 不能为空
      *
      * @param req 本次请求提供的操作人
      * @param batch 保存上传操作人的导入批次
+     * @return 用户 ID
      */
     private String currentUserId(StockPoolExcelImportReq req, SysImpTmpBo batch) {
         String id = req.getCurrentUserId() == null ? batch.getOpterId() : req.getCurrentUserId().trim();
@@ -784,9 +901,14 @@ public class StockPoolExcelImportService {
     }
 
     /**
-     * 映射批次、上传参数和服务器快照。
+     * 映射批次、上传参数和服务器快照
+     *
+     * 执行顺序：
+     * 1. 还原上传时固定参数
+     * 2. 读取已保存的校验快照
      *
      * @param batch 包含业务参数和校验、提交快照的持久化批次
+     * @return 股票 Excel 导入结果
      */
     private StockPoolExcelImportDto toTaskDto(SysImpTmpBo batch) {
         StockPoolExcelImportDto dto = new StockPoolExcelImportDto();
@@ -806,11 +928,11 @@ public class StockPoolExcelImportService {
         dto.setSaveRslt(batch.getSaveRslt());
         dto.setSaveDscr(batch.getSaveDscr());
         dto.setOptionJson(batch.getOptionJson());
-        // 还原上传时固定参数
+        // 1. 还原上传时固定参数
         JsonNode options = readJson(batch.getOptionJson());
         dto.setAllowLinkMutex(options.path("allowLinkMutex").asBoolean());
         dto.setCheckDone(batch.getResultJson() != null && !"0".equals(batch.getChkRslt()));
-        // 读取已保存的校验快照
+        // 2. 读取已保存的校验快照
         List<StockPoolExcelImportCheckItemDto> checks = readChecks(batch.getResultJson());
         dto.setCheckItems(checks);
         int passed = (int) checks.stream().filter(StockPoolExcelImportCheckItemDto::isCanAdjust).count();
@@ -826,9 +948,13 @@ public class StockPoolExcelImportService {
     }
 
     /**
-     * 映射原始四列数据及行级状态。
+     * 映射原始四列数据及行级状态
+     *
+     * 执行顺序：
+     * 1. 读取 Excel 临时行的股票和目标池字段，带上本行校验及保存结果
      *
      * @param row 包含原始四列及行级校验、保存状态的明细
+     * @return 股票 Excel 导入明细
      */
     private StockPoolExcelImportItemDto toItemDto(SysImpTmpDetlBo row) {
         StockPoolExcelImportItemDto dto = new StockPoolExcelImportItemDto();
@@ -848,9 +974,13 @@ public class StockPoolExcelImportService {
     }
 
     /**
-     * 严格解析服务器 JSON，损坏数据不得静默忽略。
+     * 严格解析服务器 JSON，损坏数据不得静默忽略
+     *
+     * 执行顺序：
+     * 1. 先检查快照文本是否缺失，再解析 JSON，读取异常时提示快照损坏
      *
      * @param json 必须存在且格式有效的服务器参数或快照 JSON
+     * @return 解析后的 JSON 节点
      */
     private JsonNode readJson(String json) {
         try {
@@ -866,9 +996,15 @@ public class StockPoolExcelImportService {
     }
 
     /**
-     * 无校验快照表示尚未校验，其余 JSON 必须有效。
+     * 无校验快照表示尚未校验，其余 JSON 必须有效
+     *
+     * 执行顺序：
+     * 1. 严格读取服务器保存的校验项
+     * 2. 股票导入校验快照缺少有效校验项时终止处理
+     * 3. 根据参数定义类型将字符串值转换为 Java 对应类型
      *
      * @param json 持久化校验快照 JSON，未校验时为空
+     * @return 股票投资池Excel 导入校验明细列表
      */
     private List<StockPoolExcelImportCheckItemDto> readChecks(String json) {
         if (json == null) {
@@ -887,9 +1023,13 @@ public class StockPoolExcelImportService {
     }
 
     /**
-     * 序列化参数或快照，失败时回滚。
+     * 序列化参数或快照，失败时回滚
+     *
+     * 执行顺序：
+     * 1. 把参数或快照转换成 JSON 字符串，转换失败时抛出业务异常
      *
      * @param value 需要保存到导入批次的参数或结果快照
+     * @return JSON
      */
     private String writeJson(Object value) {
         try {
@@ -900,7 +1040,10 @@ public class StockPoolExcelImportService {
     }
 
     /**
-     * 调整原因和建议各允许最多 1000 字，使用已有 TEXT 业务槽。
+     * 调整原因和建议各允许最多 1000 字，使用已有 TEXT 业务槽
+     *
+     * 执行顺序：
+     * 1. 调整原因和建议各允许最多 1000 字，使用已有 TEXT 业务槽，条件不满足时终止处理
      *
      * @param req 包含调整原因和建议的上传或提交请求
      */
@@ -912,9 +1055,13 @@ public class StockPoolExcelImportService {
     }
 
     /**
-     * 限制行级说明长度，完整失败原因仍可在调库校验结果查看。
+     * 限制行级说明长度，完整失败原因仍可在调库校验结果查看
+     *
+     * 执行顺序：
+     * 1. 用分号连接各条失败原因，长度超过 500 时保留前 460 个字符并提示查看完整结果
      *
      * @param failures 保留在完整快照中的行级失败原因
+     * @return 截短后的失败原因汇总
      */
     private String summarizeFailures(List<String> failures) {
         String text = String.join("；", failures);
@@ -922,9 +1069,13 @@ public class StockPoolExcelImportService {
     }
 
     /**
-     * 将导入 API 方向转换为股票调库使用的枚举 code。
+     * 将导入 API 方向转换为股票调库使用的枚举 code
+     *
+     * 执行顺序：
+     * 1. 把 in 或 out 转为股票调入或调出编码，其他方向报错
      *
      * @param direction 导入 API 调整方向，in 或 out
+     * @return 调整方向
      */
     private String toAdjustMode(String direction) {
         if ("in".equals(direction)) {
@@ -937,9 +1088,13 @@ public class StockPoolExcelImportService {
     }
 
     /**
-     * 将股票调库枚举 code 转换为导入 API 的方向值。
+     * 将股票调库枚举 code 转换为导入 API 的方向值
+     *
+     * 执行顺序：
+     * 1. 按股票调库编码还原 in 或 out，其他编码报错
      *
      * @param adjustMode 股票调库使用的 AdjustMode 枚举 code
+     * @return 调库方向
      */
     private String toAdjustDirection(String adjustMode) {
         if (AdjustMode.IN.getCode().equals(adjustMode)) {

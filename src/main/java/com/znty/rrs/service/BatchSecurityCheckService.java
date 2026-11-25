@@ -46,7 +46,13 @@ import java.util.stream.Collectors;
 
 import static com.znty.rrs.service.SecurityPoolCheckRules.SIMPLE_INBOUND_HISTORY_DAYS;
 
-/** 证券池批量页面和自动补债任务共用的批次校验服务 */
+/**
+ * 为批量调库和自动补债校验证券调入调出条件
+ *
+ * 一次读取本批证券及同券跨市场代码的主档、在途流程、池状态、关系池和 ABS 主体等校验所需数据
+ * 逐券复用 {@link SecurityPoolCheckRules} 的规则，返回各调库项的校验结果和流程候选
+ * 自动补债按本轮摘牌日截止日期复核候选，并区分随已生效 Excel 主体决定处理的请求
+ */
 @Slf4j
 @Service
 public class BatchSecurityCheckService {
@@ -87,13 +93,25 @@ public class BatchSecurityCheckService {
     @Resource
     private CreditBondGradeRuleMapper creditBondGradeRuleMapper;
 
-    /** 批量页面沿用单券规则校验本批调库项 */
+    /**
+     * 批量页面沿用单券规则校验本批调库项
+     *
+     * 执行顺序：
+     * 1. 按批量页面口径复用证券调库校验，摘牌日截止日期留空，Excel 主体决定集合使用空集合
+     *
+     * @param requests 本批调库请求
+     * @return 调库校验结果及流程候选列表
+     */
     List<AdjustCheckDto> checkSecurityBatch(List<AdjustCheckReq> requests) {
+        // 校验本批证券调库请求并保留逐券结果
         return checkSecurityBatch(requests, null, Collections.emptySet());
     }
 
     /**
      * 按主体的 Excel 决定批量校验其跟随债券
+     *
+     * 执行顺序：
+     * 1. 校验本批证券调库请求并保留逐券结果
      *
      * @param requests 同轮待处理的调库请求
      * @param maturityCutoff 本轮初筛使用的摘牌日截止日期
@@ -102,9 +120,22 @@ public class BatchSecurityCheckService {
      */
     List<AdjustCheckDto> checkCompanyFollowBatch(List<AdjustCheckReq> requests, String maturityCutoff,
                                                 Set<AdjustCheckReq> excelCompanyRequests) {
+        // 校验本批证券调库请求并保留逐券结果
         return checkSecurityBatch(requests, maturityCutoff, excelCompanyRequests);
     }
 
+    /**
+     * 校验本批证券调库请求并保留逐券结果
+     *
+     * 执行顺序：
+     * 1. 集中读取本批校验所需的事实
+     * 2. 识别同一 ABS 在本批请求中的不同主体选择
+     *
+     * @param requests 本批调库请求
+     * @param maturityCutoff 本轮初筛使用的摘牌日截止日期
+     * @param excelCompanyRequests 随已生效 Excel 主体决定处理的请求
+     * @return 调库校验结果及流程候选列表，请求列表为空时返回空列表
+     */
     private List<AdjustCheckDto> checkSecurityBatch(List<AdjustCheckReq> requests, String maturityCutoff,
                                                     Set<AdjustCheckReq> excelCompanyRequests) {
         boolean scheduled = maturityCutoff != null;
@@ -119,9 +150,9 @@ public class BatchSecurityCheckService {
                 throw new BizException("调库项不能为空");
             }
         }
-        // 集中读取本批校验所需的事实
+        // 1. 集中读取本批校验所需的事实
         BatchSecurityCheckData data = loadBatchCheckData(requests, maturityCutoff, false, false);
-        // 识别同一 ABS 在本批请求中的不同主体选择
+        // 2. 识别同一 ABS 在本批请求中的不同主体选择
         Set<String> conflictingAbsCodes = findConflictingAbsCodes(requests, data);
         List<AdjustCheckDto> results = new ArrayList<>(requests.size());
         for (AdjustCheckReq request : requests) {
@@ -156,9 +187,20 @@ public class BatchSecurityCheckService {
         return results;
     }
 
-    /** 同一 ABS 的各次选择统一按最终主体比较，缺省时使用首个候选 */
+    /**
+     * 同一 ABS 的各次选择统一按最终主体比较，缺省时使用首个候选
+     *
+     * 执行顺序：
+     * 1. 逐条识别 ABS，并根据自选权益人、关联权益人、已选评级主体和默认候选确定主体代码
+     * 2. 返回同一 ABS 选择了多个不同主体的证券代码集合
+     *
+     * @param requests 本批调库请求
+     * @param data 本批当前状态
+     * @return 本批存在不同评级主体选择的 ABS 证券代码集合，无冲突时为空集合
+     */
     Set<String> findConflictingAbsCodes(List<AdjustCheckReq> requests, BatchSecurityCheckData data) {
         Map<String, Set<String>> selections = new HashMap<>();
+        // 1. 逐条识别 ABS，并根据自选权益人、关联权益人、已选评级主体和默认候选确定主体代码
         for (AdjustCheckReq request : requests) {
             String code = data.resolveExcelSecurityCode(request.getSecurityCode());
             if (!CreditBondSpecialInboundRule.isAbs(data.securities.get(code))) {
@@ -179,12 +221,17 @@ public class BatchSecurityCheckService {
                 selections.computeIfAbsent(code, key -> new HashSet<>()).add(selected.trim());
             }
         }
+        // 2. 返回同一 ABS 选择了多个不同主体的证券代码集合
         return selections.entrySet().stream().filter(entry -> entry.getValue().size() > 1)
                 .map(Map.Entry::getKey).collect(Collectors.toSet());
     }
 
     /**
      * 复核自动落池的证券资格、材料、容量和 Excel 保护
+     *
+     * 执行顺序：
+     * 1. 有 Excel 保护的组不会落库，不能把它的调入计入后续候选的在池状态
+     * 2. 只有整组通过时，才更新下一组校验可见的在池状态及容量
      *
      * @param result 一只证券及其配套项的校验结果
      * @param data 本批当前状态
@@ -214,10 +261,12 @@ public class BatchSecurityCheckService {
             }
             String issuer = data.securities.get(item.getSecurityCode()).getIssuerCode();
             if (inbound && data.excelCompanyOutPools.getOrDefault(issuer, Collections.emptySet()).contains(pool.getId())) {
+                // 将自动任务的特有条件加入原调库项失败原因
                 rejectScheduledItem(item, "发行主体已通过 Excel 调出目标池，不能自动补入");
                 return;
             }
             if (!excelCompany && !ItemType.RELATED.getCode().equals(item.getItemTag()) && primary.getMaterialExemptionType() == null
+                    // 判断池是否要求研究报告
                     && requiresReport(inbound ? pool.getInReportRestriction() : pool.getOutReportRestriction())
                     && !data.reportExemptIssuers.contains(issuer)) {
                 // 保留原规则的材料豁免，缺少材料则跳过整组
@@ -233,15 +282,16 @@ public class BatchSecurityCheckService {
                 }
             }
         }
-        // 有 Excel 保护的组不会落库，不能把它的调入计入后续候选的在池状态
+        // 1. 有 Excel 保护的组不会落库，不能把它的调入计入后续候选的在池状态
         for (AdjustCheckDto.CheckResultItem item : items) {
             if (AdjustMode.OUT.getCode().equals(item.getAdjustMode())
                     && securityPoolAdjustMapper.queryExcelProtectedPoolIds(item.getSecurityCode()).contains(item.getTargetPoolId())) {
+                // 将自动任务的特有条件加入原调库项失败原因
                 rejectScheduledItem(item, "涉及 Excel 导入保护池，跳过本组调库");
                 return;
             }
         }
-        // 只有整组通过时，才更新下一组校验可见的在池状态及容量
+        // 2. 只有整组通过时，才更新下一组校验可见的在池状态及容量
         for (AdjustCheckDto.CheckResultItem item : items) {
             Set<Long> pools = data.activePools.computeIfAbsent(item.getSecurityCode(), code -> new HashSet<>());
             if (AdjustMode.IN.getCode().equals(item.getAdjustMode())) {
@@ -255,19 +305,38 @@ public class BatchSecurityCheckService {
         }
     }
 
-    /** 将自动任务的特有条件加入原调库项失败原因 */
+    /**
+     * 将自动任务的调库项标记为校验失败
+     *
+     * 执行顺序：
+     * 1. 将该调库项标记为不可调整，并用本次原因作为唯一失败原因
+     *
+     * @param item 当前主项
+     * @param reason 本次校验产生的原因或提示
+     */
     private void rejectScheduledItem(AdjustCheckDto.CheckResultItem item, String reason) {
         item.setCanAdjust(false);
         item.setFailReasons(Collections.singletonList(reason));
     }
 
-    /** 判断池是否要求研究报告 */
+    /**
+     * 判断池是否要求研究报告
+     *
+     * 执行顺序：
+     * 1. 检查文本
+     *
+     * @param restriction 限制
+     * @return true=目标池配置了研究报告限制，false=目标池未配置研究报告限制
+     */
     private boolean requiresReport(String restriction) {
         return StringUtils.hasText(restriction) && !"none".equals(restriction);
     }
 
     /**
      * 批量补齐 Excel 当前页展示的证券主档及候选
+     *
+     * 执行顺序：
+     * 1. 创建本页独立的校验数据对象，读取证券主档及本页涉及的评级主体候选
      *
      * @param codes 当前页已去重的证券代码
      * @param selfSelected 当前页已去重的自选主体代码
@@ -282,6 +351,10 @@ public class BatchSecurityCheckService {
     /**
      * 补齐本次 Excel 首屏未查过的证券主档与评级候选
      *
+     * 执行顺序：
+     * 1. 先按输入补齐主档，再用主档中的实际代码查询评级候选
+     * 2. 已查过但未命中的证券或候选同样复用空结果
+     *
      * @param data 本次已读取的证券主档、关联主体及自选权益人
      * @param codes 当前页证券代码
      * @param selfSelected 当前页自选权益人代码
@@ -289,19 +362,22 @@ public class BatchSecurityCheckService {
     void completeExcelRatingCandidates(BatchSecurityCheckData data, List<String> codes, List<String> selfSelected) {
         List<String> missingMasters = codes.stream()
                 .filter(code -> !data.lookedUpExcelSecurities.contains(code)).collect(Collectors.toList());
-        // 先按输入补齐主档，再用主档中的实际代码查询评级候选
+        // 1. 先按输入补齐主档，再用主档中的实际代码查询评级候选
         loadExcelSecurityMasters(missingMasters, data);
         List<String> masterCodes = codes.stream().map(data::resolveExcelSecurityCode).distinct()
                 .filter(data.securities::containsKey).filter(code -> !data.lookedUpRatingCompanies.contains(code))
                 .collect(Collectors.toList());
         List<String> missingSelfSelected = selfSelected.stream()
                 .filter(code -> !data.lookedUpSelfSelectedCompanies.contains(code)).collect(Collectors.toList());
-        // 已查过但未命中的证券或候选同样复用空结果
+        // 2. 已查过但未命中的证券或候选同样复用空结果
         loadRatingCandidates(data, masterCodes, missingSelfSelected);
     }
 
     /**
      * 批量加载 Excel 的校验事实，供各行核对自己的评级主体
+     *
+     * 执行顺序：
+     * 1. Excel 共用批量事实，清空场景另加载已占用的自选权益人
      *
      * @param requests 已通过入口校验的证券请求
      * @param clearTarget 是否为清空出库，清空使用已占用的 ABS 主体
@@ -318,6 +394,9 @@ public class BatchSecurityCheckService {
     /**
      * 执行 Excel 单行规则判定，使用整批已经读取的数据
      *
+     * 执行顺序：
+     * 1. 使用本批数据检查指定证券，适用普通调库阻断规则
+     *
      * @param request 本行目标池、方向及主体选择
      * @param data 本批已经加载的校验事实
      * @return 含原业务提示的逐项校验结果
@@ -327,13 +406,31 @@ public class BatchSecurityCheckService {
         return securityPoolCheckRules.checkBatchItem(request, false, data, true);
     }
 
-    /** 执行严格的单笔出库校验并复用本批已查数据 */
+    /**
+     * 执行严格的单笔出库校验并复用本批已查数据
+     *
+     * 执行顺序：
+     * 1. 使用本批数据检查指定证券，适用普通调库阻断规则
+     *
+     * @param request 本行目标池、方向及主体选择
+     * @param data 本批当前状态
+     * @return 调库校验结果及流程候选
+     */
     AdjustCheckDto checkClearItem(AdjustCheckReq request, BatchSecurityCheckData data) {
         return securityPoolCheckRules.checkBatchItem(request, false, data);
     }
 
     /**
      * 加载批次使用的证券、投资池及校验事实
+     *
+     * 执行顺序：
+     * 1. 按池 ID 和关系类型索引本批查询到的关系池
+     * 2. 先展开关联码，再读取主档、市场和在途状态
+     * 3. 证券各自的校验事实由同一批次共享
+     * 4. 主券与关联券都可能存在已确认或在途的 ABS 主体
+     * 5. 加载关联评级主体及自选权益人
+     * 6. 生效池状态也用于名单和调出冻结期判断
+     * 7. 按涉及的目标池补充评级和流程资格
      *
      * @param requests 本批调库请求
      * @param maturityCutoff 普通债跟随任务的摘牌日截止日期，人工批量为空
@@ -347,7 +444,7 @@ public class BatchSecurityCheckService {
         BatchSecurityCheckData data = new BatchSecurityCheckData();
         data.scheduled = scheduled;
         List<PoolRelationBo> relations = batchSecurityCheckMapper.queryPoolRelations();
-        // 按池 ID 和关系类型索引本批查询到的关系池
+        // 1. 按池 ID 和关系类型索引本批查询到的关系池
         if (relations != null) {
             for (PoolRelationBo relation : relations) {
                 data.relations.computeIfAbsent(relation.getPoolId(), id -> new HashMap<>())
@@ -387,7 +484,7 @@ public class BatchSecurityCheckService {
         List<String> mainCodes = requests.stream().map(AdjustCheckReq::getSecurityCode)
                 .distinct().collect(Collectors.toList());
         Set<String> codes = new LinkedHashSet<>(mainCodes);
-        // 先展开关联码，再读取主档、市场和在途状态
+        // 2. 先展开关联码，再读取主档、市场和在途状态
         forEachCheckChunk(mainCodes, chunk -> {
             for (Row row : batchSecurityCheckMapper.queryRelatedCodes(chunk, MarketCode.queryCodeList())) {
                 data.relatedCodes.computeIfAbsent(row.getSecurityCode(), key -> new ArrayList<>()).add(row.getRelatedCode());
@@ -417,6 +514,7 @@ public class BatchSecurityCheckService {
             // 联动和关联券同样受发行主体最近一次 Excel 调出决定约束
             List<String> issuers = data.securities.values().stream().map(SecurityInfoBo::getIssuerCode)
                     .filter(StringUtils::hasText).distinct().collect(Collectors.toList());
+            // 使用现有自动调库的分批大小执行批次查询
             forEachCheckChunk(issuers, chunk -> {
                 ExcelPoolExclusionService.CompanyDecisions decisions = excelPoolExclusionService.loadCompanyDecisions(null, chunk);
                 for (String issuer : chunk) {
@@ -427,11 +525,12 @@ public class BatchSecurityCheckService {
                 }
             });
         } else {
+            // 使用现有自动调库的分批大小执行批次查询
             forEachCheckChunk(new ArrayList<>(masterCodesToLoad), chunk ->
                     batchSecurityCheckMapper.querySecurities(chunk)
                             .forEach(sec -> data.securities.put(sec.getWindCode(), sec)));
         }
-        // 证券各自的校验事实由同一批次共享
+        // 3. 证券各自的校验事实由同一批次共享
         forEachCheckChunk(actualCodes, chunk -> {
             securityMarketMapper.queryMarketMappingList(chunk).forEach(row -> data.markets
                     .computeIfAbsent(row.getWindCode(), key -> new ArrayList<>()).add(row));
@@ -447,7 +546,7 @@ public class BatchSecurityCheckService {
         for (String code : absCodes) {
             absAndRelated.addAll(data.relatedCodes.getOrDefault(code, Collections.emptyList()));
         }
-        // 主券与关联券都可能存在已确认或在途的 ABS 主体
+        // 4. 主券与关联券都可能存在已确认或在途的 ABS 主体
         forEachCheckChunk(new ArrayList<>(absAndRelated), chunk -> batchSecurityCheckMapper.queryAbsIdentities(chunk)
                 .forEach(row -> data.absIdentities.computeIfAbsent(row.getSecurityCode(), key -> new ArrayList<>())
                         .add(row)));
@@ -464,7 +563,7 @@ public class BatchSecurityCheckService {
                         .filter(StringUtils::hasText).forEach(selfSelected::add);
             }
         }
-        // 加载关联评级主体及自选权益人
+        // 5. 加载关联评级主体及自选权益人
         loadRatingCandidates(data, new ArrayList<>(selectionCodes), new ArrayList<>(selfSelected));
         List<String> issuers = data.securities.values().stream().map(SecurityInfoBo::getIssuerCode)
                 .filter(StringUtils::hasText).distinct().collect(Collectors.toList());
@@ -478,7 +577,7 @@ public class BatchSecurityCheckService {
                 .map(req -> req.getSelectedRatingCompany().getCompanyCode()).filter(StringUtils::hasText)
                 .forEach(companies::add);
         codes.addAll(companies);
-        // 生效池状态也用于名单和调出冻结期判断
+        // 6. 生效池状态也用于名单和调出冻结期判断
         forEachCheckChunk(new ArrayList<>(codes), chunk -> {
             for (Row row : batchSecurityCheckMapper.queryActiveStates(chunk)) {
                 data.activePools.computeIfAbsent(row.getSecurityCode(), key -> new HashSet<>()).add(row.getPoolId());
@@ -492,13 +591,20 @@ public class BatchSecurityCheckService {
                 }
             }
         });
-        // 按涉及的目标池补充评级和流程资格
+        // 7. 按涉及的目标池补充评级和流程资格
         loadBatchRatingAndFlowData(data, requests, actualCodes, issuers, new ArrayList<>(companies), affectedPools);
         return data;
     }
 
     /**
      * 按本批目标池加载会用到的评级、流程和材料资格
+     *
+     * 执行顺序：
+     * 1. 按调库方向和目标池判断本批要加载的校验数据
+     * 2. 涉及信用债分级池调入或黑名单质押库调整时，读取启用的外部评级机构，有机构配置时为黑名单加载低外评主体
+     * 3. 有信用债分级池调入时，读取期限区间和评级档，按机构配置查评级下调，并加载发行人历史入库、报告及分析资格
+     * 4. 定时任务涉及报告限制时加载发行主体的报告豁免信息
+     * 5. 产品池调入且能找到 CRMW 池时加载标的证券的有效 CRMW 组合来源
      *
      * @param data 本批共享数据
      * @param requests 本批调库请求
@@ -510,6 +616,7 @@ public class BatchSecurityCheckService {
     private void loadBatchRatingAndFlowData(BatchSecurityCheckData data, List<AdjustCheckReq> requests,
                                            List<String> codes, List<String> issuers,
                                            List<String> blacklistCompanies, Set<Long> poolIds) {
+        // 1. 按调库方向和目标池判断本批要加载的校验数据
         boolean inbound = requests.stream().flatMap(req -> req.getItems().stream())
                 .anyMatch(item -> AdjustMode.IN.getCode().equals(item.getAdjustMode()));
         List<InvestmentPoolBo> pools = poolIds.stream().map(data.pools::get).filter(Objects::nonNull)
@@ -517,6 +624,7 @@ public class BatchSecurityCheckService {
         boolean creditBond = inbound && pools.stream()
                 .anyMatch(pool -> CreditBondSpecialInboundRule.isGradedBondPoolType(pool.getPoolType()));
         boolean blacklist = poolIds.contains(PledgeBlacklistRuleService.BLACKLIST_POOL_ID);
+        // 2. 涉及信用债分级池调入或黑名单质押库调整时，读取启用的外部评级机构，有机构配置时为黑名单加载低外评主体
         if (creditBond || blacklist) {
             List<String> agencies = externalRatingAgencyService.queryActiveAgencyCodeList();
             data.ratingAgenciesConfigured = !agencies.isEmpty();
@@ -525,6 +633,7 @@ public class BatchSecurityCheckService {
                 forEachCheckChunk(blacklistCompanies, chunk -> data.lowRatedCompanies.addAll(
                         batchSecurityCheckMapper.queryLowRatedCompanies(chunk, agencies)));
             }
+            // 3. 有信用债分级池调入时，读取期限区间和评级档，按机构配置查评级下调，并加载发行人历史入库、报告及分析资格
             if (creditBond) {
                 data.termBuckets = creditBondGradeRuleMapper.queryEnabledTermBucketList();
                 data.ratingGrades = creditBondGradeRuleMapper.queryEnabledRatingGradeList();
@@ -559,12 +668,15 @@ public class BatchSecurityCheckService {
                 });
             }
         }
+        // 4. 定时任务涉及报告限制时加载发行主体的报告豁免信息
         if (data.scheduled && pools.stream().anyMatch(pool -> requiresReport(pool.getInReportRestriction())
+                // 判断池是否要求研究报告
                 || requiresReport(pool.getOutReportRestriction()))) {
             // 自动入池无法上传文件，只使用已有业务豁免
             forEachCheckChunk(issuers, chunk -> data.reportExemptIssuers.addAll(
                     batchSecurityCheckMapper.queryReportExemptIssuers(chunk)));
         }
+        // 5. 产品池调入且能找到 CRMW 池时加载标的证券的有效 CRMW 组合来源
         if (inbound && pools.stream().anyMatch(pool -> securityPoolCheckRules.isProductInboundTarget(pool, data.pools))) {
             data.pools.values().stream().filter(pool -> ProductInboundPoolCodes.CRMW.equals(pool.getPoolCode())
                     && Integer.valueOf(0).equals(pool.getIsDeleted())).findFirst().ifPresent(pool -> {
@@ -575,8 +687,17 @@ public class BatchSecurityCheckService {
         }
     }
 
-    /** 批量读取 Excel 证券主档并建立忽略大小写的代码索引 */
+    /**
+     * 批量读取 Excel 证券主档并建立忽略大小写的代码索引
+     *
+     * 执行顺序：
+     * 1. 查询证券
+     *
+     * @param codes 当前页已去重的证券代码
+     * @param data 本批当前状态
+     */
     private void loadExcelSecurityMasters(List<String> codes, BatchSecurityCheckData data) {
+        // 使用现有自动调库的分批大小执行批次查询
         forEachCheckChunk(codes, chunk -> {
             for (SecurityInfoBo security : batchSecurityCheckMapper.querySecurities(chunk)) {
                 String masterCode = security.getWindCode();
@@ -589,6 +710,9 @@ public class BatchSecurityCheckService {
 
     /**
      * 批量读取未指定主体的 ABS 默认权益人
+     *
+     * 执行顺序：
+     * 1. 按原候选顺序保留首项
      *
      * @param codes 本次提交未显式选择主体的证券代码
      * @return 各证券的首个关联主体编码
@@ -605,19 +729,40 @@ public class BatchSecurityCheckService {
         return defaults;
     }
 
-    /** 判断 ABS 提交项是否需要读取默认权益人 */
+    /**
+     * 判断 ABS 提交项是否需要读取默认权益人
+     *
+     * 执行顺序：
+     * 1. 仅当证券是 ABS 且权益人和自选权益人都未填写时，才需要读取默认值
+     *
+     * @param securityType 页面已知证券类型
+     * @param rightsHolder 权益人
+     * @param selfSelected 页面为当前 ABS 选填的自选权益人代码
+     * @return true=该 ABS 尚未选择权益人，需要查询默认权益人，false=无需查询默认权益人
+     */
     static boolean needsDefaultRightsHolder(String securityType, String rightsHolder, String selfSelected) {
         return "abs".equals(securityType) && !StringUtils.hasText(rightsHolder) && !StringUtils.hasText(selfSelected);
     }
 
-    /** 按代码分批加载关联评级主体和精确匹配的自选权益人 */
+    /**
+     * 按代码分批加载关联评级主体和精确匹配的自选权益人
+     *
+     * 执行顺序：
+     * 1. 查询评级主体
+     *
+     * @param data 本批当前状态
+     * @param codes 当前页已去重的证券代码
+     * @param selfSelected 当前页已去重的自选主体代码
+     */
     void loadRatingCandidates(BatchSecurityCheckData data, List<String> codes, List<String> selfSelected) {
+        // 使用现有自动调库的分批大小执行批次查询
         forEachCheckChunk(codes, chunk -> {
             batchSecurityCheckMapper.queryRatingCompanies(chunk)
                     .forEach(row -> data.ratingCompanies.computeIfAbsent(row.getSecurityCode(), key -> new ArrayList<>())
                             .add(row));
             data.lookedUpRatingCompanies.addAll(chunk);
         });
+        // 使用现有自动调库的分批大小执行批次查询
         forEachCheckChunk(selfSelected, chunk -> {
             batchSecurityCheckMapper.querySelfSelectedCompanies(chunk)
                     .forEach(row -> data.selfSelectedCompanies.put(row.getCompanyCode(), row));
@@ -625,7 +770,15 @@ public class BatchSecurityCheckService {
         });
     }
 
-    /** 使用现有自动调库的分批大小执行批次查询 */
+    /**
+     * 使用现有自动调库的分批大小执行批次查询
+     *
+     * 执行顺序：
+     * 1. 按自动调库的每批代码数切分列表，依次查询每批，尾批使用剩余的代码
+     *
+     * @param codes 当前页已去重的证券代码
+     * @param query 接收分批数据并执行操作的函数
+     */
     private void forEachCheckChunk(List<String> codes, Consumer<List<String>> query) {
         int size = AutoAdjustRestrictHelper.QUERY_BATCH_SIZE;
         for (int offset = 0; offset < codes.size(); offset += size) {

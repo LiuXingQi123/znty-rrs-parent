@@ -27,10 +27,10 @@ import org.springframework.util.StringUtils;
 /**
  * 质押黑名单库每日增量提醒
  *
- * 对齐老系统 BlackPoolRemindJob，按上次成功执行水位扫描质押黑名单库的增量调库记录
- * 1. 首次执行从当天零点开始，后续执行从上次成功执行开始时间继续扫描
- * 2. 只提醒审批通过的债券、主体调入调出记录，已到期债券不纳入提醒
- * 3. 生成候选明细并交给统一通知投递服务，当前通知通道未接入时仍保留过程日志供人工核对
+ * 执行顺序：
+ * 1. 确定扫描池和增量窗口，首次从当天零点开始，后续从上次成功执行开始时间继续
+ * 2. 筛选窗口内审批通过的债券和主体调入调出记录，排除已到期债券
+ * 3. 通过 {@link ScheduledReminderDeliveryService} 提交候选明细，记录通知状态和本轮处理结果
  */
 @Slf4j
 @Service
@@ -42,8 +42,13 @@ public class PledgeBlacklistDailyIncrementReminderService implements RrsSchedule
     /** 任务名称 */
     public static final String TASK_NAME = "质押黑名单库每日增量提醒";
 
+    /** 解析质押黑名单库提醒的扫描参数 */
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+
+    /** 未指定扫描范围时使用的质押黑名单库 ID */
     private static final List<Long> DEFAULT_POOL_IDS = Collections.singletonList(17L);
+
+    /** 定时任务页面展示的扫描池、时间窗口和提醒条件 */
     private static final String PARAM_HELP =
             "参数格式：JSON 对象，例如 <code>{\"poolIds\":[17]}</code>\n"
                     + "poolIds：可选，质押黑名单增量扫描池；未配置时默认 [17]\n"
@@ -63,13 +68,27 @@ public class PledgeBlacklistDailyIncrementReminderService implements RrsSchedule
     @Resource
     private ScheduledReminderDeliveryService reminderDeliveryService;
 
-    /** 返回质押黑名单库每日增量提醒任务编码 */
+    /**
+     * 返回质押黑名单库每日增量提醒任务编码
+     *
+     * 执行顺序：
+     * 1. 返回当前任务定义的固定编码
+     *
+     * @return 任务编码
+     */
     @Override
     public String getTaskCode() {
         return TASK_CODE;
     }
 
-    /** 返回质押黑名单库每日增量提醒任务参数说明 */
+    /**
+     * 返回质押黑名单库每日增量提醒任务参数说明
+     *
+     * 执行顺序：
+     * 1. 返回当前任务定义的参数说明
+     *
+     * @return 任务参数说明
+     */
     @Override
     public String getParamHelp() {
         return PARAM_HELP;
@@ -99,7 +118,9 @@ public class PledgeBlacklistDailyIncrementReminderService implements RrsSchedule
             Date windowStart = resolveWindowStart(startTime);
             detail.line("扫描条件：ip_adjust_log.is_deleted=0、audit_status=20、target_pool_id IN "
                     + poolIds + "、category_type IN (bond,company)。债券须关联证券主档、状态不为 D，且摘牌日为空或晚于今日");
+            // 格式化时间
             detail.line("增量窗口：[" + formatTime(windowStart)
+                    // 格式化时间
                     + ", " + formatTime(startTime) + ")");
             // 3. 查询本轮增量提醒候选
             List<BondReminderDto> sourceList = bondReminderMapper.queryPledgeBlacklistIncrementList(
@@ -109,6 +130,7 @@ public class PledgeBlacklistDailyIncrementReminderService implements RrsSchedule
             detail.line("扫描完成：增量提醒候选 " + rows.size() + " 条");
             // 4. 生成消息及执行历史中的可追溯明细
             ScheduledReminderMessageDto reminder = buildReminder(rows);
+            // 将候选明细写入过程日志，通知未接入时仍可人工核对
             appendDetail(rows, detail);
             // 5. 调用统一投递边界；当前实现明确返回未接入
             ScheduledReminderDeliveryService.DeliveryResult delivery = reminderDeliveryService.send(reminder);
@@ -135,6 +157,11 @@ public class PledgeBlacklistDailyIncrementReminderService implements RrsSchedule
      * 读取并解析质押黑名单扫描池
      *
      * 未配置扩展参数时使用默认池 17，同一池只保留一组扫描配置
+     *
+     * 执行顺序：
+     * 1. 按任务编码查询任务配置
+     * 2. 检查poolIds 须为数字数组
+     * 3. 检查poolIds 不能为空数组
      *
      * @return 去重后的扫描池 ID
      */
@@ -177,6 +204,10 @@ public class PledgeBlacklistDailyIncrementReminderService implements RrsSchedule
      *
      * 有成功水位时从该时间开始，首次执行从当天零点开始
      *
+     * 执行顺序：
+     * 1. 有成功执行历史时沿用最近一次开始时间
+     * 2. 首次运行时用本次执行当天零点作为扫描起点
+     *
      * @param currentStart 本轮任务开始时间
      * @return 增量窗口起始时间
      */
@@ -194,7 +225,16 @@ public class PledgeBlacklistDailyIncrementReminderService implements RrsSchedule
         return calendar.getTime();
     }
 
-    /** 构建后续通知通道可直接消费的消息 */
+    /**
+     * 构建后续通知通道可直接消费的消息
+     *
+     * 执行顺序：
+     * 1. 将任务编码、标题及扫描明细写入提醒
+     * 2. 按是否有增量决定无变更说明或记录条数
+     *
+     * @param rows 行列表
+     * @return 提醒
+     */
     private ScheduledReminderMessageDto buildReminder(List<BondReminderDto> rows) {
         ScheduledReminderMessageDto message = new ScheduledReminderMessageDto();
         message.setTaskCode(TASK_CODE);
@@ -205,7 +245,15 @@ public class PledgeBlacklistDailyIncrementReminderService implements RrsSchedule
         return message;
     }
 
-    /** 将候选明细写入过程日志，通知未接入时仍可人工核对 */
+    /**
+     * 将候选明细写入过程日志，通知未接入时仍可人工核对
+     *
+     * 执行顺序：
+     * 1. 逐项格式化时间
+     *
+     * @param rows 行列表
+     * @param detail 过程日志
+     */
     private void appendDetail(List<BondReminderDto> rows, TaskDetailLog detail) {
         if (rows.isEmpty()) {
             detail.line("本轮无增量调库记录");
@@ -215,18 +263,37 @@ public class PledgeBlacklistDailyIncrementReminderService implements RrsSchedule
             // 1. 将可空字段和审核时间格式化为可读文本
             detail.line("提醒候选：池=" + row.getTargetPoolName()
                     + "，证券=" + row.getSecurityShortName() + "(" + row.getSecurityCode() + ")"
+                    // 将空字符串字段安全输出到过程日志
                     + "，主体=" + nullToEmpty(row.getIssuerName())
+                    // 将空字符串字段安全输出到过程日志
                     + "，方向=" + nullToEmpty(row.getAdjustMode())
+                    // 格式化时间
                     + "，审核时间=" + formatTime(row.getAuditTime()));
         }
     }
 
-    /** 格式化时间 */
+    /**
+     * 格式化时间
+     *
+     * 执行顺序：
+     * 1. 输入为 null 时返回空字符串，否则按 yyyy-MM-dd HH:mm:ss 输出
+     *
+     * @param value 入池时间
+     * @return yyyy-MM-dd HH:mm:ss 格式的入池时间，输入为 null 时返回空字符串
+     */
     private String formatTime(Date value) {
         return value == null ? "" : new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(value);
     }
 
-    /** 将空字符串字段安全输出到过程日志 */
+    /**
+     * 将缺失文本转换成日志可用的空字符串
+     *
+     * 执行顺序：
+     * 1. 输入为 null 时返回空字符串，有值时原样返回
+     *
+     * @param value 待统一空值的文本
+     * @return 有值时返回原文本，空值时返回空字符串
+     */
     private String nullToEmpty(String value) {
         return value == null ? "" : value;
     }

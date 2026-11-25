@@ -33,8 +33,10 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
- * 测试用例服务。
- * <p>负责测试用例的 CRUD、单个/批量执行，以及执行历史查询。</p>
+ * 维护和运行风控规则的测试用例
+ *
+ * 保存各用例的输入参数，并通过 {@link RuleService} 执行规则，查询执行记录和结果
+ * 批量执行时每个用例各自提交执行结果，单个失败时其他用例继续运行
  */
 @Service
 public class TestCaseService {
@@ -57,31 +59,52 @@ public class TestCaseService {
     private TestCaseService self;
 
     /**
-     * 分页查询测试用例列表，包含参数绑定数据和最近执行结果。
-     * <p>采用批量加载避免 N+1：用例 → 批量参数值 → 批量规则名称。</p>
+     * 分页查询测试用例列表，包含参数绑定数据和最近执行结果
+     *
+     * 采用批量加载避免 N+1：用例 → 批量参数值 → 批量规则名称
+     *
+     * 执行顺序：
+     * 1. 按请求的页码和每页条数开启分页，并用筛选条件查询记录
+     * 2. 批量加载测试用例的参数值
+     * 3. 批量加载测试用例关联的规则定义
+     * 4. 将本页记录和查询总条数一起返回
+     *
+     * @param req 规则测试用例请求
+     * @return 规则测试用例信息及分页信息
      */
     public PageResult<TestCaseDto> queryTestCasePage(TestCaseReq req) {
+        // 1. 按页码和筛选条件查询
         PageHelper.startPage(req.getPageIndex(), req.getPageSize());
         List<RuleTestCaseBo> cases = testCaseMapper.queryCasePage(req.getKeyword(), req.getResult());
         PageInfo<RuleTestCaseBo> pageInfo = new PageInfo<>(cases);
-        // 批量加载测试用例的参数值
+        // 2. 批量加载测试用例的参数值
         Map<Long, Map<String, String>> paramMap = loadCaseParamMap(cases);
-        // 批量加载测试用例关联的规则定义
+        // 3. 批量加载测试用例关联的规则定义
         Map<Long, RuleDefinitionBo> ruleMap = loadRuleMap(cases);
         List<TestCaseDto> records = cases.stream()
                 // 组装测试用例返回对象
                 .map(c -> toDto(c, paramMap.get(c.getId()), ruleMap.get(c.getRuleId()))).collect(Collectors.toList());
+        // 4. 返回本页数据和查询总条数
         return new PageResult<>(records, pageInfo.getTotal(), req.getPageIndex(), req.getPageSize());
     }
 
     /**
-     * 新增测试用例，含参数值的全量保存。
+     * 新增测试用例，含参数值的全量保存
+     *
+     * 执行顺序：
+     * 1. 校验保存请求的必填字段（名称、关联规则）
+     * 2. 校验并加载关联规则定义
+     * 3. 全量替换测试用例的参数值（先删后增）
+     * 4. 按 ID 查询测试用例并组装为完整的 TestCaseDto
+     *
+     * @param req 规则测试用例请求
+     * @return 规则测试用例信息
      */
     @Transactional(rollbackFor = Exception.class)
     public TestCaseDto addTestCase(TestCaseReq req) {
-        // 校验保存请求的必填字段（名称、关联规则）
+        // 1. 校验保存请求的必填字段（名称、关联规则）
         validateSaveReq(req);
-        // 校验并加载关联规则定义
+        // 2. 校验并加载关联规则定义
         RuleDefinitionBo rule = ruleService.requireRule(req.getRuleId());
         RuleTestCaseBo testCase = new RuleTestCaseBo();
         testCase.setCaseName(req.getName().trim());
@@ -90,35 +113,55 @@ public class TestCaseService {
         testCase.setLastResult(null);
         testCase.setLastOutput(null);
         testCaseMapper.addCase(testCase);
-        // 全量替换测试用例的参数值（先删后增）
+        // 3. 全量替换测试用例的参数值（先删后增）
         replaceCaseParams(testCase.getId(), rule.getId(), req.getParams());
-        // 按 ID 查询测试用例并组装为完整的 TestCaseDto
+        // 4. 按 ID 查询测试用例并组装为完整的 TestCaseDto
         return detailById(testCase.getId());
     }
 
     /**
-     * 编辑测试用例，含参数值的全量替换（先删后增）。
+     * 编辑测试用例，含参数值的全量替换（先删后增）
+     *
+     * 执行顺序：
+     * 1. 校验保存请求的必填字段（名称、关联规则）
+     * 2. 校验并加载关联规则定义
+     * 3. 按 ID 查询测试用例实体
+     * 4. 全量替换测试用例的参数值（先删后增）
+     * 5. 按 ID 查询测试用例并组装为完整的 TestCaseDto
+     *
+     * @param req 规则测试用例请求
+     * @return 规则测试用例信息
      */
     @Transactional(rollbackFor = Exception.class)
     public TestCaseDto editTestCase(TestCaseReq req) {
-        // 校验保存请求的必填字段（名称、关联规则）
+        // 1. 校验保存请求的必填字段（名称、关联规则）
         validateSaveReq(req);
-        // 校验并加载关联规则定义
+        // 2. 校验并加载关联规则定义
         RuleDefinitionBo rule = ruleService.requireRule(req.getRuleId());
-        // 按 ID 查询测试用例实体
+        // 3. 按 ID 查询测试用例实体
         RuleTestCaseBo testCase = requireCase(req.getId());
         testCase.setCaseName(req.getName().trim());
         testCase.setRuleId(rule.getId());
         testCase.setRuleNameSnapshot(rule.getRuleName());
         testCaseMapper.editCase(testCase);
-        // 全量替换测试用例的参数值（先删后增）
+        // 4. 全量替换测试用例的参数值（先删后增）
         replaceCaseParams(testCase.getId(), rule.getId(), req.getParams());
-        // 按 ID 查询测试用例并组装为完整的 TestCaseDto
+        // 5. 按 ID 查询测试用例并组装为完整的 TestCaseDto
         return detailById(testCase.getId());
     }
 
     /**
-     * 仅修改测试用例名称，不涉及参数变更。
+     * 仅修改测试用例名称，不涉及参数变更
+     *
+     * 执行顺序：
+     * 1. 检查测试用例ID不能为空
+     * 2. 检查测试用例名称不能为空
+     * 3. 更新用例名称
+     * 4. 测试用例不存在时终止处理
+     * 5. 按 ID 查询测试用例并组装为完整的 TestCaseDto
+     *
+     * @param req 规则测试用例请求
+     * @return 规则测试用例信息
      */
     @Transactional(rollbackFor = Exception.class)
     public TestCaseDto editTestCaseName(TestCaseReq req) {
@@ -137,13 +180,20 @@ public class TestCaseService {
     }
 
     /**
-     * 物理删除测试用例及其关联的参数数据。
+     * 物理删除测试用例及其关联的参数数据
+     *
+     * 执行顺序：
+     * 1. 按 ID 查询测试用例实体
+     * 2. 删除前查出实体一并返回，便于前端展示
+     *
+     * @param req 规则测试用例请求
+     * @return 规则测试用例信息
      */
     @Transactional(rollbackFor = Exception.class)
     public TestCaseDto deleteTestCase(TestCaseReq req) {
-        // 按 ID 查询测试用例实体
+        // 1. 按 ID 查询测试用例实体
         RuleTestCaseBo testCase = requireCase(req.getId());
-        // 删除前查出实体一并返回，便于前端展示
+        // 2. 删除前查出实体一并返回，便于前端展示
         TestCaseDto deleted = detailById(testCase.getId());
         testCaseMapper.deleteParamsByCaseId(testCase.getId());
         testCaseMapper.deleteCaseById(testCase.getId());
@@ -151,34 +201,52 @@ public class TestCaseService {
     }
 
     /**
-     * 执行单个测试用例。
-     * <p>流程：加载用例参数 → 调用规则引擎执行 → 更新用例的最近执行结果。</p>
+     * 执行单个测试用例
+     *
+     * 流程：加载用例参数 → 调用规则引擎执行 → 更新用例的最近执行结果
+     *
+     * 执行顺序：
+     * 1. 按 ID 查询测试用例实体
+     * 2. 查询测试用例关联的规则定义
+     * 3. 批量加载测试用例的参数值
+     * 4. 调用规则引擎执行并记录运行结果
+     * 5. 按 ID 查询测试用例并组装为完整的 TestCaseDto
+     *
+     * @param req 规则测试用例请求
+     * @return 规则测试用例信息
      */
     @Transactional(rollbackFor = Exception.class)
     public TestCaseDto runTestCase(TestCaseReq req) {
-        // 按 ID 查询测试用例实体
+        // 1. 按 ID 查询测试用例实体
         RuleTestCaseBo testCase = requireCase(req.getId());
-        // 查询测试用例关联的规则定义
+        // 2. 查询测试用例关联的规则定义
         RuleDefinitionBo rule = ruleMapper.queryRuleById(testCase.getRuleId());
         if (rule == null) {
             throw new BizException("测试用例关联规则不存在");
         }
-        // 批量加载测试用例的参数值
+        // 3. 批量加载测试用例的参数值
         Map<String, String> params = loadCaseParamMap(Collections.singletonList(testCase))
                 .getOrDefault(testCase.getId(), Collections.emptyMap());
-        // 调用规则引擎执行并记录运行结果
+        // 4. 调用规则引擎执行并记录运行结果
         RuleRunResultDto runResult = ruleService.executeAndRecord(rule, params, testCase.getId());
         testCase.setLastResult(runResult.getStatus());
         testCase.setLastOutput(runResult.getOutput());
         testCase.setLastRunTime(new Date());
         testCaseMapper.editCaseLastResult(testCase);
-        // 按 ID 查询测试用例并组装为完整的 TestCaseDto
+        // 5. 按 ID 查询测试用例并组装为完整的 TestCaseDto
         return detailById(testCase.getId());
     }
 
     /**
-     * 批量执行全部测试用例。
-     * <p>每个用例通过代理调用 self.runTestCase() 获得独立事务，单个失败不影响其余用例继续执行。</p>
+     * 批量执行全部测试用例
+     *
+     * 每个用例通过代理调用 self.runTestCase() 获得独立事务，单个失败不影响其余用例继续执行
+     *
+     * 执行顺序：
+     * 1. 批量加载测试用例的参数值
+     * 2. 批量加载测试用例关联的规则定义
+     *
+     * @return 规则测试用例信息列表
      */
     public List<TestCaseDto> runAllTestCases() {
         List<RuleTestCaseBo> cases = testCaseMapper.queryAllCaseList();
@@ -194,9 +262,9 @@ public class TestCaseService {
             }
         }
         List<RuleTestCaseBo> refreshedCases = testCaseMapper.queryAllCaseList();
-        // 批量加载测试用例的参数值
+        // 1. 批量加载测试用例的参数值
         Map<Long, Map<String, String>> paramMap = loadCaseParamMap(refreshedCases);
-        // 批量加载测试用例关联的规则定义
+        // 2. 批量加载测试用例关联的规则定义
         Map<Long, RuleDefinitionBo> ruleMap = loadRuleMap(refreshedCases);
         return refreshedCases.stream()
                 // 组装测试用例返回对象
@@ -204,7 +272,14 @@ public class TestCaseService {
     }
 
     /**
-     * 查询指定测试用例的执行历史记录，含每次执行的步骤日志。
+     * 查询指定测试用例的执行历史记录，含每次执行的步骤日志
+     *
+     * 执行顺序：
+     * 1. 检查测试用例ID不能为空
+     * 2. 查询执行日志列表
+     *
+     * @param req 规则测试用例请求
+     * @return 规则执行结果列表
      */
     public List<RuleRunResultDto> queryRunHistoryList(TestCaseReq req) {
         Long caseId = req.getId();
@@ -228,7 +303,15 @@ public class TestCaseService {
 
     // ==================== 私有方法 ====================
 
-    /** 校验保存请求的必填字段（名称、关联规则） */
+    /**
+     * 校验保存请求的必填字段（名称、关联规则）
+     *
+     * 执行顺序：
+     * 1. 检查测试用例名称不能为空
+     * 2. 检查关联规则不能为空
+     *
+     * @param req 规则测试用例请求
+     */
     private void validateSaveReq(TestCaseReq req) {
         if (!StringUtils.hasText(req.getName())) {
             throw new BizException("测试用例名称不能为空");
@@ -238,7 +321,17 @@ public class TestCaseService {
         }
     }
 
-    /** 按 ID 查询测试用例实体，不存在则抛出业务异常 */
+    /**
+     * 按 ID 查询测试用例实体，不存在则抛出业务异常
+     *
+     * 执行顺序：
+     * 1. 检查测试用例ID不能为空
+     * 2. 按ID查询用例
+     * 3. 测试用例不存在时终止处理
+     *
+     * @param id 登记主键
+     * @return 规则测试用例
+     */
     private RuleTestCaseBo requireCase(Long id) {
         if (id == null) {
             throw new BizException("测试用例ID不能为空");
@@ -250,23 +343,42 @@ public class TestCaseService {
         return testCase;
     }
 
-    /** 按 ID 查询测试用例并组装为完整的 TestCaseDto */
+    /**
+     * 按 ID 查询测试用例并组装为完整的 TestCaseDto
+     *
+     * 执行顺序：
+     * 1. 按 ID 查询测试用例实体
+     * 2. 批量加载测试用例的参数值
+     * 3. 组装测试用例返回对象
+     *
+     * @param id 登记主键
+     * @return 规则测试用例信息
+     */
     private TestCaseDto detailById(Long id) {
-        // 按 ID 查询测试用例实体
+        // 1. 按 ID 查询测试用例实体
         RuleTestCaseBo testCase = requireCase(id);
-        // 批量加载测试用例的参数值
+        // 2. 批量加载测试用例的参数值
         Map<String, String> params = loadCaseParamMap(Collections.singletonList(testCase))
                 .getOrDefault(testCase.getId(), Collections.emptyMap());
         RuleDefinitionBo rule = testCase.getRuleId() == null
                 // 查询测试用例关联的规则定义
                 ? null : ruleMapper.queryRuleById(testCase.getRuleId());
-        // 组装测试用例返回对象
+        // 3. 组装测试用例返回对象
         return toDto(testCase, params, rule);
     }
 
     /**
-     * 全量替换测试用例的参数值（先删后增）。
-     * <p>同时快照参数的显示名和类型，保证历史用例在规则参数变更后仍可复现。</p>
+     * 全量替换测试用例的参数值（先删后增）
+     *
+     * 同时快照参数的显示名和类型，保证历史用例在规则参数变更后仍可复现
+     *
+     * 执行顺序：
+     * 1. 删除用例原有参数值，从关联规则读取参数定义
+     * 2. 逐项保存新参数值，并记录参数名称和类型的快照
+     *
+     * @param caseId 关联测试用例 ID（临时执行时为 null）
+     * @param ruleId 规则ID
+     * @param params 参数值映射（paramName → paramValue）
      */
     private void replaceCaseParams(Long caseId, Long ruleId, Map<String, String> params) {
         testCaseMapper.deleteParamsByCaseId(caseId);
@@ -287,8 +399,16 @@ public class TestCaseService {
     }
 
     /**
-     * 批量加载测试用例的参数值，返回 caseId → (paramName → paramValue) 映射。
-     * <p>使用 LinkedHashMap 保持参数插入顺序。</p>
+     * 批量加载测试用例的参数值，返回 caseId → (paramName → paramValue) 映射
+     *
+     * 使用 LinkedHashMap 保持参数插入顺序
+     *
+     * 执行顺序：
+     * 1. 用例ID 列表为空时返回空映射
+     * 2. 按用例ID 列表列表查询参数
+     *
+     * @param cases 规则测试用例列表
+     * @return 用例参数索引
      */
     private Map<Long, Map<String, String>> loadCaseParamMap(List<RuleTestCaseBo> cases) {
         if (cases.isEmpty()) {
@@ -311,11 +431,16 @@ public class TestCaseService {
     }
 
     /**
-     * RuleTestCaseBo 实体 → TestCaseDto，附带参数值映射和关联规则名称。
+     * RuleTestCaseBo 实体 → TestCaseDto，附带参数值映射和关联规则名称
+     *
+     * 执行顺序：
+     * 1. 填入用例 ID、名称、关联规则和参数值，规则缺失时使用原名称快照
+     * 2. 附上最近执行结果、输出和时间
      *
      * @param testCase 测试用例实体
-     * @param params   参数值映射（paramName → paramValue）
-     * @param rule     关联的规则定义（由调用方预加载，避免 N+1）
+     * @param params 参数值映射（paramName → paramValue）
+     * @param rule 关联的规则定义（由调用方预加载，避免 N+1）
+     * @return 规则测试用例信息
      */
     private TestCaseDto toDto(RuleTestCaseBo testCase, Map<String, String> params, RuleDefinitionBo rule) {
         TestCaseDto dto = new TestCaseDto();
@@ -331,8 +456,16 @@ public class TestCaseService {
     }
 
     /**
-     * 批量加载测试用例关联的规则定义，返回 ruleId → RuleDefinitionBo 映射。
-     * <p>避免 N+1 查询。</p>
+     * 批量加载测试用例关联的规则定义，返回 ruleId → RuleDefinitionBo 映射
+     *
+     * 避免 N+1 查询
+     *
+     * 执行顺序：
+     * 1. 规则ID 列表为空时返回空映射
+     * 2. 按ID 列表列表查询规则
+     *
+     * @param cases 规则测试用例列表
+     * @return 规则索引
      */
     private Map<Long, RuleDefinitionBo> loadRuleMap(List<RuleTestCaseBo> cases) {
         if (cases.isEmpty()) {
@@ -347,7 +480,15 @@ public class TestCaseService {
                 .collect(Collectors.toMap(RuleDefinitionBo::getId, rule -> rule, (left, right) -> left));
     }
 
-    /** 构建仅含 ID 的 TestCaseReq，供批量调用 runTestCase 使用 */
+    /**
+     * 构建仅含 ID 的 TestCaseReq，供批量调用 runTestCase 使用
+     *
+     * 执行顺序：
+     * 1. 把当前测试用例 ID 填入批量执行需要的单条请求
+     *
+     * @param id 登记主键
+     * @return 规则测试用例请求
+     */
     private TestCaseReq newTestCaseReq(Long id) {
         TestCaseReq req = new TestCaseReq();
         req.setId(id);

@@ -61,14 +61,16 @@ public class BatchCrmwPoolAdjustService {
     @Resource
     private AbsIdentityService absIdentityService;
 
-    /** 统一证券市场查询组件。 */
+    /** 统一证券市场查询组件 */
     @Resource
     private SecurityMarketService securityMarketService;
 
     /** 短时间重复提交判定窗口（秒） */
     private static final int DUPLICATE_SUBMIT_WINDOW_SECONDS = 30;
+
     /** 管理员用户 ID */
     private static final String ADMIN_USER_ID = "1";
+
     /** CRMW 凭证类型 */
     private static final String CRMW_SECURITY_TYPE = "crmw";
 
@@ -330,7 +332,7 @@ public class BatchCrmwPoolAdjustService {
      * 1. 遍历手工调整项并判断其所选流程能否直接完成，找到一项即可触发
      *
      * @param req 批量调整请求
-     * @return 存在无需人工审批即可完成的手工项时返回 true
+     * @return true=至少一个手工项可直接生效，需要整批复核，false=没有可直接生效的手工项，无需整批复核
      */
     private boolean needsWholeBatchDirectRecheck(BatchCrmwAdjustReq req) {
         if (req.getItems() == null) {
@@ -388,18 +390,20 @@ public class BatchCrmwPoolAdjustService {
      * @param req 用于比较调整项、原因和意见的批量提交请求
      */
     private void checkRecentBatchDuplicateSubmit(BatchCrmwAdjustReq req) {
+        // 1. 查询当前提交人近期的批量调整日志
         List<IpAdjustLogBo> recent = batchCrmwPoolAdjustMapper.queryRecentBatchManualAdjustLogList(
                 req.getAdjusterId(), DUPLICATE_SUBMIT_WINDOW_SECONDS);
         if (recent == null || recent.isEmpty()) {
             return;
         }
-        // 判断批量提交项是否为手工调整项
+        // 2. 按组合、目标池、方向和流程比对手工项
         List<String> requestKeys = req.getItems().stream().filter(this::isManualBatchSubmitItem)
                 // 生成批量历史日志的重复提交比对键
                 .map(this::buildBatchDuplicateItemKey).sorted().collect(Collectors.toList());
         // 生成批量历史日志的重复提交比对键
         List<String> historyKeys = recent.stream().map(this::buildBatchDuplicateItemKey)
                 .sorted().collect(Collectors.toList());
+        // 3. 调整项、原因和意见相同时提示重复提交
         boolean sameText = recent.stream().allMatch(log ->
                 // 去掉首尾空白，统一空值后再比较
                 Objects.equals(normalizeDuplicateText(req.getAdjustReason()),
@@ -529,6 +533,7 @@ public class BatchCrmwPoolAdjustService {
      * @param req 含方向、调整项和发起人信息的批量提交请求
      */
     private void validateAdjustSubmitReq(BatchCrmwAdjustReq req) {
+        // 1. 检查目标池、方向、提交项及发起人信息
         if (req.getPoolId() == null) {
             throw new BizException("目标投资池 ID 不能为空");
         }
@@ -543,10 +548,11 @@ public class BatchCrmwPoolAdjustService {
         if (req.getAdjusterName() == null || req.getAdjusterName().isEmpty()) {
             throw new BizException("调整人名称不能为空");
         }
+        // 2. 确认目标池是启用的叶子 CRMW 池
         if (batchCrmwPoolAdjustMapper.queryEnabledLeafCrmwPoolCount(req.getPoolId()) == 0) {
             throw new BizException("目标投资池不存在、未启用、不是叶子池或不是 CRMW 池");
         }
-        // 解析批量调库中文方向
+        // 3. 逐项校验凭证与标的组合、目标池和方向
         String adjustMode = resolveAdjustMode(req);
         for (BatchCrmwAdjustReq.AdjustItem item : req.getItems()) {
             if (item.getSecurityCode() == null || item.getSecurityCode().isEmpty()) {
@@ -575,7 +581,7 @@ public class BatchCrmwPoolAdjustService {
      * 1. 将未填写来源标记和明确标为手工的提交项视为手工项
      *
      * @param item 当前调整项
-     * @return 提交项为手工项时返回 true
+     * @return true=手工调库项（含未填标签的项），false=其他类型的调库项
      */
     private boolean isManualBatchSubmitItem(BatchCrmwAdjustReq.AdjustItem item) {
         return item.getItemTag() == null || item.getItemTag().isEmpty() || ItemType.MANUAL.getCode().equals(item.getItemTag());
@@ -641,6 +647,7 @@ public class BatchCrmwPoolAdjustService {
      */
     private AdjustCheckReq buildSingleCheckReq(BatchCrmwAdjustReq req,
                                                BatchCrmwAdjustReq.SecurityItem security) {
+        // 1. 按批量请求构造目标池和调库方向
         AdjustCheckReq.CheckItem item = new AdjustCheckReq.CheckItem();
         item.setTargetPoolId(req.getPoolId());
         item.setTargetPoolName(req.getPoolName());
@@ -648,6 +655,7 @@ public class BatchCrmwPoolAdjustService {
         // 解析批量调库中文方向
         item.setAdjustMode(resolveAdjustMode(req));
 
+        // 2. 带入凭证、标的及本次所选评级主体
         AdjustCheckReq checkReq = new AdjustCheckReq();
         checkReq.setSecurityCode(security.getSecurityCode());
         checkReq.setSecurityShortName(security.getSecurityShortName());
@@ -894,11 +902,11 @@ public class BatchCrmwPoolAdjustService {
      * @param req 含当前用户和目标池 ID 的权限查询条件
      */
     private void validatePoolPermission(BatchCrmwPoolAdjustReq req) {
-        // 判断当前用户是否为管理员
+        // 1. 判断当前用户是否为管理员
         if (isAdminUser(req.getCurrentUserId())) {
             return;
         }
-        // 查询当前用户拥有调整权限的投资池
+        // 2. 查询当前用户拥有调整权限的投资池
         if (!queryAdjustablePoolIds(req.getCurrentUserId()).contains(req.getPoolId())) {
             throw new BizException("当前用户无权调整目标投资池");
         }
@@ -912,14 +920,14 @@ public class BatchCrmwPoolAdjustService {
      * 2. 普通用户查询可调整池，未指定范围时使用全部可调整池，指定时与可调整池取交集
      *
      * @param req 待补充可调整池范围的查询条件
-     * @return 有可查询范围或用户为管理员时返回 true
+     * @return true=管理员或已确定可查询的池范围，false=没有可查询的池范围
      */
     private boolean prepareAdjustablePoolIds(BatchCrmwPoolAdjustReq req) {
-        // 判断当前用户是否为管理员
+        // 1. 判断当前用户是否为管理员
         if (isAdminUser(req.getCurrentUserId())) {
             return true;
         }
-        // 查询当前用户拥有调整权限的投资池
+        // 2. 查询当前用户拥有调整权限的投资池
         Set<Long> adjustablePoolIds = queryAdjustablePoolIds(req.getCurrentUserId());
         if (adjustablePoolIds.isEmpty()) {
             return false;
@@ -998,7 +1006,7 @@ public class BatchCrmwPoolAdjustService {
      * 1. 将当前用户 ID 与管理员 ID 比较
      *
      * @param currentUserId 当前用户 ID
-     * @return 用户为管理员时返回 true
+     * @return true=当前用户是管理员，false=当前用户不是管理员
      */
     private boolean isAdminUser(String currentUserId) {
         return ADMIN_USER_ID.equals(currentUserId);

@@ -47,81 +47,116 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * 脚本工具服务。
- * <p>仅执行后端白名单内的 SQL 文件和固定清空语句，不接收前端传入的任意 SQL。</p>
+ * 执行预先登记的建表、演示数据和清理任务
+ *
+ * 页面按任务编码使用后端登记的 SQL 文件和固定清空语句，写操作受功能开关和二次确认控制
+ * 提供表记录数、脚本概况和结构差异等只读检查，并保存写操作执行记录
  */
 @Service
 public class ScriptToolService {
 
     /** 初始化建表任务编码 */
     private static final String TASK_INIT_SCHEMA = "INIT_SCHEMA";
+
     /** 初始化 Demo 数据任务编码 */
     private static final String TASK_INIT_DEMO = "INIT_DEMO";
+
     /** 债券及公共业务建表任务编码 */
     private static final String TASK_INIT_BOND_SCHEMA = "INIT_BOND_SCHEMA";
+
     /** 债券及公共业务演示数据任务编码 */
     private static final String TASK_INIT_BOND_DEMO = "INIT_BOND_DEMO";
+
     /** 全库建表任务编码 */
     private static final String TASK_INIT_ALL_SCHEMA = "INIT_ALL_SCHEMA";
+
     /** 全库演示数据任务编码 */
     private static final String TASK_INIT_ALL_DEMO = "INIT_ALL_DEMO";
+
     /** 重建完整演示环境任务编码 */
     private static final String TASK_RESET_ALL = "RESET_ALL";
+
     /** 清空调库运行态数据任务编码 */
     private static final String TASK_CLEAR_ADJUST_FLOW = "CLEAR_ADJUST_FLOW";
+
     /** 初始化 AIS 库建表任务编码 */
     private static final String TASK_INIT_AIS_SCHEMA = "INIT_AIS_SCHEMA";
+
     /** 初始化 AIS 库 Demo 数据任务编码 */
     private static final String TASK_INIT_AIS_DEMO = "INIT_AIS_DEMO";
+
     /** 初始化外部导入表建表任务编码 */
     private static final String TASK_INIT_EXTERNAL_IMPORT_SCHEMA = "INIT_EXTERNAL_IMPORT_SCHEMA";
+
     /** 初始化外部导入表 Demo 数据任务编码 */
     private static final String TASK_INIT_EXTERNAL_IMPORT_DEMO = "INIT_EXTERNAL_IMPORT_DEMO";
+
     /** 初始化基金专属表建表任务编码 */
     private static final String TASK_INIT_FUND_SCHEMA = "INIT_FUND_SCHEMA";
+
     /** 初始化基金专属 Demo 数据任务编码 */
     private static final String TASK_INIT_FUND_DEMO = "INIT_FUND_DEMO";
+
     /** 股票专属建表任务 */
     private static final String TASK_INIT_STOCK_SCHEMA = "INIT_STOCK_SCHEMA";
+
     /** 股票专属演示数据任务 */
     private static final String TASK_INIT_STOCK_DEMO = "INIT_STOCK_DEMO";
+
     /** 股票调库运行态清空任务 */
     private static final String TASK_CLEAR_STOCK_ADJUST_FLOW = "CLEAR_STOCK_ADJUST_FLOW";
+
     /** 清空选中表数据任务编码 */
     private static final String TASK_CLEAR_SELECTED_TABLES = "CLEAR_SELECTED_TABLES";
+
     /** 清空选中表确认文本 */
     private static final String CONFIRM_CLEAR_SELECTED_TABLES = "CLEAR_SELECTED_TABLES";
+
     /** 重置选中表数据任务编码 */
     private static final String TASK_RESET_SELECTED_TABLES = "RESET_SELECTED_TABLES";
+
     /** 重置选中表确认文本 */
     private static final String CONFIRM_RESET_SELECTED_TABLES = "RESET_SELECTED_TABLES";
+
     /** 模块级重置确认文本 */
     private static final String CONFIRM_RESET_MODULE = "RESET_MODULE";
+
     /** Demo 场景生成确认文本 */
     private static final String CONFIRM_GENERATE_DEMO_SCENE = "GENERATE_DEMO_SCENE";
 
     /** 脚本执行状态：成功 */
     private static final String STATUS_SUCCESS = "success";
+
     /** 脚本执行状态：失败 */
     private static final String STATUS_FAILED = "failed";
+
     /** 健康检查状态：警告 */
     private static final String STATUS_WARNING = "warning";
+
     /** USE 数据库语句匹配规则 */
     private static final Pattern USE_DATABASE_PATTERN = Pattern.compile("(?is)^USE\\s+`?([A-Za-z0-9_]+)`?.*");
+
     /** 数据操作语句目标表匹配规则 */
     private static final Pattern TABLE_STATEMENT_PATTERN = Pattern.compile("(?is)^(?:INSERT\\s+(?:IGNORE\\s+)?INTO|REPLACE\\s+INTO|TRUNCATE\\s+TABLE|DELETE\\s+FROM|UPDATE)\\s+(?:`?([A-Za-z0-9_]+)`?\\.)?`?([A-Za-z0-9_]+)`?.*");
+
     /** 建表语句目标表匹配规则 */
     private static final Pattern CREATE_TABLE_PATTERN = Pattern.compile("(?is)^CREATE\\s+TABLE\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?`?([A-Za-z0-9_]+)`?.*");
+
     /** 清表语句目标表匹配规则 */
     private static final Pattern TRUNCATE_TABLE_PATTERN = Pattern.compile("(?is)^TRUNCATE\\s+TABLE\\s+`?([A-Za-z0-9_]+)`?.*");
+
     /** 插入语句目标表匹配规则 */
     private static final Pattern INSERT_TABLE_PATTERN = Pattern.compile("(?is)^INSERT\\s+(?:IGNORE\\s+)?INTO\\s+`?([A-Za-z0-9_]+)`?.*");
+
     /** 建表语句结构匹配规则 */
     private static final Pattern CREATE_TABLE_DETAIL_PATTERN = Pattern.compile("(?is)^CREATE\\s+TABLE\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?`?([A-Za-z0-9_]+)`?\\s*\\((.*)\\)\\s*ENGINE\\s*=\\s*([A-Za-z0-9_]+)(.*)$");
+
     /** 字段定义匹配规则 */
     private static final Pattern COLUMN_DEFINITION_PATTERN = Pattern.compile("(?is)^`([^`]+)`\\s+([A-Za-z]+(?:\\s*\\([^)]*\\))?(?:\\s+UNSIGNED)?)\\s*(.*)$");
+
     /** 索引定义匹配规则 */
     private static final Pattern INDEX_DEFINITION_PATTERN = Pattern.compile("(?is)^(PRIMARY\\s+KEY|UNIQUE\\s+KEY\\s+`?([A-Za-z0-9_]+)`?|KEY\\s+`?([A-Za-z0-9_]+)`?)\\s*\\(([^)]+)\\).*$");
+
     /** 表排序规则匹配规则 */
     private static final Pattern COLLATION_PATTERN = Pattern.compile("(?is).*COLLATE\\s*=?\\s*([A-Za-z0-9_]+).*");
 
@@ -134,9 +169,10 @@ public class ScriptToolService {
     private String sqlPath;
 
     /**
-     * 脚本工具总开关。
-     * <p>默认 true（开发/演示）；生产请设 rrs.script.enabled=false 或环境变量 RRS_SCRIPT_ENABLED=false。
-     * 为 null（单测未注入）时按开启处理。</p>
+     * 脚本工具总开关
+     *
+     * 默认 true（开发/演示）；生产请设 rrs.script.enabled=false 或环境变量 RRS_SCRIPT_ENABLED=false
+     * 为 null（单测未注入）时按开启处理
      */
     @Value("${rrs.script.enabled:true}")
     private Boolean scriptEnabled;
@@ -145,14 +181,25 @@ public class ScriptToolService {
     private final AtomicBoolean running = new AtomicBoolean(false);
 
     /**
-     * 查询脚本工具开关状态（供前端隐藏写操作入口）。
+     * 查询脚本工具开关状态（供前端隐藏写操作入口）
+     *
+     * 执行顺序：
+     * 1. 读取脚本工具写操作开关，只有显式配置为 false 才关闭
+     *
+     * @return true=脚本工具写操作已开启，false=脚本工具写操作已关闭
      */
     public boolean isScriptToolEnabled() {
         return !Boolean.FALSE.equals(scriptEnabled);
     }
 
     /**
-     * 查询脚本工具最近写操作审计（默认最近 50 条）。
+     * 查询脚本工具最近写操作审计（默认最近 50 条）
+     *
+     * 执行顺序：
+     * 1. 在数据库连接打开期间执行本次操作
+     *
+     * @param req 数据表清理请求
+     * @return 脚本工具最近写操作审计（默认最近 50 条）列表
      */
     public List<ScriptToolRunLogDto> queryScriptToolRunLogList(ScriptToolReq req) {
         int limit = 50;
@@ -194,7 +241,10 @@ public class ScriptToolService {
     }
 
     /**
-     * 写操作前校验工具是否开启。
+     * 写操作前校验工具是否开启
+     *
+     * 执行顺序：
+     * 1. 脚本工具已禁用（rrs.script.enabled=false），仅开发/演示环境开放时终止处理
      */
     private void ensureScriptToolEnabled() {
         if (Boolean.FALSE.equals(scriptEnabled)) {
@@ -203,7 +253,13 @@ public class ScriptToolService {
     }
 
     /**
-     * 查询可执行脚本任务列表。
+     * 查询可执行脚本任务列表
+     *
+     * 执行顺序：
+     * 1. 从内置脚本任务配置取出各任务，复制成列表返回
+     *
+     * @param req 数据表清理请求
+     * @return 脚本任务列表
      */
     public List<ScriptTaskDto> queryScriptTaskList(ScriptToolReq req) {
         // 构建任务白名单
@@ -211,7 +267,13 @@ public class ScriptToolService {
     }
 
     /**
-     * 查询可清空表分组列表。
+     * 查询可清空表分组列表
+     *
+     * 执行顺序：
+     * 1. 查询可清空表分组
+     *
+     * @param req 数据表清理请求
+     * @return 脚本表分组列表
      */
     public List<ScriptTableGroupDto> queryClearTableGroupList(ScriptToolReq req) {
         // 构建可清空表白名单
@@ -219,21 +281,30 @@ public class ScriptToolService {
     }
 
     /**
-     * 查询各业务库表记录数。
-     * <p>znty_rrs 统计全部基础表；ais_inv_analysis / ais_inv_ods 仅统计本地已有表（显式清单）。
-     * 按记录数降序返回，与 tool_table_row_counts.sql 策略一致。</p>
+     * 查询各业务库表记录数
+     *
+     * znty_rrs 统计全部基础表；ais_inv_analysis / ais_inv_ods 仅统计本地已有表（显式清单）
+     * 按记录数降序返回，与 tool_table_row_counts.sql 策略一致
+     *
+     * 执行顺序：
+     * 1. 主业务库：统计全部基础表
+     * 2. AIS 投资分析库：仅统计本地已有表（公司库表多，显式指定）
+     * 3. AIS 投资 ODS 库：仅统计本地已有表
+     *
+     * @param req 数据表清理请求
+     * @return 脚本表记录数分组列表
      */
     public List<ScriptTableRowCountGroupDto> queryTableRowCounts(ScriptToolReq req) {
         List<ScriptTableRowCountGroupDto> groups = new ArrayList<>();
-        // 主业务库：统计全部基础表
+        // 1. 主业务库：统计全部基础表
         groups.add(buildRowCountGroup("znty_rrs", "主业务库", null));
-        // AIS 投资分析库：仅统计本地已有表（公司库表多，显式指定）
+        // 2. AIS 投资分析库：仅统计本地已有表（公司库表多，显式指定）
         groups.add(buildRowCountGroup("ais_inv_analysis", "AIS 投资分析库", Arrays.asList(
                 "t_inv_company", "t_inv_grade_result", "v_inv_grade_result", "company_observer_view",
                 "t_sys_role", "t_sys_role_evt",
                 "t_sys_user", "t_sys_user_evt",
                 "t_sys_user_role", "t_sys_user_role_evt")));
-        // AIS 投资 ODS 库：仅统计本地已有表
+        // 3. AIS 投资 ODS 库：仅统计本地已有表
         groups.add(buildRowCountGroup("ais_inv_ods", "AIS 投资 ODS 库", Arrays.asList(
                 "wind_compintroduction", "wind_cbondissuer", "wind_cbondissuerrating",
                 "wind_windcustomcode", "wind_cbondchangewindcode")));
@@ -241,22 +312,40 @@ public class ScriptToolService {
     }
 
     /**
-     * 构建单库表记录数统计结果。
+     * 构建单库表记录数统计结果
+     *
+     * 执行顺序：
+     * 1. 查询单库表记录数（按记录数降序）
+     * 2. 构建单库表记录数统计结果
+     *
+     * @param databaseName 所属数据库名称
+     * @param databaseDesc 用于表行数统计分组展示的数据库说明
+     * @param tableNames 文本列表
+     * @return 脚本表记录数分组
      */
     private ScriptTableRowCountGroupDto buildRowCountGroup(String databaseName, String databaseDesc, List<String> tableNames) {
         ScriptTableRowCountGroupDto group = new ScriptTableRowCountGroupDto();
         group.setDatabaseName(databaseName);
         group.setDatabaseDesc(databaseDesc);
+        // 查询单库表记录数（按记录数降序）
         group.setTables(queryDatabaseTableRowCounts(databaseName, tableNames));
         return group;
     }
 
     /**
-     * 查询单库表记录数（按记录数降序）。
+     * 查询单库表记录数（按记录数降序）
+     *
+     * 执行顺序：
+     * 1. 复用可清空表白名单的表说明
+     * 2. 按记录数降序排序（null 视为 0）
+     *
+     * @param databaseName 所属数据库名称
+     * @param tableNames 文本列表
+     * @return 脚本表记录数列表
      */
     private List<ScriptTableRowCountDto> queryDatabaseTableRowCounts(String databaseName, List<String> tableNames) {
         List<ScriptTableRowCountDto> result = new ArrayList<>();
-        // 复用可清空表白名单的表说明
+        // 1. 复用可清空表白名单的表说明
         Map<String, ScriptTableDto> clearTableMap = queryClearTableMap();
         try (Connection conn = dataSource.getConnection(); Statement stmt = conn.createStatement()) {
             // 查询库内表清单（tableNames 为空则查全部基础表）
@@ -268,20 +357,30 @@ public class ScriptToolService {
                 String tableKey = databaseName + "." + table;
                 ScriptTableDto clearTable = clearTableMap.get(tableKey);
                 dto.setTableDesc(clearTable != null ? clearTable.getTableDesc() : null);
+                // 查询单表记录数（不可访问返回 -1）
                 dto.setRowCount(queryTableRowCount(stmt, databaseName, table));
                 result.add(dto);
             }
         } catch (Exception e) {
             // 库不可访问时返回空列表
         }
-        // 按记录数降序排序（null 视为 0）
+        // 2. 按记录数降序排序（null 视为 0）
         result.sort((a, b) -> Long.compare(b.getRowCount() == null ? 0L : b.getRowCount(),
                 a.getRowCount() == null ? 0L : a.getRowCount()));
         return result;
     }
 
     /**
-     * 查询库内表名清单。
+     * 查询库内表名清单
+     *
+     * 执行顺序：
+     * 1. 按数据库名筛选基础表，有指定表名时进一步限制查询范围
+     * 2. 按表名排序读取并返回结果
+     *
+     * @param conn 本次操作使用的数据库连接
+     * @param databaseName 所属数据库名称
+     * @param tableNames 文本列表
+     * @return 库内表名清单列表
      */
     private List<String> queryDatabaseTableNames(Connection conn, String databaseName, List<String> tableNames) throws Exception {
         StringBuilder sql = new StringBuilder(
@@ -307,7 +406,15 @@ public class ScriptToolService {
     }
 
     /**
-     * 查询单表记录数（不可访问返回 -1）。
+     * 查询单表记录数（不可访问返回 -1）
+     *
+     * 执行顺序：
+     * 1. 执行行数统计，查询有结果时返回行数、无结果时返回 0，查询失败时返回 -1
+     *
+     * @param stmt 语句
+     * @param databaseName 所属数据库名称
+     * @param tableName 表名
+     * @return 表记录数
      */
     private long queryTableRowCount(Statement stmt, String databaseName, String tableName) {
         try (ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM `" + databaseName + "`.`" + tableName + "`")) {
@@ -318,19 +425,30 @@ public class ScriptToolService {
     }
 
     /**
-     * 查询 SQL 脚本清单与依赖总览。
+     * 查询 SQL 脚本清单与依赖总览
+     *
+     * 执行顺序：
+     * 1. 读取 SQL 脚本目录并统计各类脚本数量
+     * 2. 按执行顺序整理建表脚本及文件状态
+     * 3. 按执行顺序整理 Demo 数据脚本，汇总缺失文件数量
+     *
+     * @param req 数据表清理请求
+     * @return 脚本、任务与库表概况
      */
     public ScriptOverviewDto queryScriptOverview(ScriptToolReq req) {
         ScriptOverviewDto overview = new ScriptOverviewDto();
-        // 解析 SQL 文件目录
+        // 1. 读取 SQL 脚本目录并统计各类脚本数量
         File sqlDir = resolveSqlDir();
         overview.setSqlPath(sqlDir.getAbsolutePath());
+        // 查询建表脚本执行顺序
         overview.setSchemaFileCount(querySchemaFiles().size());
+        // 查询 Demo 数据脚本执行顺序
         overview.setDemoFileCount(queryDemoFiles().size());
         overview.setFiles(new ArrayList<ScriptFileDto>());
 
         int missingCount = 0;
         int sortOrder = 1;
+        // 2. 按执行顺序整理建表脚本及文件状态
         for (String fileName : querySchemaFiles()) {
             // 解析建表脚本文件信息
             ScriptFileDto file = buildScriptFile(sqlDir, fileName, "schema", sortOrder++);
@@ -339,6 +457,7 @@ public class ScriptToolService {
             }
             overview.getFiles().add(file);
         }
+        // 3. 按执行顺序整理 Demo 数据脚本，汇总缺失文件数量
         for (String fileName : queryDemoFiles()) {
             // 解析 Demo 脚本文件信息
             ScriptFileDto file = buildScriptFile(sqlDir, fileName, "demo", sortOrder++);
@@ -352,47 +471,77 @@ public class ScriptToolService {
     }
 
     /**
-     * 查询脚本工具环境健康检查结果。
+     * 查询脚本工具环境健康检查结果
+     *
+     * 执行顺序：
+     * 1. 主库 znty_rrs + AIS 分析库 + AIS ODS（Wind）共 3 个库
+     * 2. 查询可清空表白名单索引
+     * 3. 解析 SQL 文件目录
+     * 4. 构建健康检查项
+     * 5. 追加数据库健康检查项
+     * 6. 计算健康检查整体状态
+     *
+     * @param req 数据表清理请求
+     * @return 脚本工具健康检查汇总
      */
     public ScriptHealthCheckDto queryHealthCheck(ScriptToolReq req) {
         ScriptHealthCheckDto check = new ScriptHealthCheckDto();
         check.setItems(new ArrayList<ScriptHealthItemDto>());
-        // 主库 znty_rrs + AIS 分析库 + AIS ODS（Wind）共 3 个库
+        // 1. 初始化数据库范围及预期表数
         check.setExpectedDatabaseCount(3);
+        // 查询可清空表白名单索引
         check.setExpectedTableCount(queryClearTableMap().size());
         check.setExistingTableCount(0);
         check.setMissingTableCount(check.getExpectedTableCount());
         check.setEmptyTableCount(0);
         check.setNonEmptyTableCount(0);
+        // 2. 检查脚本目录及所需文件
         try {
             // 解析 SQL 文件目录
             File sqlDir = resolveSqlDir();
             check.setSqlPath(sqlDir.getAbsolutePath());
+            // 构建健康检查项
             check.getItems().add(buildHealthItem("sql-path", "SQL 目录", STATUS_SUCCESS, sqlDir.getAbsolutePath(), "目录存在", "SQL 目录可读取"));
         } catch (Exception e) {
             check.setSqlPath(sqlPath);
+            // 构建健康检查项
             check.getItems().add(buildHealthItem("sql-path", "SQL 目录", STATUS_FAILED, sqlPath, "目录存在", e.getMessage()));
         }
 
+        // 3. 读取各数据库实际表和数据状态
         try (Connection conn = dataSource.getConnection()) {
             DatabaseMetaData metaData = conn.getMetaData();
             check.setConnectionInfo(metaData.getURL());
+            // 构建健康检查项
             check.getItems().add(buildHealthItem("database-connection", "数据库连接", STATUS_SUCCESS, metaData.getURL(), "可连接", "数据库连接正常"));
             // 检查全部数据库和表状态
             appendDatabaseHealthItems(conn, check);
         } catch (Exception e) {
             check.setConnectionInfo("");
+            // 构建健康检查项
             check.getItems().add(buildHealthItem("database-connection", "数据库连接", STATUS_FAILED, "", "可连接", e.getMessage()));
         }
+        // 4. 按缺失项和空表数汇总健康状态
         check.setStatus(resolveHealthStatus(check.getItems()));
         return check;
     }
 
     /**
-     * 查询数据库结构差异检查结果。
+     * 查询数据库结构差异检查结果
+     *
+     * 执行顺序：
+     * 1. 构建只读检查结果
+     * 2. 解析全部建表脚本中的期望表结构
+     * 3. 比较期望结构与实际数据库结构
+     * 4. 汇总结构差异检查结果
+     *
+     * @param req 数据表清理请求
+     * @return 检查项明细及汇总
      */
     public ScriptInspectionDto querySchemaDiff(ScriptToolReq req) {
+        // 1. 准备结构检查结果
         ScriptInspectionDto inspection = buildInspectionResult("对比建表脚本与实际数据库的表、字段、索引、引擎和排序规则");
+        // 2. 从建表脚本读取预期结构并与数据库实际结构比较
         try {
             // 解析建表脚本中的期望结构
             Map<String, ExpectedSchemaTable> expectedTables = queryExpectedSchemaTables();
@@ -401,35 +550,55 @@ public class ScriptToolService {
                 appendSchemaDiffItems(conn, expectedTables, inspection.getItems());
             }
         } catch (Exception e) {
+            // 构建只读检查项
             inspection.getItems().add(buildInspectionItem("schema-check", "结构", "全部数据库", "结构差异检查",
                     STATUS_FAILED, "检查失败", "可完成检查", 1L, e.getMessage(), "确认 SQL 目录和数据库连接均可用"));
         }
-        // 汇总结构差异检查结果
+        // 3. 汇总结构检查结果
         fillInspectionSummary(inspection);
         return inspection;
     }
 
     /**
-     * 查询业务数据完整性检查结果。
+     * 查询业务数据完整性检查结果
+     *
+     * 执行顺序：
+     * 1. 构建只读检查结果
+     * 2. 查询业务数据完整性规则
+     * 3. 执行单条业务完整性规则
+     * 4. 汇总业务完整性检查结果
+     *
+     * @param req 数据表清理请求
+     * @return 检查项明细及汇总
      */
     public ScriptInspectionDto queryDataIntegrity(ScriptToolReq req) {
+        // 1. 准备业务数据完整性检查结果
         ScriptInspectionDto inspection = buildInspectionResult("检查调库、流程、投资池、规则和用户数据的关键业务关联");
+        // 2. 逐条执行检查规则并记录结果
         try (Connection conn = dataSource.getConnection()) {
             // 执行业务完整性规则
             for (IntegrityRule rule : queryIntegrityRules()) {
+                // 执行单条业务完整性规则
                 inspection.getItems().add(executeIntegrityRule(conn, rule));
             }
         } catch (Exception e) {
+            // 构建只读检查项
             inspection.getItems().add(buildInspectionItem("integrity-check", "完整性", "全部业务数据", "业务完整性检查",
                     STATUS_FAILED, "检查失败", "可完成检查", 1L, e.getMessage(), "确认数据库连接和业务表结构均可用"));
         }
-        // 汇总业务完整性检查结果
+        // 3. 汇总完整性检查结果
         fillInspectionSummary(inspection);
         return inspection;
     }
 
     /**
-     * 查询模块级重置任务列表。
+     * 查询模块级重置任务列表
+     *
+     * 执行顺序：
+     * 1. 从模块重置任务配置取出各任务，复制成列表返回
+     *
+     * @param req 数据表清理请求
+     * @return 指定模块的脚本任务配置列表
      */
     public List<ScriptModuleTaskDto> queryModuleResetTaskList(ScriptToolReq req) {
         // 构建模块级重置任务白名单
@@ -437,19 +606,28 @@ public class ScriptToolService {
     }
 
     /**
-     * 执行模块级重置任务。
+     * 执行模块级重置任务
+     *
+     * 执行顺序：
+     * 1. 生产/关闭开关时禁止写操作
+     * 2. 获取并校验模块重置任务
+     * 3. 校验模块重置确认文本
+     *
+     * @param req 数据表清理请求
+     * @return 脚本任务的执行结果
      */
     public ScriptExecuteResultDto executeModuleResetTask(ScriptToolReq req) {
-        // 生产/关闭开关时禁止写操作
+        // 1. 生产/关闭开关时禁止写操作
         ensureScriptToolEnabled();
-        // 获取并校验模块重置任务
+        // 2. 获取并校验模块重置任务
         ScriptModuleTaskDto task = requireModuleTask(req);
-        // 校验模块重置确认文本
+        // 3. 校验模块重置确认文本
         validateFixedConfirmText(req, CONFIRM_RESET_MODULE);
         if (!running.compareAndSet(false, true)) {
             throw new BizException("已有脚本任务正在执行，请稍后再试");
         }
 
+        // 构建脚本执行结果
         ScriptExecuteResultDto result = buildExecuteResult(task.getModuleCode(), task.getModuleName(), req);
         try {
             // 执行模块对应 Demo 脚本
@@ -461,6 +639,7 @@ public class ScriptToolService {
             result.setStatus(STATUS_FAILED);
             result.setErrorMessage(e.getMessage());
         } finally {
+            // 回填脚本执行结束信息
             fillExecuteResultEnd(result);
             running.set(false);
             // 记录模块重置审计
@@ -470,7 +649,13 @@ public class ScriptToolService {
     }
 
     /**
-     * 查询 Demo 场景列表。
+     * 查询 Demo 场景列表
+     *
+     * 执行顺序：
+     * 1. 从 Demo 场景配置取出各场景，复制成列表返回
+     *
+     * @param req 数据表清理请求
+     * @return 指定演示场景的配置列表
      */
     public List<ScriptDemoSceneDto> queryDemoSceneList(ScriptToolReq req) {
         // 构建 Demo 场景白名单
@@ -478,19 +663,28 @@ public class ScriptToolService {
     }
 
     /**
-     * 执行 Demo 场景生成。
+     * 执行 Demo 场景生成
+     *
+     * 执行顺序：
+     * 1. 生产/关闭开关时禁止写操作
+     * 2. 获取并校验 Demo 场景
+     * 3. 校验 Demo 场景确认文本
+     *
+     * @param req 数据表清理请求
+     * @return 脚本任务的执行结果
      */
     public ScriptExecuteResultDto executeDemoScene(ScriptToolReq req) {
-        // 生产/关闭开关时禁止写操作
+        // 1. 生产/关闭开关时禁止写操作
         ensureScriptToolEnabled();
-        // 获取并校验 Demo 场景
+        // 2. 获取并校验 Demo 场景
         ScriptDemoSceneDto scene = requireDemoScene(req);
-        // 校验 Demo 场景确认文本
+        // 3. 校验 Demo 场景确认文本
         validateFixedConfirmText(req, CONFIRM_GENERATE_DEMO_SCENE);
         if (!running.compareAndSet(false, true)) {
             throw new BizException("已有脚本任务正在执行，请稍后再试");
         }
 
+        // 构建脚本执行结果
         ScriptExecuteResultDto result = buildExecuteResult(scene.getSceneCode(), scene.getSceneName(), req);
         try {
             // 校验场景基础数据依赖
@@ -502,6 +696,7 @@ public class ScriptToolService {
             result.setStatus(STATUS_FAILED);
             result.setErrorMessage(e.getMessage());
         } finally {
+            // 回填脚本执行结束信息
             fillExecuteResultEnd(result);
             running.set(false);
             // 记录场景生成审计
@@ -511,14 +706,22 @@ public class ScriptToolService {
     }
 
     /**
-     * 执行脚本任务。
+     * 执行脚本任务
+     *
+     * 执行顺序：
+     * 1. 生产/关闭开关时禁止写操作
+     * 2. 获取并校验任务配置
+     * 3. 校验二次确认文本
+     *
+     * @param req 数据表清理请求
+     * @return 脚本任务的执行结果
      */
     public ScriptExecuteResultDto executeScriptTask(ScriptToolReq req) {
-        // 生产/关闭开关时禁止写操作
+        // 1. 生产/关闭开关时禁止写操作
         ensureScriptToolEnabled();
-        // 获取并校验任务配置
+        // 2. 获取并校验任务配置
         ScriptTaskDto task = requireTask(req);
-        // 校验二次确认文本
+        // 3. 校验二次确认文本
         validateConfirmText(req, task);
         if (!running.compareAndSet(false, true)) {
             throw new BizException("已有脚本任务正在执行，请稍后再试");
@@ -550,12 +753,19 @@ public class ScriptToolService {
     }
 
     /**
-     * 清空选中的表数据。
+     * 清空选中的表数据
+     *
+     * 执行顺序：
+     * 1. 生产/关闭开关时禁止写操作
+     * 2. 校验自定义清空表请求
+     *
+     * @param req 数据表清理请求
+     * @return 脚本任务的执行结果
      */
     public ScriptExecuteResultDto executeClearSelectedTables(ScriptToolReq req) {
-        // 生产/关闭开关时禁止写操作
+        // 1. 生产/关闭开关时禁止写操作
         ensureScriptToolEnabled();
-        // 校验自定义清空表请求
+        // 2. 校验自定义清空表请求
         validateSelectedTableReq(req, CONFIRM_CLEAR_SELECTED_TABLES);
         if (!running.compareAndSet(false, true)) {
             throw new BizException("已有脚本任务正在执行，请稍后再试");
@@ -587,12 +797,19 @@ public class ScriptToolService {
     }
 
     /**
-     * 重置选中的表数据。
+     * 重置选中的表数据
+     *
+     * 执行顺序：
+     * 1. 生产/关闭开关时禁止写操作
+     * 2. 校验自定义重置表请求
+     *
+     * @param req 数据表清理请求
+     * @return 脚本任务的执行结果
      */
     public ScriptExecuteResultDto executeResetSelectedTables(ScriptToolReq req) {
-        // 生产/关闭开关时禁止写操作
+        // 1. 生产/关闭开关时禁止写操作
         ensureScriptToolEnabled();
-        // 校验自定义重置表请求
+        // 2. 校验自定义重置表请求
         validateSelectedTableReq(req, CONFIRM_RESET_SELECTED_TABLES);
         if (!running.compareAndSet(false, true)) {
             throw new BizException("已有脚本任务正在执行，请稍后再试");
@@ -626,7 +843,13 @@ public class ScriptToolService {
     }
 
     /**
-     * 写操作审计落库（失败不影响主流程）。
+     * 写操作审计落库（失败不影响主流程）
+     *
+     * 执行顺序：
+     * 1. 在数据库连接打开期间执行本次操作
+     *
+     * @param actionType 动作类型
+     * @param result 本次操作的结果对象
      */
     private void saveRunLog(String actionType, ScriptExecuteResultDto result) {
         if (result == null) {
@@ -642,8 +865,10 @@ public class ScriptToolService {
             ps.setString(2, result.getTaskCode());
             ps.setString(3, result.getTaskName());
             ps.setString(4, result.getStatus());
+            // 截断文本长度
             ps.setString(5, truncateText(result.getErrorMessage(), 1000));
             List<String> items = result.getExecutedItems() == null ? new ArrayList<String>() : result.getExecutedItems();
+            // 截断文本长度，再拼接字符串列表
             ps.setString(6, truncateText(joinStrings(items, "；"), 2000));
             ps.setInt(7, items.size());
             if (result.getCostMillis() == null) {
@@ -670,7 +895,14 @@ public class ScriptToolService {
     }
 
     /**
-     * 截断文本长度。
+     * 截断文本长度
+     *
+     * 执行顺序：
+     * 1. 文本为空时返回空值
+     *
+     * @param text 待处理的文本
+     * @param maxLen 截断后的最大文本长度，包含末尾省略号
+     * @return 按指定最大长度截断后的文本，超长时用省略号收尾，输入为 null 时返回 null
      */
     private String truncateText(String text, int maxLen) {
         if (text == null) {
@@ -683,7 +915,14 @@ public class ScriptToolService {
     }
 
     /**
-     * 获取任务配置。
+     * 获取任务配置
+     *
+     * 执行顺序：
+     * 1. 检查脚本任务编码不能为空
+     * 2. 构建任务白名单
+     *
+     * @param req 数据表清理请求
+     * @return 脚本任务
      */
     private ScriptTaskDto requireTask(ScriptToolReq req) {
         if (!StringUtils.hasText(req.getTaskCode())) {
@@ -698,7 +937,13 @@ public class ScriptToolService {
     }
 
     /**
-     * 校验确认文本。
+     * 校验确认文本
+     *
+     * 执行顺序：
+     * 1. 将请求中的确认文本与任务配置逐字比较，不一致时提示应输入的文本
+     *
+     * @param req 数据表清理请求
+     * @param task 任务
      */
     private void validateConfirmText(ScriptToolReq req, ScriptTaskDto task) {
         String confirmText = req.getConfirmText();
@@ -708,7 +953,13 @@ public class ScriptToolService {
     }
 
     /**
-     * 校验固定确认文本。
+     * 校验固定确认文本
+     *
+     * 执行顺序：
+     * 1. 将请求中的确认文本与指定文本逐字比较，不一致时提示应输入的文本
+     *
+     * @param req 数据表清理请求
+     * @param expectedConfirmText 预期的确认文本
      */
     private void validateFixedConfirmText(ScriptToolReq req, String expectedConfirmText) {
         String confirmText = req.getConfirmText();
@@ -718,7 +969,14 @@ public class ScriptToolService {
     }
 
     /**
-     * 获取模块重置任务配置。
+     * 获取模块重置任务配置
+     *
+     * 执行顺序：
+     * 1. 检查模块编码不能为空
+     * 2. 构建模块级重置任务白名单
+     *
+     * @param req 数据表清理请求
+     * @return 指定模块的脚本任务配置
      */
     private ScriptModuleTaskDto requireModuleTask(ScriptToolReq req) {
         if (!StringUtils.hasText(req.getModuleCode())) {
@@ -733,7 +991,14 @@ public class ScriptToolService {
     }
 
     /**
-     * 获取 Demo 场景配置。
+     * 获取 Demo 场景配置
+     *
+     * 执行顺序：
+     * 1. 检查Demo 场景编码不能为空
+     * 2. 构建 Demo 场景白名单
+     *
+     * @param req 数据表清理请求
+     * @return 指定演示场景的配置
      */
     private ScriptDemoSceneDto requireDemoScene(ScriptToolReq req) {
         if (!StringUtils.hasText(req.getSceneCode())) {
@@ -748,7 +1013,15 @@ public class ScriptToolService {
     }
 
     /**
-     * 构建脚本执行结果。
+     * 构建脚本执行结果
+     *
+     * 执行顺序：
+     * 1. 依次设置任务代码、任务名称、当前用户 ID、当前用户名称等字段
+     *
+     * @param taskCode 待执行的任务编码
+     * @param taskName 任务显示名称
+     * @param req 数据表清理请求
+     * @return 脚本任务的执行结果
      */
     private ScriptExecuteResultDto buildExecuteResult(String taskCode, String taskName, ScriptToolReq req) {
         ScriptExecuteResultDto result = new ScriptExecuteResultDto();
@@ -762,7 +1035,12 @@ public class ScriptToolService {
     }
 
     /**
-     * 回填脚本执行结束信息。
+     * 回填脚本执行结束信息
+     *
+     * 执行顺序：
+     * 1. 记录当前时间作为结束时间，用结束时间减去开始时间得到总耗时
+     *
+     * @param result 本次操作的结果对象
      */
     private void fillExecuteResultEnd(ScriptExecuteResultDto result) {
         result.setEndTime(new Date());
@@ -770,7 +1048,10 @@ public class ScriptToolService {
     }
 
     /**
-     * 校验自定义清空表请求。
+     * 校验自定义清空表请求
+     *
+     * 执行顺序：
+     * 1. 构建可清空表白名单索引
      *
      * @param req 数据表清理请求
      * @param expectedConfirmText 预期的确认文本
@@ -792,7 +1073,15 @@ public class ScriptToolService {
     }
 
     /**
-     * 执行具体任务。
+     * 执行具体任务
+     *
+     * 执行顺序：
+     * 1. 债券或全库初始化任务按建表或 Demo 类型执行对应脚本，公共脚本先于基金和股票专属脚本
+     * 2. 主库初始化和外部导入任务分别执行各自的建表或 Demo 脚本
+     * 3. 基金和股票初始化各自执行专属脚本，股票清空任务仅清理股票调库数据
+     * 4. AIS 初始化执行 AIS 分析库和 Wind 数据库对应的建表或 Demo 脚本
+     * 5. 重置主库时先执行主库建表再执行 Demo，清空调库任务则只清理调库运行数据
+     * 6. 未识别的任务编码提示不支持
      *
      * @param taskCode 待执行的任务编码
      * @param executedItems 已执行脚本的记录列表
@@ -879,7 +1168,10 @@ public class ScriptToolService {
     }
 
     /**
-     * 执行 SQL 文件列表。
+     * 执行 SQL 文件列表
+     *
+     * 执行顺序：
+     * 1. 解析 SQL 文件目录
      *
      * @param fileNames 按执行顺序排列的脚本文件名
      * @param executedItems 已执行脚本的记录列表
@@ -898,6 +1190,7 @@ public class ScriptToolService {
                     // 拆分 SQL 文件语句
                     List<String> statements = splitSqlStatements(sqlText);
                     for (String sql : statements) {
+                        // 判断语句是否需要执行
                         if (isExecutableStatement(sql)) {
                             stmt.execute(sql);
                         }
@@ -911,18 +1204,35 @@ public class ScriptToolService {
         }
     }
 
-    /** 仅解除股票日志附件关联，保留公共报告与物理文件。 */
+    /**
+     * 仅解除股票日志附件关联，保留公共报告与物理文件
+     *
+     * 执行顺序：
+     * 1. 删除关联股票调库日志的附件记录，再把本次清理项写入执行结果
+     *
+     * @param stmt 语句
+     * @param executedItems 已执行脚本的记录列表
+     */
     private void deleteStockAdjustAttachmentBindings(Statement stmt, List<String> executedItems) throws Exception {
         stmt.execute("DELETE FROM `znty_rrs`.`sys_attachment` WHERE `table_name` = 'ip_adjust_log_stock'");
         executedItems.add("sys_attachment(table_name=ip_adjust_log_stock)");
     }
 
-    /** 独立清空股票调库运行表。 */
+    /**
+     * 独立清空股票调库运行表
+     *
+     * 执行顺序：
+     * 1. 仅解除股票日志附件关联，保留公共报告与物理文件
+     * 2. 股票运行态表，不含公共附件、报告或其他资产运行表
+     *
+     * @param executedItems 已执行脚本的记录列表
+     */
     private void clearStockAdjustFlowData(List<String> executedItems) throws Exception {
         try (Connection conn = dataSource.getConnection(); Statement stmt = conn.createStatement()) {
             stmt.execute("USE `znty_rrs`");
             // 在日志 ID 被复用前解除旧附件关联
             deleteStockAdjustAttachmentBindings(stmt, executedItems);
+            // 股票运行态表，不含公共附件、报告或其他资产运行表
             for (String table : queryStockAdjustFlowRuntimeTables()) {
                 stmt.execute("TRUNCATE TABLE `" + table + "`");
                 executedItems.add(table);
@@ -931,7 +1241,12 @@ public class ScriptToolService {
     }
 
     /**
-     * 清空调库运行态数据。
+     * 清空调库运行态数据
+     *
+     * 执行顺序：
+     * 1. 查询调库运行态清空表
+     *
+     * @param executedItems 已执行脚本的记录列表
      */
     private void clearAdjustFlowData(List<String> executedItems) throws Exception {
         // 查询调库运行态清空表
@@ -946,7 +1261,14 @@ public class ScriptToolService {
     }
 
     /**
-     * 清空选中的白名单表。
+     * 清空选中的白名单表
+     *
+     * 执行顺序：
+     * 1. 构建可清空表白名单索引
+     * 2. 仅解除股票日志附件关联，保留公共报告与物理文件
+     *
+     * @param tableKeys 文本列表
+     * @param executedItems 已执行脚本的记录列表
      */
     private void clearSelectedTables(List<String> tableKeys, List<String> executedItems) throws Exception {
         Set<String> selectedKeySet = new HashSet<>(tableKeys);
@@ -970,7 +1292,15 @@ public class ScriptToolService {
     }
 
     /**
-     * 执行选中表对应的 Demo 数据语句。
+     * 执行选中表对应的 Demo 数据语句
+     *
+     * 执行顺序：
+     * 1. 解析 SQL 文件目录
+     * 2. 查询 Demo 数据脚本执行顺序
+     * 3. 执行 Demo 文件中命中选中表的语句
+     *
+     * @param tableKeys 文本列表
+     * @param executedItems 已执行脚本的记录列表
      */
     private void executeSelectedDemoData(List<String> tableKeys, List<String> executedItems) throws Exception {
         Set<String> selectedKeySet = new HashSet<>(tableKeys);
@@ -978,6 +1308,7 @@ public class ScriptToolService {
         File sqlDir = resolveSqlDir();
         try (Connection conn = dataSource.getConnection(); Statement stmt = conn.createStatement()) {
             try {
+                // 查询 Demo 数据脚本执行顺序
                 for (String fileName : queryDemoFiles()) {
                     File sqlFile = new File(sqlDir, fileName);
                     if (!sqlFile.exists()) {
@@ -995,7 +1326,17 @@ public class ScriptToolService {
     }
 
     /**
-     * 执行 Demo 文件中命中选中表的语句。
+     * 执行 Demo 文件中命中选中表的语句
+     *
+     * 执行顺序：
+     * 1. 逐条清理脚本语句，并根据 USE 语句维护当前库
+     * 2. 只执行命中所选表的数据语句，记录实际处理的表
+     *
+     * @param stmt 语句
+     * @param statements 文本列表
+     * @param fileName 待识别的脚本文件名或相对路径
+     * @param selectedKeySet 选中标识集合
+     * @param executedItems 已执行脚本的记录列表
      */
     private void executeSelectedDemoStatements(Statement stmt, List<String> statements, String fileName,
                                                Set<String> selectedKeySet, List<String> executedItems) throws Exception {
@@ -1028,7 +1369,13 @@ public class ScriptToolService {
     }
 
     /**
-     * 提取 USE 语句中的数据库名。
+     * 提取 USE 语句中的数据库名
+     *
+     * 执行顺序：
+     * 1. 对去掉首尾空白的 SQL 匹配 USE 语法，命中时提取对应库名
+     *
+     * @param sql 待处理的 SQL 语句
+     * @return USE 语句中的数据库名，语句不匹配时返回 null
      */
     private String extractUseDatabase(String sql) {
         Matcher matcher = USE_DATABASE_PATTERN.matcher(sql.trim());
@@ -1039,7 +1386,15 @@ public class ScriptToolService {
     }
 
     /**
-     * 提取数据操作语句目标表 key。
+     * 提取数据操作语句目标表 key
+     *
+     * 执行顺序：
+     * 1. 解析 SQL 数据操作的目标表，语句无法匹配时返回空值
+     * 2. 缺少显式库名时使用当前库，再拼成库名和表名
+     *
+     * @param sql 待处理的 SQL 语句
+     * @param currentDatabase 当前数据库
+     * @return 数据库名和表名拼成的标识，语句不匹配时返回 null
      */
     private String extractStatementTableKey(String sql, String currentDatabase) {
         Matcher matcher = TABLE_STATEMENT_PATTERN.matcher(sql.trim());
@@ -1052,7 +1407,13 @@ public class ScriptToolService {
     }
 
     /**
-     * 解析 SQL 文件目录。
+     * 解析 SQL 文件目录
+     *
+     * 执行顺序：
+     * 1. 优先解析配置的 SQL 路径，相对路径按工作目录查找
+     * 2. 确认最终路径存在且为目录后返回
+     *
+     * @return 文件
      */
     private File resolveSqlDir() {
         File dir = new File(sqlPath);
@@ -1069,7 +1430,14 @@ public class ScriptToolService {
     }
 
     /**
-     * 拆分 SQL 语句，忽略字符串内部分号。
+     * 拆分 SQL 语句，忽略字符串内部分号
+     *
+     * 执行顺序：
+     * 1. 逐字符识别字符串引号和转义，只在字符串外用分号拆分
+     * 2. 去掉每段首尾空白，收录末尾尚未入列的非空语句
+     *
+     * @param sqlText SQL文本
+     * @return SQL 语句，忽略字符串内部分号列表
      */
     private List<String> splitSqlStatements(String sqlText) {
         List<String> statements = new ArrayList<>();
@@ -1110,7 +1478,14 @@ public class ScriptToolService {
     }
 
     /**
-     * 判断语句是否需要执行。
+     * 判断语句是否需要执行
+     *
+     * 执行顺序：
+     * 1. SQL为空时返回false
+     * 2. 清理 SQL 注释后判断是否仍有可执行内容
+     *
+     * @param sql 待处理的 SQL 语句
+     * @return true=语句清理后可执行，false=语句无需执行
      */
     private boolean isExecutableStatement(String sql) {
         if (!StringUtils.hasText(sql)) {
@@ -1121,7 +1496,14 @@ public class ScriptToolService {
     }
 
     /**
-     * 清理 SQL 注释并返回可匹配语句。
+     * 清理 SQL 注释并返回可匹配语句
+     *
+     * 执行顺序：
+     * 1. 先移除跨行或行内块注释，再按行去掉整行双横线注释和空行
+     * 2. 拼回用于匹配和执行的 SQL 文本
+     *
+     * @param sql 待处理的 SQL 语句
+     * @return 移除注释和空白后的待匹配 SQL
      */
     private String normalizeExecutableSql(String sql) {
         String cleaned = sql.replaceAll("(?s)/\\*.*?\\*/", "");
@@ -1137,20 +1519,34 @@ public class ScriptToolService {
     }
 
     /**
-     * 构建脚本文件信息。
+     * 构建脚本文件信息
+     *
+     * 执行顺序：
+     * 1. 写入脚本名称、类型、执行顺序和所属模块
+     * 2. 读取脚本文件状态，文件存在时统计 SQL 语句和涉及的表
+     *
+     * @param sqlDir 文件
+     * @param fileName 待识别的脚本文件名或相对路径
+     * @param scriptType 建表或演示脚本类型
+     * @param sortOrder 审批步骤排序值
+     * @return 脚本文件
      */
     private ScriptFileDto buildScriptFile(File sqlDir, String fileName, String scriptType, int sortOrder) {
+        // 1. 写入脚本名称、类型、执行顺序和所属模块
         ScriptFileDto dto = new ScriptFileDto();
         dto.setFileName(fileName);
         dto.setScriptType(scriptType);
         dto.setSortOrder(sortOrder);
+        // 解析脚本所属模块编码
         dto.setModuleCode(resolveModuleCode(fileName));
+        // 解析脚本所属模块名称
         dto.setModuleName(resolveModuleName(fileName));
         dto.setCreateCount(0);
         dto.setTruncateCount(0);
         dto.setInsertCount(0);
         dto.setAffectedTables(new ArrayList<String>());
 
+        // 2. 读取脚本文件状态，文件存在时统计 SQL 语句和涉及的表
         File sqlFile = new File(sqlDir, fileName);
         dto.setExists(sqlFile.exists());
         dto.setFileSize(sqlFile.exists() ? sqlFile.length() : 0L);
@@ -1172,7 +1568,14 @@ public class ScriptToolService {
     }
 
     /**
-     * 回填脚本语句统计信息。
+     * 回填脚本语句统计信息
+     *
+     * 执行顺序：
+     * 1. 逐条识别可执行的建表、清空和插入语句，统计各类语句数量
+     * 2. 汇总这些语句涉及的表并回填脚本统计
+     *
+     * @param dto 待回填或返回的数据对象
+     * @param statements 文本列表
      */
     private void fillScriptFileStatementInfo(ScriptFileDto dto, List<String> statements) {
         Set<String> tableSet = new LinkedHashSet<>();
@@ -1180,9 +1583,11 @@ public class ScriptToolService {
         int truncateCount = 0;
         int insertCount = 0;
         for (String sql : statements) {
+            // 判断语句是否需要执行
             if (!isExecutableStatement(sql)) {
                 continue;
             }
+            // 清理 SQL 注释并返回可匹配语句
             String matchSql = normalizeExecutableSql(sql);
             Matcher createMatcher = CREATE_TABLE_PATTERN.matcher(matchSql);
             if (createMatcher.matches()) {
@@ -1207,19 +1612,29 @@ public class ScriptToolService {
     }
 
     /**
-     * 追加数据库健康检查项。
+     * 追加数据库健康检查项
+     *
+     * 执行顺序：
+     * 1. 检查项目使用的三个数据库：主库、AIS 分析库、AIS ODS
+     * 2. 复用可清空表白名单检查全部项目表
+     *
+     * @param conn 本次操作使用的数据库连接
+     * @param check 校验
      */
     private void appendDatabaseHealthItems(Connection conn, ScriptHealthCheckDto check) {
-        // 检查项目使用的三个数据库：主库、AIS 分析库、AIS ODS
+        // 1. 检查项目使用的三个数据库：主库、AIS 分析库、AIS ODS
         appendDatabaseItem(conn, check.getItems(), "znty_rrs");
+        // 追加数据库存在性检查项
         appendDatabaseItem(conn, check.getItems(), "ais_inv_analysis");
+        // 追加数据库存在性检查项
         appendDatabaseItem(conn, check.getItems(), "ais_inv_ods");
 
         int existingCount = 0;
         int emptyCount = 0;
         int nonEmptyCount = 0;
-        // 复用可清空表白名单检查全部项目表
+        // 2. 复用可清空表白名单检查全部项目表
         for (ScriptTableDto table : queryClearTableMap().values()) {
+            // 追加表存在性和数据量检查项
             int tableState = appendTableItem(conn, check.getItems(), table.getDatabaseName(), table.getTableName());
             if (tableState >= 0) {
                 existingCount++;
@@ -1238,7 +1653,14 @@ public class ScriptToolService {
     }
 
     /**
-     * 追加数据库存在性检查项。
+     * 追加数据库存在性检查项
+     *
+     * 执行顺序：
+     * 1. 构建健康检查项
+     *
+     * @param conn 本次操作使用的数据库连接
+     * @param items 明细列表
+     * @param databaseName 所属数据库名称
      */
     private void appendDatabaseItem(Connection conn, List<ScriptHealthItemDto> items, String databaseName) {
         try (Statement stmt = conn.createStatement();
@@ -1247,31 +1669,45 @@ public class ScriptToolService {
                 String charset = rs.getString(1);
                 String collation = rs.getString(2);
                 String status = "utf8mb4".equalsIgnoreCase(charset) && "utf8mb4_0900_ai_ci".equalsIgnoreCase(collation) ? STATUS_SUCCESS : STATUS_WARNING;
+                // 构建健康检查项
                 items.add(buildHealthItem("database-" + databaseName, "数据库 " + databaseName, status,
                         charset + " / " + collation, "utf8mb4 / utf8mb4_0900_ai_ci", "数据库存在"));
             } else {
+                // 构建健康检查项
                 items.add(buildHealthItem("database-" + databaseName, "数据库 " + databaseName, STATUS_FAILED,
                         "不存在", "存在", "数据库不存在，请先执行建库建表脚本"));
             }
         } catch (Exception e) {
+            // 构建健康检查项
             items.add(buildHealthItem("database-" + databaseName, "数据库 " + databaseName, STATUS_FAILED,
                     "", "可查询", e.getMessage()));
         }
     }
 
     /**
-     * 追加表存在性和数据量检查项。
+     * 追加表存在性和数据量检查项
+     *
+     * 执行顺序：
+     * 1. 构建健康检查项
+     *
+     * @param conn 本次操作使用的数据库连接
+     * @param items 明细列表
+     * @param databaseName 所属数据库名称
+     * @param tableName 表名
+     * @return 表明细
      */
     private int appendTableItem(Connection conn, List<ScriptHealthItemDto> items, String databaseName, String tableName) {
         String tableKey = databaseName + "." + tableName;
         try (Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = '" + databaseName + "' AND TABLE_NAME = '" + tableName + "'")) {
             if (!rs.next() || rs.getLong(1) == 0L) {
+                // 构建健康检查项
                 items.add(buildHealthItem("table-" + tableKey, "项目表 " + tableKey, STATUS_FAILED,
                         "不存在", "存在", "项目表不存在"));
                 return -1;
             }
         } catch (Exception e) {
+            // 构建健康检查项
             items.add(buildHealthItem("table-" + tableKey, "项目表 " + tableKey, STATUS_FAILED,
                     "", "可查询", e.getMessage()));
             return -1;
@@ -1281,10 +1717,12 @@ public class ScriptToolService {
              ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM `" + databaseName + "`.`" + tableName + "`")) {
             long count = rs.next() ? rs.getLong(1) : 0L;
             String status = count > 0L ? STATUS_SUCCESS : STATUS_WARNING;
+            // 构建健康检查项
             items.add(buildHealthItem("table-" + tableKey, "项目表 " + tableKey, status,
                     String.valueOf(count), "大于等于 0", count > 0L ? "表存在且有数据" : "表存在但暂无数据"));
             return count > 0L ? 1 : 0;
         } catch (Exception e) {
+            // 构建健康检查项
             items.add(buildHealthItem("table-" + tableKey, "项目表 " + tableKey, STATUS_FAILED,
                     "", "可统计", e.getMessage()));
             return -1;
@@ -1292,7 +1730,18 @@ public class ScriptToolService {
     }
 
     /**
-     * 构建健康检查项。
+     * 构建健康检查项
+     *
+     * 执行顺序：
+     * 1. 依次设置明细代码、明细名称、状态、当前值等字段
+     *
+     * @param itemCode 明细代码
+     * @param itemName 明细名称
+     * @param status 审核状态
+     * @param currentValue 当前值
+     * @param expectedValue 预期值
+     * @param message 返回给调用方的处理信息
+     * @return 本项健康检查的结果
      */
     private ScriptHealthItemDto buildHealthItem(String itemCode, String itemName, String status,
                                                 String currentValue, String expectedValue, String message) {
@@ -1307,7 +1756,14 @@ public class ScriptToolService {
     }
 
     /**
-     * 计算健康检查整体状态。
+     * 计算健康检查整体状态
+     *
+     * 执行顺序：
+     * 1. 检查每个子项的状态，存在失败时直接返回整体失败
+     * 2. 其余结果中有警告则标为警告，全部通过时标为成功
+     *
+     * @param items 明细列表
+     * @return 健康检查整体状态
      */
     private String resolveHealthStatus(List<ScriptHealthItemDto> items) {
         boolean hasWarning = false;
@@ -1323,11 +1779,19 @@ public class ScriptToolService {
     }
 
     /**
-     * 解析全部建表脚本中的期望表结构。
+     * 解析全部建表脚本中的期望表结构
+     *
+     * 执行顺序：
+     * 1. 读取 SQL 脚本目录
+     * 2. 按执行顺序读取各建表脚本并整理预期表结构
+     *
+     * @return 按库表标识索引的脚本预期表结构
      */
     private Map<String, ExpectedSchemaTable> queryExpectedSchemaTables() throws Exception {
         Map<String, ExpectedSchemaTable> tables = new LinkedHashMap<>();
+        // 1. 读取 SQL 脚本目录
         File sqlDir = resolveSqlDir();
+        // 2. 按执行顺序读取各建表脚本并整理预期表结构
         for (String fileName : querySchemaFiles()) {
             File sqlFile = new File(sqlDir, fileName);
             if (!sqlFile.exists()) {
@@ -1336,7 +1800,9 @@ public class ScriptToolService {
             String databaseName = fileName.startsWith("ais_inv_analysis") ? "ais_inv_analysis"
                     : fileName.startsWith("ais_inv_ods") ? "ais_inv_ods" : "znty_rrs";
             String sqlText = new String(Files.readAllBytes(sqlFile.toPath()), StandardCharsets.UTF_8);
+            // 拆分 SQL 语句，忽略字符串内部分号
             for (String statement : splitSqlStatements(sqlText)) {
+                // 清理 SQL 注释并返回可匹配语句
                 String sql = normalizeExecutableSql(statement);
                 Matcher matcher = CREATE_TABLE_DETAIL_PATTERN.matcher(sql);
                 if (matcher.matches()) {
@@ -1350,7 +1816,15 @@ public class ScriptToolService {
     }
 
     /**
-     * 解析单张期望表结构。
+     * 解析单张期望表结构
+     *
+     * 执行顺序：
+     * 1. 按顶层逗号拆分字段和索引定义
+     * 2. 解析单张期望表结构
+     *
+     * @param databaseName 所属数据库名称
+     * @param matcher 已定位到建表语句的正则匹配结果
+     * @return 从建表脚本提取的预期表结构
      */
     private ExpectedSchemaTable parseExpectedSchemaTable(String databaseName, Matcher matcher) {
         ExpectedSchemaTable table = new ExpectedSchemaTable();
@@ -1365,9 +1839,11 @@ public class ScriptToolService {
 
         // 按顶层逗号拆分字段和索引定义
         for (String definition : splitTopLevelDefinitions(matcher.group(2))) {
+            // 清理 SQL 注释并返回可匹配语句
             String normalized = normalizeExecutableSql(definition).trim();
             Matcher columnMatcher = COLUMN_DEFINITION_PATTERN.matcher(normalized);
             if (columnMatcher.matches()) {
+                // 标准化字段类型
                 String type = normalizeColumnType(columnMatcher.group(2));
                 String attributes = columnMatcher.group(3).toUpperCase();
                 String signature = type + "|" + (!attributes.contains("NOT NULL") ? "YES" : "NO")
@@ -1381,6 +1857,7 @@ public class ScriptToolService {
                 String indexName = prefix.startsWith("PRIMARY") ? "PRIMARY"
                         : (StringUtils.hasText(indexMatcher.group(2)) ? indexMatcher.group(2) : indexMatcher.group(3));
                 String indexType = prefix.startsWith("PRIMARY") ? "PRIMARY" : (prefix.startsWith("UNIQUE") ? "UNIQUE" : "INDEX");
+                // 标准化索引字段
                 table.indexes.put(indexName, indexType + ":" + normalizeIndexColumns(indexMatcher.group(4)));
             }
         }
@@ -1388,7 +1865,14 @@ public class ScriptToolService {
     }
 
     /**
-     * 拆分 CREATE TABLE 内的顶层定义。
+     * 拆分 CREATE TABLE 内的顶层定义
+     *
+     * 执行顺序：
+     * 1. 逐字符跟踪单引号与括号层级，只在最外层按逗号拆分定义
+     * 2. 加入末尾非空的字段或约束定义
+     *
+     * @param body 建表语句括号内的字段、索引和约束定义
+     * @return CREATE TABLE 内的顶层定义列表
      */
     private List<String> splitTopLevelDefinitions(String body) {
         List<String> definitions = new ArrayList<>();
@@ -1422,30 +1906,55 @@ public class ScriptToolService {
     }
 
     /**
-     * 比较期望结构与实际数据库结构。
+     * 比较期望结构与实际数据库结构
+     *
+     * 执行顺序：
+     * 1. 逐项判断表是否存在
+     * 2. 构建只读检查项
+     *
+     * @param conn 本次操作使用的数据库连接
+     * @param expectedTables 按文本索引的从建表脚本提取的预期表结构
+     * @param items 明细列表
      */
     private void appendSchemaDiffItems(Connection conn, Map<String, ExpectedSchemaTable> expectedTables,
                                        List<ScriptInspectionItemDto> items) throws Exception {
         for (ExpectedSchemaTable expected : expectedTables.values()) {
+            // 判断表是否存在
             if (!queryTableExists(conn, expected.databaseName, expected.tableName)) {
+                // 构建只读检查项
                 items.add(buildInspectionItem("schema-" + expected.tableKey, "表结构", expected.tableKey, "数据库结构一致性",
+                        // 构建期望表结构摘要
                         STATUS_FAILED, "表不存在", buildExpectedTableSummary(expected), 1L,
                         "建表脚本中存在该表，但实际数据库缺失", "执行对应 schema 脚本或补建该表"));
                 continue;
             }
             // 查询实际字段、索引和表属性
             Map<String, String> actualColumns = queryActualColumns(conn, expected.databaseName, expected.tableName);
+            // 查询实际索引结构
             Map<String, String> actualIndexes = queryActualIndexes(conn, expected.databaseName, expected.tableName);
+            // 查询实际表属性
             Map<String, String> actualOptions = queryActualTableOptions(conn, expected.databaseName, expected.tableName);
+            // 比较单张表结构
             items.add(compareSchemaTable(expected, actualColumns, actualIndexes, actualOptions));
         }
     }
 
     /**
-     * 比较单张表结构。
+     * 比较单张表结构
+     *
+     * 执行顺序：
+     * 1. 比较字段、索引及表选项，分别记录错误和提醒
+     * 2. 确定检查状态、整理差异摘要，并返回只读检查项
+     *
+     * @param expected 建表脚本定义的预期表结构
+     * @param actualColumns 按文本索引的文本
+     * @param actualIndexes 按文本索引的文本
+     * @param actualOptions 按文本索引的实际选项
+     * @return 单项检查的状态及差异
      */
     private ScriptInspectionItemDto compareSchemaTable(ExpectedSchemaTable expected, Map<String, String> actualColumns,
                                                         Map<String, String> actualIndexes, Map<String, String> actualOptions) {
+        // 1. 比较字段、索引及表选项，分别记录错误和提醒
         List<String> seriousDiffs = new ArrayList<>();
         List<String> warningDiffs = new ArrayList<>();
         for (Map.Entry<String, String> column : expected.columns.entrySet()) {
@@ -1479,17 +1988,29 @@ public class ScriptToolService {
             warningDiffs.add("排序规则不一致（实际 " + actualOptions.get("collation") + "，脚本 " + expected.collation + "）");
         }
 
+        // 2. 确定检查状态、整理差异摘要，并返回只读检查项
         String status = !seriousDiffs.isEmpty() ? STATUS_FAILED : (!warningDiffs.isEmpty() ? STATUS_WARNING : STATUS_SUCCESS);
         List<String> allDiffs = new ArrayList<>(seriousDiffs);
         allDiffs.addAll(warningDiffs);
+        // 限制差异说明长度
         String message = allDiffs.isEmpty() ? "表结构与建表脚本一致" : joinLimited(allDiffs, 8);
+        // 构建只读检查项
         return buildInspectionItem("schema-" + expected.tableKey, "表结构", expected.tableKey, "数据库结构一致性",
+                // 构建实际表结构摘要，再构建期望表结构摘要
                 status, buildActualTableSummary(actualColumns, actualIndexes, actualOptions), buildExpectedTableSummary(expected),
                 (long) allDiffs.size(), message, allDiffs.isEmpty() ? "" : "核对差异后执行迁移脚本或人工修正结构");
     }
 
     /**
-     * 查询实际字段结构。
+     * 查询实际字段结构
+     *
+     * 执行顺序：
+     * 1. 读取实际库表中的字段定义，按列名建立索引
+     *
+     * @param conn 本次操作使用的数据库连接
+     * @param databaseName 所属数据库名称
+     * @param tableName 表名
+     * @return 按列名索引的实际字段信息
      */
     private Map<String, String> queryActualColumns(Connection conn, String databaseName, String tableName) throws Exception {
         Map<String, String> columns = new LinkedHashMap<>();
@@ -1497,6 +2018,7 @@ public class ScriptToolService {
                 + " WHERE TABLE_SCHEMA = '" + databaseName + "' AND TABLE_NAME = '" + tableName + "' ORDER BY ORDINAL_POSITION";
         try (Statement stmt = conn.createStatement(); ResultSet rs = stmt.executeQuery(sql)) {
             while (rs.next()) {
+                // 标准化字段类型
                 String signature = normalizeColumnType(rs.getString(2)) + "|" + rs.getString(3).toUpperCase()
                         + "|" + (rs.getString(4) != null && rs.getString(4).toLowerCase().contains("auto_increment") ? "auto_increment" : "");
                 columns.put(rs.getString(1).toLowerCase(), signature);
@@ -1506,7 +2028,15 @@ public class ScriptToolService {
     }
 
     /**
-     * 查询实际索引结构。
+     * 查询实际索引结构
+     *
+     * 执行顺序：
+     * 1. 读取实际库表的索引定义，按索引名归并索引列
+     *
+     * @param conn 本次操作使用的数据库连接
+     * @param databaseName 所属数据库名称
+     * @param tableName 表名
+     * @return 按索引名索引的实际索引信息
      */
     private Map<String, String> queryActualIndexes(Connection conn, String databaseName, String tableName) throws Exception {
         Map<String, List<String>> indexColumns = new LinkedHashMap<>();
@@ -1525,13 +2055,23 @@ public class ScriptToolService {
         }
         Map<String, String> indexes = new LinkedHashMap<>();
         for (String indexName : indexColumns.keySet()) {
+            // 拼接字符串列表
             indexes.put(indexName, indexTypes.get(indexName) + ":" + joinStrings(indexColumns.get(indexName), ","));
         }
         return indexes;
     }
 
     /**
-     * 查询实际表属性。
+     * 查询实际表属性
+     *
+     * 执行顺序：
+     * 1. 按库名和表名查询实际引擎及排序规则
+     * 2. 查到记录时填入属性映射，供结构检查比较
+     *
+     * @param conn 本次操作使用的数据库连接
+     * @param databaseName 所属数据库名称
+     * @param tableName 表名
+     * @return 实际表结构中的引擎、字符集和排序规则等选项
      */
     private Map<String, String> queryActualTableOptions(Connection conn, String databaseName, String tableName) throws Exception {
         Map<String, String> options = new LinkedHashMap<>();
@@ -1547,7 +2087,15 @@ public class ScriptToolService {
     }
 
     /**
-     * 判断表是否存在。
+     * 判断表是否存在
+     *
+     * 执行顺序：
+     * 1. 在 information_schema 按库名和表名统计匹配项，有结果且数量大于 0 时判为存在
+     *
+     * @param conn 本次操作使用的数据库连接
+     * @param databaseName 所属数据库名称
+     * @param tableName 表名
+     * @return true=指定库表存在，false=指定库表不存在
      */
     private boolean queryTableExists(Connection conn, String databaseName, String tableName) throws Exception {
         String sql = "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = '" + databaseName
@@ -1558,140 +2106,193 @@ public class ScriptToolService {
     }
 
     /**
-     * 执行单条业务完整性规则。
+     * 执行单条业务完整性规则
+     *
+     * 执行顺序：
+     * 1. 构建只读检查项
+     *
+     * @param conn 本次操作使用的数据库连接
+     * @param rule 规则
+     * @return 单项检查的状态及差异
      */
     private ScriptInspectionItemDto executeIntegrityRule(Connection conn, IntegrityRule rule) {
         try (Statement stmt = conn.createStatement(); ResultSet rs = stmt.executeQuery(rule.sql)) {
             long count = rs.next() ? rs.getLong(1) : 0L;
             String status = count == 0L ? STATUS_SUCCESS : rule.issueStatus;
+            // 构建只读检查项
             return buildInspectionItem(rule.code, rule.category, rule.objectName, rule.name, status,
                     String.valueOf(count), "0", count, count == 0L ? "未发现异常数据" : rule.message,
                     count == 0L ? "" : rule.suggestion);
         } catch (Exception e) {
+            // 构建只读检查项
             return buildInspectionItem(rule.code, rule.category, rule.objectName, rule.name, STATUS_FAILED,
                     "检查失败", "0", 1L, e.getMessage(), "先在环境检查和结构差异检查中确认相关表字段存在");
         }
     }
 
     /**
-     * 查询业务数据完整性规则。
+     * 查询业务数据完整性规则
+     *
+     * 执行顺序：
+     * 1. 构建业务完整性规则
+     *
+     * @return 本项数据完整性规则列表
      */
     private List<IntegrityRule> queryIntegrityRules() {
         List<IntegrityRule> rules = new ArrayList<>();
+        // 构建业务完整性规则
         rules.add(buildIntegrityRule("adjust-step-log", "调库流程", "ip_adjust_step → ip_adjust_log", "审批步骤关联申请",
                 "SELECT COUNT(*) FROM znty_rrs.ip_adjust_step s LEFT JOIN znty_rrs.ip_adjust_log l ON l.id = s.adjust_log_id WHERE l.id IS NULL",
                 STATUS_FAILED, "存在找不到调库申请的审批步骤", "清理孤儿步骤或补回对应调库申请"));
+        // 构建业务完整性规则
         rules.add(buildIntegrityRule("adjust-step-batch", "调库流程", "ip_adjust_step.adjust_batch_no", "步骤批次号一致性",
                 "SELECT COUNT(*) FROM znty_rrs.ip_adjust_step s JOIN znty_rrs.ip_adjust_log l ON l.id = s.adjust_log_id WHERE COALESCE(s.adjust_batch_no, '') != COALESCE(l.adjust_batch_no, '')",
                 STATUS_FAILED, "步骤批次号与申请批次号不一致", "按调库申请批次号修正步骤记录"));
+        // 构建业务完整性规则
         rules.add(buildIntegrityRule("pool-status-log", "调库流程", "ip_pool_status → ip_adjust_log", "证券池状态来源申请",
                 "SELECT COUNT(*) FROM znty_rrs.ip_pool_status p LEFT JOIN znty_rrs.ip_adjust_log l ON l.id = p.adjust_log_id WHERE l.id IS NULL",
                 STATUS_FAILED, "存在找不到来源申请的证券池状态", "清理孤儿池状态或补回来源申请"));
+        // 构建业务完整性规则
         rules.add(buildIntegrityRule("crmw-status-log", "调库流程", "ip_pool_status_crmw → ip_adjust_log", "CRMW 状态来源申请",
                 "SELECT COUNT(*) FROM znty_rrs.ip_pool_status_crmw p LEFT JOIN znty_rrs.ip_adjust_log l ON l.id = p.adjust_log_id WHERE l.id IS NULL",
                 STATUS_FAILED, "存在找不到来源申请的 CRMW 池状态", "清理孤儿池状态或补回来源申请"));
+        // 构建业务完整性规则
         rules.add(buildIntegrityRule("adjust-snapshot-log", "调库流程", "ip_adjust_security_snapshot → ip_adjust_log", "证券调库快照来源申请",
                 "SELECT COUNT(*) FROM znty_rrs.ip_adjust_security_snapshot s LEFT JOIN znty_rrs.ip_adjust_log l ON l.id = s.adjust_log_id WHERE s.adjust_log_id IS NOT NULL AND l.id IS NULL",
                 STATUS_FAILED, "存在找不到来源申请的证券调库信息快照", "清理孤儿快照或补回对应调库申请"));
+        // 构建业务完整性规则
         rules.add(buildIntegrityRule("crmw-snapshot-log", "调库流程", "ip_adjust_security_snapshot_crmw → ip_adjust_log", "CRMW 调库快照来源申请",
                 "SELECT COUNT(*) FROM znty_rrs.ip_adjust_security_snapshot_crmw s LEFT JOIN znty_rrs.ip_adjust_log l ON l.id = s.adjust_log_id WHERE s.adjust_log_id IS NOT NULL AND l.id IS NULL",
                 STATUS_FAILED, "存在找不到来源申请的 CRMW 调库信息快照", "清理孤儿快照或补回对应调库申请"));
+        // 构建业务完整性规则
         rules.add(buildIntegrityRule("pool-status-audit", "调库流程", "ip_pool_status.audit_status", "证券池落地状态合法性",
                 "SELECT COUNT(*) FROM znty_rrs.ip_pool_status WHERE COALESCE(is_deleted, 0) = 0 AND audit_status != '20'",
                 STATUS_FAILED, "当前池状态中存在非审批通过数据", "核对落池逻辑，仅保留 audit_status=20 的有效状态"));
+        // 构建业务完整性规则
         rules.add(buildIntegrityRule("crmw-status-audit", "调库流程", "ip_pool_status_crmw.audit_status", "CRMW 落地状态合法性",
                 "SELECT COUNT(*) FROM znty_rrs.ip_pool_status_crmw WHERE COALESCE(is_deleted, 0) = 0 AND audit_status != '20'",
                 STATUS_FAILED, "CRMW 当前池状态中存在非审批通过数据", "核对落池逻辑，仅保留 audit_status=20 的有效状态"));
+        // 构建业务完整性规则
         rules.add(buildIntegrityRule("pool-status-duplicate", "调库流程", "ip_pool_status", "证券池有效状态重复",
                 "SELECT COALESCE(SUM(t.cnt - 1), 0) FROM (SELECT COUNT(*) cnt FROM znty_rrs.ip_pool_status WHERE COALESCE(is_deleted, 0) = 0 GROUP BY security_code, target_pool_id HAVING COUNT(*) > 1) t",
                 STATUS_FAILED, "同一证券在同一投资池存在多条有效状态", "合并重复状态并补充业务唯一性校验"));
+        // 构建业务完整性规则
         rules.add(buildIntegrityRule("pool-status-pool", "投资池", "ip_pool_status → ip_investment_pool", "证券池目标投资池",
                 "SELECT COUNT(*) FROM znty_rrs.ip_pool_status p LEFT JOIN znty_rrs.ip_investment_pool i ON i.id = p.target_pool_id WHERE p.target_pool_id IS NOT NULL AND i.id IS NULL",
                 STATUS_FAILED, "证券池状态引用了不存在的投资池", "修正目标池 ID 或补回投资池配置"));
+        // 构建业务完整性规则
         rules.add(buildIntegrityRule("crmw-status-pool", "投资池", "ip_pool_status_crmw → ip_investment_pool", "CRMW 目标投资池",
                 "SELECT COUNT(*) FROM znty_rrs.ip_pool_status_crmw p LEFT JOIN znty_rrs.ip_investment_pool i ON i.id = p.target_pool_id WHERE p.target_pool_id IS NOT NULL AND i.id IS NULL",
                 STATUS_FAILED, "CRMW 状态引用了不存在的投资池", "修正目标池 ID 或补回投资池配置"));
+        // 构建业务完整性规则
         rules.add(buildIntegrityRule("pool-parent", "投资池", "ip_investment_pool.parent_id", "投资池父子关系",
                 "SELECT COUNT(*) FROM znty_rrs.ip_investment_pool c LEFT JOIN znty_rrs.ip_investment_pool p ON p.id = c.parent_id WHERE c.parent_id IS NOT NULL AND p.id IS NULL",
                 STATUS_FAILED, "存在找不到父级的投资池", "修正 parent_id 或补回父级投资池"));
+        // 构建业务完整性规则
         rules.add(buildIntegrityRule("pool-relation", "投资池", "ip_pool_relation", "投资池关系两端",
                 "SELECT COUNT(*) FROM znty_rrs.ip_pool_relation r LEFT JOIN znty_rrs.ip_investment_pool p1 ON p1.id = r.pool_id LEFT JOIN znty_rrs.ip_investment_pool p2 ON p2.id = r.relation_pool_id WHERE p1.id IS NULL OR p2.id IS NULL",
                 STATUS_FAILED, "投资池关系存在无效端点", "修正关系两端的投资池 ID"));
+        // 构建业务完整性规则
         rules.add(buildIntegrityRule("pool-permission", "投资池", "ip_pool_permission → ip_investment_pool", "投资池权限归属",
                 "SELECT COUNT(*) FROM znty_rrs.ip_pool_permission p LEFT JOIN znty_rrs.ip_investment_pool i ON i.id = p.pool_id WHERE p.pool_id IS NOT NULL AND i.id IS NULL",
                 STATUS_FAILED, "权限配置引用了不存在的投资池", "清理孤儿权限或补回投资池配置"));
+        // 构建业务完整性规则
         rules.add(buildIntegrityRule("pool-permission-handler", "用户权限", "ip_pool_permission.handler_id", "投资池权限处理人",
                 "SELECT COUNT(*) FROM znty_rrs.ip_pool_permission p LEFT JOIN ais_inv_analysis.t_sys_user u ON p.handler_type = 'user' AND u.id = p.handler_id LEFT JOIN ais_inv_analysis.t_sys_role r ON p.handler_type = 'role' AND r.id = p.handler_id WHERE (p.handler_type = 'user' AND u.id IS NULL) OR (p.handler_type = 'role' AND r.id IS NULL)",
                 STATUS_FAILED, "投资池权限引用了不存在的用户或角色", "修正 handler_type/handler_id 或补回用户角色数据"));
+        // 构建业务完整性规则
         rules.add(buildIntegrityRule("pool-auto-rule", "投资池", "ip_pool_auto_rule", "投资池自动规则关联",
                 "SELECT COUNT(*) FROM znty_rrs.ip_pool_auto_rule a LEFT JOIN znty_rrs.ip_investment_pool p ON p.id = a.pool_id LEFT JOIN znty_rrs.sys_scheduled_task t ON t.id = a.rule_id AND IFNULL(t.is_deleted, 0) = 0 WHERE IFNULL(a.is_deleted, 0) = 0 AND (p.id IS NULL OR (a.rule_id IS NOT NULL AND t.id IS NULL) OR (a.task_code IS NOT NULL AND t.id IS NOT NULL AND t.task_code != a.task_code))",
                 STATUS_FAILED, "自动规则引用了不存在的投资池或定时任务", "修正 pool_id/rule_id/task_code 或清理孤儿配置"));
+        // 构建业务完整性规则
         rules.add(buildIntegrityRule("flow-version", "流程配置", "wf_flow_version → wf_flow_definition", "流程版本归属",
                 "SELECT COUNT(*) FROM znty_rrs.wf_flow_version v LEFT JOIN znty_rrs.wf_flow_definition f ON f.id = v.flow_id WHERE v.flow_id IS NOT NULL AND f.id IS NULL",
                 STATUS_FAILED, "流程版本找不到流程定义", "修正 flow_id 或补回流程定义"));
+        // 构建业务完整性规则
         rules.add(buildIntegrityRule("flow-node", "流程配置", "wf_flow_node → wf_flow_version", "流程节点归属",
                 "SELECT COUNT(*) FROM znty_rrs.wf_flow_node n LEFT JOIN znty_rrs.wf_flow_version v ON v.id = n.version_id WHERE n.version_id IS NOT NULL AND v.id IS NULL",
                 STATUS_FAILED, "流程节点找不到流程版本", "清理孤儿节点或补回流程版本"));
+        // 构建业务完整性规则
         rules.add(buildIntegrityRule("approval-config", "流程配置", "wf_node_approval_config → wf_flow_node", "审批节点配置归属",
                 "SELECT COUNT(*) FROM znty_rrs.wf_node_approval_config c LEFT JOIN znty_rrs.wf_flow_node n ON n.id = c.node_id WHERE c.node_id IS NOT NULL AND n.id IS NULL",
                 STATUS_FAILED, "审批配置找不到流程节点", "清理孤儿配置或补回流程节点"));
+        // 构建业务完整性规则
         rules.add(buildIntegrityRule("approval-handler", "流程配置", "wf_node_approval_handler → wf_node_approval_config", "审批处理人配置归属",
                 "SELECT COUNT(*) FROM znty_rrs.wf_node_approval_handler h LEFT JOIN znty_rrs.wf_node_approval_config c ON c.id = h.approval_config_id WHERE h.approval_config_id IS NOT NULL AND c.id IS NULL",
                 STATUS_FAILED, "审批处理人找不到审批节点配置", "清理孤儿处理人或补回审批配置"));
+        // 构建业务完整性规则
         rules.add(buildIntegrityRule("approval-handler-identity", "用户权限", "wf_node_approval_handler.handler_id", "审批处理人身份",
                 "SELECT COUNT(*) FROM znty_rrs.wf_node_approval_handler h LEFT JOIN ais_inv_analysis.t_sys_user u ON h.handler_type = 'user' AND u.id = h.handler_id LEFT JOIN ais_inv_analysis.t_sys_role r ON h.handler_type = 'role' AND r.id = h.handler_id WHERE (h.handler_type = 'user' AND u.id IS NULL) OR (h.handler_type = 'role' AND r.id IS NULL)",
                 STATUS_FAILED, "审批配置引用了不存在的用户或角色", "修正 handler_type/handler_id 或补回用户角色数据"));
+        // 构建业务完整性规则
         rules.add(buildIntegrityRule("auto-config", "流程配置", "wf_node_auto_config → wf_flow_node", "自动节点配置归属",
                 "SELECT COUNT(*) FROM znty_rrs.wf_node_auto_config c LEFT JOIN znty_rrs.wf_flow_node n ON n.id = c.node_id WHERE c.node_id IS NOT NULL AND n.id IS NULL",
                 STATUS_FAILED, "自动节点配置找不到流程节点", "清理孤儿配置或补回流程节点"));
+        // 构建业务完整性规则
         rules.add(buildIntegrityRule("notify-config", "流程配置", "wf_node_notify_config → wf_flow_node", "通知节点配置归属",
                 "SELECT COUNT(*) FROM znty_rrs.wf_node_notify_config c LEFT JOIN znty_rrs.wf_flow_node n ON n.id = c.node_id WHERE c.node_id IS NOT NULL AND n.id IS NULL",
                 STATUS_FAILED, "通知节点配置找不到流程节点", "清理孤儿配置或补回流程节点"));
+        // 构建业务完整性规则
         rules.add(buildIntegrityRule("condition-config", "流程配置", "wf_node_condition_config → wf_flow_node", "条件节点配置归属",
                 "SELECT COUNT(*) FROM znty_rrs.wf_node_condition_config c LEFT JOIN znty_rrs.wf_flow_node n ON n.id = c.node_id WHERE c.node_id IS NOT NULL AND n.id IS NULL",
                 STATUS_FAILED, "条件节点配置找不到流程节点", "清理孤儿配置或补回流程节点"));
+        // 构建业务完整性规则
         rules.add(buildIntegrityRule("flow-edge", "流程配置", "wf_flow_edge → wf_flow_version", "流程连线归属",
                 "SELECT COUNT(*) FROM znty_rrs.wf_flow_edge e LEFT JOIN znty_rrs.wf_flow_version v ON v.id = e.version_id WHERE e.version_id IS NOT NULL AND v.id IS NULL",
                 STATUS_FAILED, "流程连线找不到流程版本", "清理孤儿连线或补回流程版本"));
+        // 构建业务完整性规则
         rules.add(buildIntegrityRule("flow-edge-node", "流程配置", "wf_flow_edge → wf_flow_node", "流程连线两端节点",
                 "SELECT COUNT(*) FROM znty_rrs.wf_flow_edge e LEFT JOIN znty_rrs.wf_flow_node n1 ON n1.id = e.from_node_id LEFT JOIN znty_rrs.wf_flow_node n2 ON n2.id = e.to_node_id WHERE n1.id IS NULL OR n2.id IS NULL",
                 STATUS_FAILED, "流程连线存在无效起始节点或目标节点", "修正连线两端节点 ID 或清理无效连线"));
+        // 构建业务完整性规则
         rules.add(buildIntegrityRule("edge-rule", "流程配置", "wf_edge_cond_rule → wf_flow_edge", "条件规则归属",
                 "SELECT COUNT(*) FROM znty_rrs.wf_edge_cond_rule r LEFT JOIN znty_rrs.wf_flow_edge e ON e.id = r.edge_id WHERE r.edge_id IS NOT NULL AND e.id IS NULL",
                 STATUS_FAILED, "条件规则找不到流程连线", "清理孤儿条件规则或补回流程连线"));
+        // 构建业务完整性规则
         rules.add(buildIntegrityRule("rule-param", "规则配置", "rule_param → rule_definition", "规则参数归属",
                 "SELECT COUNT(*) FROM znty_rrs.rule_param p LEFT JOIN znty_rrs.rule_definition r ON r.id = p.rule_id WHERE p.rule_id IS NOT NULL AND r.id IS NULL",
                 STATUS_FAILED, "规则参数找不到规则定义", "清理孤儿参数或补回规则定义"));
+        // 构建业务完整性规则
         rules.add(buildIntegrityRule("rule-option", "规则配置", "rule_param_option → rule_param", "规则参数选项归属",
                 "SELECT COUNT(*) FROM znty_rrs.rule_param_option o LEFT JOIN znty_rrs.rule_param p ON p.id = o.param_id WHERE o.param_id IS NOT NULL AND p.id IS NULL",
                 STATUS_FAILED, "参数选项找不到规则参数", "清理孤儿选项或补回规则参数"));
+        // 构建业务完整性规则
         rules.add(buildIntegrityRule("preset-option", "规则配置", "rule_preset_option_item → rule_preset_option_set", "预设选项归属",
                 "SELECT COUNT(*) FROM znty_rrs.rule_preset_option_item i LEFT JOIN znty_rrs.rule_preset_option_set s ON s.id = i.set_id WHERE i.set_id IS NOT NULL AND s.id IS NULL",
                 STATUS_FAILED, "预设选项找不到选项集", "清理孤儿选项或补回预设选项集"));
+        // 构建业务完整性规则
         rules.add(buildIntegrityRule("rule-case", "规则配置", "rule_test_case → rule_definition", "规则测试用例归属",
                 "SELECT COUNT(*) FROM znty_rrs.rule_test_case c LEFT JOIN znty_rrs.rule_definition r ON r.id = c.rule_id WHERE c.rule_id IS NOT NULL AND r.id IS NULL",
                 STATUS_FAILED, "测试用例找不到规则定义", "清理孤儿用例或补回规则定义"));
+        // 构建业务完整性规则
         rules.add(buildIntegrityRule("rule-case-param", "规则配置", "rule_test_case_param → rule_test_case", "测试用例参数归属",
                 "SELECT COUNT(*) FROM znty_rrs.rule_test_case_param p LEFT JOIN znty_rrs.rule_test_case c ON c.id = p.case_id WHERE p.case_id IS NOT NULL AND c.id IS NULL",
                 STATUS_FAILED, "测试用例参数找不到测试用例", "清理孤儿参数或补回测试用例"));
+        // 构建业务完整性规则
         rules.add(buildIntegrityRule("rule-run", "规则配置", "rule_test_run", "规则运行记录关联",
                 "SELECT COUNT(*) FROM znty_rrs.rule_test_run x LEFT JOIN znty_rrs.rule_test_case c ON c.id = x.case_id LEFT JOIN znty_rrs.rule_definition r ON r.id = x.rule_id WHERE (x.case_id IS NOT NULL AND c.id IS NULL) OR (x.rule_id IS NOT NULL AND r.id IS NULL)",
                 STATUS_FAILED, "运行记录找不到测试用例或规则定义", "修正 case_id/rule_id 或清理孤儿运行记录"));
+        // 构建业务完整性规则
         rules.add(buildIntegrityRule("rule-run-log", "规则配置", "rule_test_run_log → rule_test_run", "规则运行日志归属",
                 "SELECT COUNT(*) FROM znty_rrs.rule_test_run_log l LEFT JOIN znty_rrs.rule_test_run r ON r.id = l.run_id WHERE l.run_id IS NOT NULL AND r.id IS NULL",
                 STATUS_FAILED, "运行日志找不到运行记录", "清理孤儿日志或补回运行记录"));
+        // 构建业务完整性规则
         rules.add(buildIntegrityRule("grade-rule", "评级规则", "credit_bond_pool_grade_rule", "评级准入规则关联",
                 "SELECT COUNT(*) FROM znty_rrs.credit_bond_pool_grade_rule r LEFT JOIN znty_rrs.credit_bond_term_bucket t ON t.id = r.term_bucket_id LEFT JOIN znty_rrs.credit_bond_inner_rating_grade g ON g.id = r.inner_rating_grade_id LEFT JOIN znty_rrs.ip_investment_pool p ON p.id = r.pool_id WHERE t.id IS NULL OR g.id IS NULL OR p.id IS NULL",
                 STATUS_FAILED, "评级准入规则存在无效期限、评分档或投资池", "修正规则关联 ID 或补回基础配置"));
+        // 构建业务完整性规则
         rules.add(buildIntegrityRule("user-role", "用户权限", "t_sys_user_role", "用户角色关联",
                 "SELECT COUNT(*) FROM ais_inv_analysis.t_sys_user_role ur LEFT JOIN ais_inv_analysis.t_sys_user u ON u.id = ur.user_id LEFT JOIN ais_inv_analysis.t_sys_role r ON r.id = ur.role_id WHERE u.id IS NULL OR r.id IS NULL",
                 STATUS_FAILED, "用户角色关系存在无效用户或角色", "修正 user_id/role_id 或清理孤儿关系"));
+        // 构建业务完整性规则
         rules.add(buildIntegrityRule("company-grade", "主体评级", "t_inv_grade_result → t_inv_company", "主体评级归属",
                 "SELECT COUNT(*) FROM ais_inv_analysis.t_inv_grade_result g LEFT JOIN ais_inv_analysis.t_inv_company c ON c.id = g.company_id WHERE g.company_id IS NOT NULL AND c.id IS NULL",
                 STATUS_FAILED, "评级结果找不到主体", "修正 company_id 或补回主体数据"));
+        // 构建业务完整性规则
         rules.add(buildIntegrityRule("my-security", "个人数据", "my_security_pool → rrs_securityinfo", "我的证券池主数据关联",
                 "SELECT COUNT(*) FROM znty_rrs.my_security_pool m LEFT JOIN znty_rrs.rrs_securityinfo s ON s.wind_code = m.security_code WHERE m.security_code IS NOT NULL AND s.wind_code IS NULL",
                 STATUS_WARNING, "我的证券池中存在找不到主数据的证券", "核对证券代码或同步证券主数据"));
+        // 构建业务完整性规则
         rules.add(buildIntegrityRule("my-security-user", "用户权限", "my_security_pool.user_id", "我的证券池用户归属",
                 "SELECT COUNT(*) FROM znty_rrs.my_security_pool m LEFT JOIN ais_inv_analysis.t_sys_user u ON u.id = m.user_id WHERE m.user_id IS NOT NULL AND u.id IS NULL",
                 STATUS_WARNING, "我的证券池中存在找不到用户的数据", "核对 user_id 或同步用户数据"));
@@ -1699,7 +2300,20 @@ public class ScriptToolService {
     }
 
     /**
-     * 构建业务完整性规则。
+     * 构建业务完整性规则
+     *
+     * 执行顺序：
+     * 1. 保存规则编码、范围、查询语句和命中后要展示的状态及提示
+     *
+     * @param code 证券代码
+     * @param category 用于对完整性规则分组的检查类别
+     * @param objectName 检查对象的展示名称
+     * @param name 待处理的名称
+     * @param sql 待处理的 SQL 语句
+     * @param issueStatus 发现问题时使用的检查状态编码
+     * @param message 返回给调用方的处理信息
+     * @param suggestion 检查发现问题后展示的处理建议
+     * @return 本项数据完整性规则
      */
     private IntegrityRule buildIntegrityRule(String code, String category, String objectName, String name,
                                              String sql, String issueStatus, String message, String suggestion) {
@@ -1716,7 +2330,13 @@ public class ScriptToolService {
     }
 
     /**
-     * 构建只读检查结果。
+     * 构建只读检查结果
+     *
+     * 执行顺序：
+     * 1. 写入本次检查摘要，为后续逐项检查初始化明细列表
+     *
+     * @param summary 汇总
+     * @return 检查项明细及汇总
      */
     private ScriptInspectionDto buildInspectionResult(String summary) {
         ScriptInspectionDto inspection = new ScriptInspectionDto();
@@ -1726,7 +2346,22 @@ public class ScriptToolService {
     }
 
     /**
-     * 构建只读检查项。
+     * 构建只读检查项
+     *
+     * 执行顺序：
+     * 1. 整理检查项的标识、当前值、预期值、问题数量和处理建议
+     *
+     * @param itemCode 明细代码
+     * @param category 检查结果所属类别
+     * @param objectName 本条检查对象的展示名称
+     * @param itemName 明细名称
+     * @param status 审核状态
+     * @param currentValue 当前值
+     * @param expectedValue 预期值
+     * @param issueCount ID
+     * @param message 返回给调用方的处理信息
+     * @param suggestion 本条检查结果展示的处理建议
+     * @return 单项检查的状态及差异
      */
     private ScriptInspectionItemDto buildInspectionItem(String itemCode, String category, String objectName,
                                                          String itemName, String status, String currentValue,
@@ -1747,7 +2382,13 @@ public class ScriptToolService {
     }
 
     /**
-     * 汇总只读检查结果。
+     * 汇总只读检查结果
+     *
+     * 执行顺序：
+     * 1. 统计各检查项的成功、警告、失败及问题数量
+     * 2. 按失败优先、警告其次的顺序设置检查汇总状态
+     *
+     * @param inspection 待汇总结果的只读检查对象
      */
     private void fillInspectionSummary(ScriptInspectionDto inspection) {
         int successCount = 0;
@@ -1775,44 +2416,82 @@ public class ScriptToolService {
     }
 
     /**
-     * 构建期望表结构摘要。
+     * 构建期望表结构摘要
+     *
+     * 执行顺序：
+     * 1. 从建表定义取字段数、索引数、引擎和排序规则，拼成摘要
+     *
+     * @param table 从建表脚本提取的预期表结构
+     * @return 预期表汇总
      */
     private String buildExpectedTableSummary(ExpectedSchemaTable table) {
         return table.columns.size() + " 字段 / " + table.indexes.size() + " 索引 / " + table.engine + " / " + table.collation;
     }
 
     /**
-     * 构建实际表结构摘要。
+     * 构建实际表结构摘要
+     *
+     * 执行顺序：
+     * 1. 使用数据库查到的字段、索引和表选项，拼出数量、引擎和排序规则
+     *
+     * @param columns 按文本索引的文本
+     * @param indexes 按文本索引的文本
+     * @param options 按文本索引的选项
+     * @return 实际表汇总
      */
     private String buildActualTableSummary(Map<String, String> columns, Map<String, String> indexes, Map<String, String> options) {
         return columns.size() + " 字段 / " + indexes.size() + " 索引 / " + options.get("engine") + " / " + options.get("collation");
     }
 
     /**
-     * 标准化字段类型。
+     * 标准化字段类型
+     *
+     * 执行顺序：
+     * 1. 替换全部
+     *
+     * @param columnType 数据库返回的原始字段类型文本
+     * @return 移除空白后的字段类型小写文本，输入为 null 时返回空字符串
      */
     private String normalizeColumnType(String columnType) {
         return columnType == null ? "" : columnType.toLowerCase().replaceAll("\\s+", "");
     }
 
     /**
-     * 标准化索引字段。
+     * 标准化索引字段
+     *
+     * 执行顺序：
+     * 1. 删除字段列表中的反引号和空白字符，再转成小写以便比较
+     *
+     * @param columns 索引列定义文本，可能含反引号和空白
+     * @return 规范化后的索引列描述
      */
     private String normalizeIndexColumns(String columns) {
         return columns.replace("`", "").replaceAll("\\s+", "").toLowerCase();
     }
 
     /**
-     * 限制差异说明长度。
+     * 限制差异说明长度
+     *
+     * 执行顺序：
+     * 1. 只拼接允许展示的前若干条差异
+     * 2. 有省略项时追加剩余数量说明
+     *
+     * @param values 待拼接的字符串列表
+     * @param limit 结果中最多直接展示的条目数
+     * @return 拼接并按限制截短的差异说明
      */
     private String joinLimited(List<String> values, int limit) {
         List<String> visible = values.size() > limit ? values.subList(0, limit) : values;
+        // 拼接字符串列表
         String text = joinStrings(visible, "；");
         return values.size() > limit ? text + "；另有 " + (values.size() - limit) + " 项" : text;
     }
 
     /**
-     * 拼接字符串列表。
+     * 拼接字符串列表
+     *
+     * 执行顺序：
+     * 1. 按列表原顺序追加内容，在相邻两项之间加上指定分隔符
      *
      * @param values 待拼接的字符串列表
      * @param separator 字符串分隔符
@@ -1830,7 +2509,10 @@ public class ScriptToolService {
     }
 
     /**
-     * 解析脚本所属模块编码。
+     * 解析脚本所属模块编码
+     *
+     * 执行顺序：
+     * 1. 取脚本文件名，按约定的文件名前缀识别所属模块
      *
      * @param fileName 待识别的脚本文件名或相对路径
      * @return 脚本文件对应的模块编码
@@ -1916,7 +2598,10 @@ public class ScriptToolService {
     }
 
     /**
-     * 解析脚本所属模块名称。
+     * 解析脚本所属模块名称
+     *
+     * 执行顺序：
+     * 1. 先按脚本文件名确定模块编码
      *
      * @param fileName 待识别的脚本文件名或相对路径
      * @return 脚本文件对应的模块名称
@@ -2003,46 +2688,74 @@ public class ScriptToolService {
     }
 
     /**
-     * 查询模块级重置任务白名单。
+     * 查询模块级重置任务白名单
+     *
+     * 执行顺序：
+     * 1. 登记基金基础信息演示数据的独立重置入口
+     * 2. 登记临时基金登记、操作审计和替换日志的独立清空入口
+     * 3. 登记基金逐日净值演示数据的独立重置入口
+     * 4. 登记基金调库运行表演示数据的独立重置入口
+     * 5. 股票数据独立重置，迁移任务不提供模块重置入口
+     * 6. 运行表重置只解除股票附件关联，收藏仅幂等追加
+     * 7. 登记基金调库也复用的系统附件与报告库演示数据重置入口
      *
      * @return 模块编码与任务信息映射
      */
     private Map<String, ScriptModuleTaskDto> queryModuleTaskMap() {
         Map<String, ScriptModuleTaskDto> taskMap = new LinkedHashMap<>();
+        // 加入模块重置任务
         addModuleTask(taskMap, "dict", "字典数据", "重置证券类型等基础字典数据。", "medium", "rrs_dict_demo_data.sql");
+        // 加入模块重置任务
         addModuleTask(taskMap, "external-import", "外部导入表", "重置外部导入表演示数据（当前含 rrs_securityinfo）。", "danger", "rrs_external_import_demo_data.sql");
-        // 登记基金基础信息演示数据的独立重置入口
+        // 1. 登记基金基础信息演示数据的独立重置入口
         addModuleTask(taskMap, "fund-info", "基金基础信息", "单独重置基金基础信息演示数据，不影响债券证券主数据。", "medium", "fund/rrs_fundinfo_demo_data.sql");
-        // 登记临时基金登记、操作审计和替换日志的独立清空入口
+        // 2. 登记临时基金登记、操作审计和替换日志的独立清空入口
         addModuleTask(taskMap, "temp-fund-code", "基金临时代码", "清空基金临时代码登记、操作审计和替换日志。", "medium", "fund/rrs_temp_fund_code_demo_data.sql");
-        // 登记基金逐日净值演示数据的独立重置入口
+        // 3. 登记基金逐日净值演示数据的独立重置入口
         addModuleTask(taskMap, "fund-nav", "基金净值数据", "单独重置基金逐日净值演示数据，不影响基金基础信息和债券证券主数据。", "medium", "fund/rrs_fund_nav_demo_data.sql");
-        // 登记基金调库运行表演示数据的独立重置入口
+        // 4. 登记基金调库运行表演示数据的独立重置入口
         addModuleTask(taskMap, "fund-adjust", "基金调库数据", "单独重置基金调库日志、审批步骤和当前池状态。", "danger", "fund/rrs_fund_pool_adjust_demo_data.sql");
-        // 股票数据独立重置，迁移任务不提供模块重置入口
+        // 5. 股票数据独立重置，迁移任务不提供模块重置入口
         addModuleTask(taskMap, "stock-info", "股票基础信息", "重置股票主档、研究评级历史和多人分管关系。", "medium", "stock/rrs_stockinfo_demo_data.sql");
-        // 运行表重置只解除股票附件关联，收藏仅幂等追加
+        // 6. 运行表重置只解除股票附件关联，收藏仅幂等追加
         addModuleTask(taskMap, "stock-adjust", "股票调库数据", "重置股票日志、步骤、当前池状态，解除股票日志附件关联并幂等追加股票自选。", "danger", "stock/rrs_stock_pool_adjust_demo_data.sql");
+        // 加入模块重置任务
         addModuleTask(taskMap, "security-adjust", "证券调库演示数据", "重置调库日志、两类池状态、流程步骤和申请快照（不含外部导入表）。", "danger", "rrs_security_pool_adjust_demo_data.sql");
+        // 加入模块重置任务
         addModuleTask(taskMap, "flow-definition", "流程定义", "重置流程定义、版本、节点、连线和审批处理人配置。", "danger", "rrs_flow_definition_demo_data.sql");
+        // 加入模块重置任务
         addModuleTask(taskMap, "rule-config", "规则配置", "重置规则分类、规则定义、参数、测试用例和测试运行日志。", "danger", "rrs_rule_demo_data.sql");
+        // 加入模块重置任务
         addModuleTask(taskMap, "pool-config", "投资池配置", "重置投资池、池关系、自动规则、权限及开放日等配置演示数据。", "danger", "rrs_pool_init_demo_data.sql");
+        // 加入模块重置任务
         addModuleTask(taskMap, "crmw-status", "CRMW 当前池", "重置 CRMW 当前池状态演示数据。", "medium", "rrs_crmw_pool_status_demo_data.sql");
-        // 登记基金调库也复用的系统附件与报告库演示数据重置入口
+        // 7. 登记基金调库也复用的系统附件与报告库演示数据重置入口
         addModuleTask(taskMap, "attachment-report", "附件与报告", "重置系统附件、入池报告和出池报告演示数据。", "medium", "rrs_sys_attachment_demo_data.sql");
+        // 加入模块重置任务
         addModuleTask(taskMap, "my-security-pool", "我的证券池", "重置我的证券池演示数据。", "medium", "rrs_my_security_pool_demo_data.sql");
+        // 加入模块重置任务
         addModuleTask(taskMap, "credit-bond-grade", "信用债评级规则", "重置信用债主体内评分档和评级准入规则。", "medium", "rrs_credit_bond_grade_rule_demo_data.sql");
+        // 加入模块重置任务
         addModuleTask(taskMap, "temp-security-code", "临时代码", "重置临时代码管理演示数据。", "medium", "rrs_temp_security_code_demo_data.sql");
+        // 加入模块重置任务
         addModuleTask(taskMap, "scheduled-task", "定时任务配置", "重置定时任务配置与执行历史演示数据。", "medium", "rrs_scheduled_task_demo_data.sql");
+        // 加入模块重置任务
         addModuleTask(taskMap, "grade-rule-alert", "不符合分级规则提醒", "重置不符合主体债入池规则提醒待办。", "medium", "rrs_grade_rule_alert_demo_data.sql");
+        // 加入模块重置任务
         addModuleTask(taskMap, "crmw-rule-alert", "CRMW规则提醒", "重置CRMW规则提醒及操作审计，不修改池状态。", "medium", "rrs_crmw_rule_alert_demo_data.sql");
+        // 加入模块重置任务
         addModuleTask(taskMap, "ais-analysis", "AIS 投资分析库", "重置 AIS 主体观察名单、主体评级、担保人内评、用户、角色和用户角色关系演示数据。", "danger", "ais_inv_analysis_demo_data.sql");
+        // 加入模块重置任务
         addModuleTask(taskMap, "ais-ods", "AIS 投资 ODS 库", "重置 Wind 全量主体公司简介、债券发行人主体、评级、公司财务指标与跨市场证券代码演示数据。", "danger", "ais_inv_ods_demo_data.sql");
         return taskMap;
     }
 
     /**
-     * 加入模块重置任务。
+     * 加入模块重置任务
+     *
+     * 执行顺序：
+     * 1. 读取模块 Demo 脚本涉及的表
+     * 2. 证券调库模块还要并入 CRMW 池状态 Demo 脚本涉及的表，再登记模块任务
      *
      * @param taskMap 模块任务索引
      * @param moduleCode 模块编码
@@ -2060,8 +2773,9 @@ public class ScriptToolService {
         task.setRiskLevel(riskLevel);
         task.setConfirmText(CONFIRM_RESET_MODULE);
         task.setDemoFileName(demoFileName);
-        // 从模块演示脚本提取重置任务影响的表
+        // 1. 读取模块 Demo 脚本涉及的表
         List<String> affectedTables = new ArrayList<>(queryDemoFileAffectedTables(demoFileName));
+        // 2. 证券调库模块还要并入 CRMW 池状态 Demo 脚本涉及的表，再登记模块任务
         if ("security-adjust".equals(moduleCode)) {
             // 证券日志重置同时恢复引用这些日志的 CRMW 当前池
             affectedTables.addAll(queryDemoFileAffectedTables("rrs_crmw_pool_status_demo_data.sql"));
@@ -2071,9 +2785,14 @@ public class ScriptToolService {
     }
 
     /**
-     * 查询 Demo 文件影响表。
+     * 查询 Demo 文件影响表
+     *
+     * 执行顺序：
+     * 1. 解析 SQL 文件目录
+     * 2. 构建脚本文件信息
      *
      * @param demoFileName 待解析的演示脚本文件名
+     * @return Demo 文件影响表列表
      */
     private List<String> queryDemoFileAffectedTables(String demoFileName) {
         File sqlDir;
@@ -2089,43 +2808,60 @@ public class ScriptToolService {
     }
 
     /**
-     * 查询 Demo 场景白名单。
-     * <p>样本与 rrs_external_import / rrs_pool_init / rrs_flow_definition Demo 对齐；重复生成按批次号清理。</p>
+     * 查询 Demo 场景白名单
+     *
+     * 样本与 rrs_external_import / rrs_pool_init / rrs_flow_definition Demo 对齐；重复生成按批次号清理
+     *
+     * 执行顺序：
+     * 1. —— 证券池 ——
+     * 2. —— 禁投 / 风险池（主体 + ABS）——
+     * 3. —— 分级规则提醒 ——
+     *
+     * @return 按场景编码查找的演示数据场景
      */
     private Map<String, ScriptDemoSceneDto> queryDemoSceneMap() {
         Map<String, ScriptDemoSceneDto> sceneMap = new LinkedHashMap<>();
-        // —— 证券池 ——
+        // 1. —— 证券池 ——
         addDemoScene(sceneMap, "security-pending-review", "证券池待复核调库单", "security",
                 "生成 XYB004.IB 申请升入一级库，停留在研究员B复核；快照、节点和审批人均取当前 Demo 配置。",
                 Arrays.asList("znty_rrs.ip_adjust_log", "znty_rrs.ip_adjust_step"));
+        // 加入 Demo 场景
         addDemoScene(sceneMap, "security-approved-history", "证券池审批通过历史", "security",
                 "生成 DBB003.IB 升入一级库的已通过申请，保留完整审批步骤、证券快照和池状态。",
                 Arrays.asList("znty_rrs.ip_adjust_log", "znty_rrs.ip_adjust_step", "znty_rrs.ip_pool_status"));
+        // 加入 Demo 场景
         addDemoScene(sceneMap, "security-reject-modify", "证券池驳回待修改", "security",
                 "生成 PPB002.IB 驳回待修改申请，当前节点为原发起人修改，audit_status=11。",
                 Arrays.asList("znty_rrs.ip_adjust_log", "znty_rrs.ip_adjust_step"));
+        // 加入 Demo 场景
         addDemoScene(sceneMap, "security-final-reject", "证券池终态驳回", "security",
                 "生成 PPN001.IB 升入二级库的终态驳回历史，audit_status=21，不生成在池状态。",
                 Arrays.asList("znty_rrs.ip_adjust_log", "znty_rrs.ip_adjust_step"));
+        // 加入 Demo 场景
         addDemoScene(sceneMap, "security-outbound-approved", "证券池调出已通过", "security",
                 "生成 YXB003.IB 已完成调出历史，保留证券快照及快速出库步骤，不预写有效在池状态。",
                 Arrays.asList("znty_rrs.ip_adjust_log", "znty_rrs.ip_adjust_step"));
+        // 加入 Demo 场景
         addDemoScene(sceneMap, "security-withdrawn", "证券池发起人撤回", "security",
                 "生成 HQB003.IB 已撤回申请，audit_status=99，不占用在途身份。",
                 Arrays.asList("znty_rrs.ip_adjust_log", "znty_rrs.ip_adjust_step"));
-        // —— 禁投 / 风险池（主体 + ABS）——
+        // 2. —— 禁投 / 风险池（主体 + ABS）——
         addDemoScene(sceneMap, "forbidden-company-pending", "禁投池主体待审批", "forbidden",
                 "生成 C10004（某基础设施建设有限公司）调入债券禁止库15的待复核申请。",
                 Arrays.asList("znty_rrs.ip_adjust_log", "znty_rrs.ip_adjust_step"));
+        // 加入 Demo 场景
         addDemoScene(sceneMap, "forbidden-observe-pending", "观察池主体待审批", "forbidden",
                 "生成 C10008（某资产管理股份有限公司）调入观察池16的待复核申请。",
                 Arrays.asList("znty_rrs.ip_adjust_log", "znty_rrs.ip_adjust_step"));
+        // 加入 Demo 场景
         addDemoScene(sceneMap, "forbidden-restricted-pending", "重点观察名单主体待审批", "forbidden",
                 "生成 C10009（某国际贸易集团有限公司）调入重点观察名单23的待复核申请。",
                 Arrays.asList("znty_rrs.ip_adjust_log", "znty_rrs.ip_adjust_step"));
+        // 加入 Demo 场景
         addDemoScene(sceneMap, "forbidden-company-approved", "禁投池主体审批通过", "forbidden",
                 "生成 C10006（某电力股份有限公司）审批通过并进入15、17池，旗下债券由独立定时任务同步。",
                 Arrays.asList("znty_rrs.ip_adjust_log", "znty_rrs.ip_adjust_step", "znty_rrs.ip_pool_status"));
+        // 加入 Demo 场景
         addDemoScene(sceneMap, "forbidden-abs-pending", "ABS 债禁投待审批", "forbidden",
                 "生成已在二级库的 108008901.IB 调入禁止库15的申请，快照沿用主档已生效的 C10008 主体身份。",
                 Arrays.asList("znty_rrs.ip_adjust_log", "znty_rrs.ip_adjust_step"));
@@ -2133,10 +2869,11 @@ public class ScriptToolService {
         addDemoScene(sceneMap, "crmw-pending-review", "CRMW 待处理调库单", "crmw",
                 "生成 CRMW003.IB + HQB001.IB 调入 CRMW库18的一般流程申请，停在研究员B复核。",
                 Arrays.asList("znty_rrs.ip_adjust_log", "znty_rrs.ip_adjust_step"));
+        // 加入 Demo 场景
         addDemoScene(sceneMap, "crmw-approved-history", "CRMW 审批通过历史", "crmw",
                 "生成 CRMW004.IB + DBB001.IB 已通过组合，凭证市场、标的快照、完整步骤和组合池状态保持一致。",
                 Arrays.asList("znty_rrs.ip_adjust_log", "znty_rrs.ip_adjust_step", "znty_rrs.ip_pool_status_crmw"));
-        // —— 分级规则提醒 ——
+        // 3. —— 分级规则提醒 ——
         addDemoScene(sceneMap, "grade-rule-alert-pending", "分级规则不符待办", "alert",
                 "为 108008901.IB 的当前二级库记录生成一条人工复核提醒，使用实际主体身份，不修改评级或矩阵规则。",
                 Arrays.asList("znty_rrs.ip_grade_rule_alert"));
@@ -2144,7 +2881,18 @@ public class ScriptToolService {
     }
 
     /**
-     * 加入 Demo 场景。
+     * 加入 Demo 场景
+     *
+     * 执行顺序：
+     * 1. 整理演示场景及关联的业务表
+     * 2. 按场景类别补充相关快照或依赖表，以场景编码登记
+     *
+     * @param sceneMap 按文本索引的指定演示场景的配置
+     * @param sceneCode 场景白名单编码
+     * @param sceneName 演示数据场景的展示名称
+     * @param sceneCategory 演示数据场景类别编码，用于判断是否需列出调库快照表
+     * @param description 模块重置说明
+     * @param affectedTables 文本列表
      */
     private void addDemoScene(Map<String, ScriptDemoSceneDto> sceneMap, String sceneCode, String sceneName,
                               String sceneCategory, String description, List<String> affectedTables) {
@@ -2167,12 +2915,18 @@ public class ScriptToolService {
     }
 
     /**
-     * 校验 Demo 场景基础数据。
+     * 校验 Demo 场景基础数据
+     *
+     * 执行顺序：
+     * 1. 查询表数据量
      */
     private void validateDemoSceneBaseData() throws Exception {
         try (Connection conn = dataSource.getConnection(); Statement stmt = conn.createStatement()) {
+            // 查询表数据量
             if (queryTableCount(stmt, "znty_rrs", "rrs_securityinfo") == 0L
+                    // 查询表数据量
                     || queryTableCount(stmt, "znty_rrs", "ip_investment_pool") == 0L
+                    // 查询表数据量
                     || queryTableCount(stmt, "znty_rrs", "wf_flow_version") == 0L) {
                 throw new BizException("基础 Demo 数据不存在，请先初始化 Demo 数据");
             }
@@ -2180,7 +2934,15 @@ public class ScriptToolService {
     }
 
     /**
-     * 查询表数据量。
+     * 查询表数据量
+     *
+     * 执行顺序：
+     * 1. 对指定库表执行 COUNT，有结果时取首行数值，无结果时返回 0
+     *
+     * @param stmt 语句
+     * @param databaseName 所属数据库名称
+     * @param tableName 表名
+     * @return 表数量
      */
     private long queryTableCount(Statement stmt, String databaseName, String tableName) throws Exception {
         try (ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM `" + databaseName + "`.`" + tableName + "`")) {
@@ -2189,9 +2951,16 @@ public class ScriptToolService {
     }
 
     /**
-     * 执行 Demo 场景 SQL。
+     * 执行 Demo 场景 SQL
+     *
+     * 执行顺序：
+     * 1. 按固定白名单生成场景，每个场景使用独立对象和批次，允许同时生成
+     *
+     * @param sceneCode 场景白名单编码
+     * @param executedItems 已执行脚本的记录列表
      */
     private void executeDemoSceneSql(String sceneCode, List<String> executedItems) throws Exception {
+        // 按固定白名单生成场景，每个场景使用独立对象和批次，允许同时生成
         List<String> statements = buildDemoSceneStatements(sceneCode);
         try (Connection conn = dataSource.getConnection(); Statement stmt = conn.createStatement()) {
             conn.setAutoCommit(false);
@@ -2223,37 +2992,52 @@ public class ScriptToolService {
      * @return 按依赖顺序执行的场景语句
      */
     private List<String> buildDemoSceneStatements(String sceneCode) {
-        // 生成与现有二级库 ABS 对应的规则提醒
+        // 1. 直接构建规则提醒场景对应的 SQL
         if ("grade-rule-alert-pending".equals(sceneCode)) {
+            // 为已在二级库的 ABS 生成规则提醒，不编造当前主体或套用担保人规则
             return buildGradeRuleAlertPendingScene();
         }
         // 日志使用正常自增 ID，后续语句按场景批次定位，避免抢占其他申请的 ID
+        // 2. 按场景编码准备调库演示所需的 SQL
         switch (sceneCode) {
             case "security-pending-review":
+                // 用真实主数据生成一组调库场景，字段名称和审批候选不另造一套
                 return buildAdjustmentDemoScene(sceneCode, "XYB004.IB", false, 2, 101, "00", "调入", null);
             case "security-approved-history":
+                // 用真实主数据生成一组调库场景，字段名称和审批候选不另造一套
                 return buildAdjustmentDemoScene(sceneCode, "DBB003.IB", false, 2, 101, "20", "调入", null);
             case "security-reject-modify":
+                // 用真实主数据生成一组调库场景，字段名称和审批候选不另造一套
                 return buildAdjustmentDemoScene(sceneCode, "PPB002.IB", false, 2, 101, "11", "调入", null);
             case "security-final-reject":
+                // 用真实主数据生成一组调库场景，字段名称和审批候选不另造一套
                 return buildAdjustmentDemoScene(sceneCode, "PPN001.IB", false, 3, 101, "21", "调入", null);
             case "security-outbound-approved":
+                // 用真实主数据生成一组调库场景，字段名称和审批候选不另造一套
                 return buildAdjustmentDemoScene(sceneCode, "YXB003.IB", false, 2, 106, "20", "调出", null);
             case "security-withdrawn":
+                // 用真实主数据生成一组调库场景，字段名称和审批候选不另造一套
                 return buildAdjustmentDemoScene(sceneCode, "HQB003.IB", false, 2, 101, "99", "调入", null);
             case "forbidden-company-pending":
+                // 用真实主数据生成一组调库场景，字段名称和审批候选不另造一套
                 return buildAdjustmentDemoScene(sceneCode, "C10004", true, 15, 113, "00", "调入", null);
             case "forbidden-observe-pending":
+                // 用真实主数据生成一组调库场景，字段名称和审批候选不另造一套
                 return buildAdjustmentDemoScene(sceneCode, "C10008", true, 16, 113, "00", "调入", null);
             case "forbidden-restricted-pending":
+                // 用真实主数据生成一组调库场景，字段名称和审批候选不另造一套
                 return buildAdjustmentDemoScene(sceneCode, "C10009", true, 23, 113, "00", "调入", null);
             case "forbidden-company-approved":
+                // 用真实主数据生成一组调库场景，字段名称和审批候选不另造一套
                 return buildAdjustmentDemoScene(sceneCode, "C10006", true, 15, 113, "20", "调入", null);
             case "forbidden-abs-pending":
+                // 用真实主数据生成一组调库场景，字段名称和审批候选不另造一套
                 return buildAdjustmentDemoScene(sceneCode, "108008901.IB", false, 15, 113, "00", "调入", null);
             case "crmw-pending-review":
+                // 用真实主数据生成一组调库场景，字段名称和审批候选不另造一套
                 return buildAdjustmentDemoScene(sceneCode, "HQB001.IB", false, 18, 103, "00", "调入", "CRMW003.IB");
             case "crmw-approved-history":
+                // 用真实主数据生成一组调库场景，字段名称和审批候选不另造一套
                 return buildAdjustmentDemoScene(sceneCode, "DBB001.IB", false, 18, 105, "20", "调入", "CRMW004.IB");
             default:
                 throw new BizException("不支持的 Demo 场景：" + sceneCode);
@@ -2281,7 +3065,7 @@ public class ScriptToolService {
     private List<String> buildAdjustmentDemoScene(String sceneCode, String objectCode, boolean company,
                                                   long poolId, long flowId, String status, String mode, String crmwCode) {
         String batchNo = (company ? "COMP" : crmwCode == null ? "BOND" : "CRMW") + "_DEMO_" + sceneCode.replace('-', '_');
-        // 仅清理本场景生成的数据，保留其他场景和基础样本
+        // 1. 限定本场景的清理范围，保留其他数据
         List<String> statements = buildSceneCleanupStatements(batchNo);
         String objectColumns = company ? "s.COMP_ID, s.COMP_NAME, 'company'" : "s.wind_code, s.short_name, s.security_type";
         String objectTable = company ? "ais_inv_ods.wind_compintroduction" : "rrs_securityinfo";
@@ -2291,6 +3075,7 @@ public class ScriptToolService {
         String auditTime = "20".equals(status) || "21".equals(status) ? "NOW()" : "NULL";
         String entryTime = "20".equals(status) && "调入".equals(mode) ? "NOW()" : "NULL";
         String flowType = "调出".equals(mode) ? "normalOutbound" : flowId == 101 ? "upgradeInbound" : "normalInbound";
+        // 2. 生成调库日志和适用的在池记录
         statements.add("INSERT INTO ip_adjust_log /* demo-primary */ (security_code, security_short_name, security_type, crmw_name, crmw_scode, crmw_mktcode, crmw_stype, "
                 + "adjust_type, adjust_mode, adjust_batch_no, target_pool_id, target_pool_name, pool_type, flow_id, flow_key, flow_type, audit_status, "
                 + "adjuster_id, adjuster_name, adjust_reason, submit_time, audit_time, entry_time, is_deleted, crte_time, updt_time) "
@@ -2328,7 +3113,7 @@ public class ScriptToolService {
                     + " ps WHERE ps.security_code = l.security_code AND ps.target_pool_id = l.target_pool_id AND ps.audit_status = '20' AND ps.is_deleted = 0"
                     + (crmwCode == null ? "" : " AND ps.crmw_scode = l.crmw_scode AND ps.crmw_stype = l.crmw_stype") + ")");
         }
-        // 生成主项实际经过的流程步骤，联动项按同一批次读取这些步骤
+        // 3. 补充主项审批步骤及适用的附件
         statements.add(buildDemoStepInsert(batchNo, status, flowId));
         if (!company) {
             // 每笔证券申请都保留自身快照，ABS 在途身份与当前已生效主体保持一致
@@ -2457,14 +3242,22 @@ public class ScriptToolService {
     }
 
     /**
-     * 允许不注册进 schema/demo 白名单的 sql 文件（只读工具脚本等）。
+     * 允许不注册进 schema/demo 白名单的 sql 文件（只读工具脚本等）
+     *
+     * 执行顺序：
+     * 1. 返回表行数统计和报告来源升级两个独立工具脚本的文件名
+     *
+     * @return 排除在注册范围之外的 SQL 文件名
      */
     private List<String> querySqlFilesExcludedFromRegistration() {
         return Arrays.asList("tool_table_row_counts.sql", "tool_report_source_upgrade.sql");
     }
 
     /**
-     * 查询建表脚本执行顺序。
+     * 查询建表脚本执行顺序
+     *
+     * 执行顺序：
+     * 1. 按内置白名单顺序列出两套 AIS 库、公共表及各业务模块的建表脚本
      *
      * @return 数据库结构脚本清单
      */
@@ -2499,7 +3292,10 @@ public class ScriptToolService {
     }
 
     /**
-     * 查询 Demo 数据脚本执行顺序。
+     * 查询 Demo 数据脚本执行顺序
+     *
+     * 执行顺序：
+     * 1. 按照与各业务表对应的内置顺序列出 AIS 和各业务模块的演示数据脚本
      *
      * @return 演示数据脚本清单
      */
@@ -2532,7 +3328,12 @@ public class ScriptToolService {
     }
 
     /**
-     * 查询 AIS 库建表脚本（ais_inv_analysis + ais_inv_ods）。
+     * 查询 AIS 库建表脚本（ais_inv_analysis + ais_inv_ods）
+     *
+     * 执行顺序：
+     * 1. 先列出 AIS 分析库建表脚本，再列出 Wind 数据库建表脚本
+     *
+     * @return AIS建表文件列表
      */
     private List<String> queryAisSchemaFiles() {
         return Arrays.asList(
@@ -2542,7 +3343,12 @@ public class ScriptToolService {
     }
 
     /**
-     * 查询 AIS 库 Demo 数据脚本（ais_inv_analysis + ais_inv_ods）。
+     * 查询 AIS 库 Demo 数据脚本（ais_inv_analysis + ais_inv_ods）
+     *
+     * 执行顺序：
+     * 1. 先列出 AIS 分析库演示脚本，再列出 Wind 数据库演示脚本
+     *
+     * @return AIS演示数据文件列表
      */
     private List<String> queryAisDemoFiles() {
         return Arrays.asList(
@@ -2552,14 +3358,22 @@ public class ScriptToolService {
     }
 
     /**
-     * 查询外部导入表建表脚本（当前含 rrs_securityinfo，后续可追加同类表）。
+     * 查询外部导入表建表脚本（当前含 rrs_securityinfo，后续可追加同类表）
+     *
+     * 执行顺序：
+     * 1. 返回承载外部证券主档等导入数据的 rrs_external_import_schema.sql
+     *
+     * @return 外部导入表建表脚本（当前含 rrs_securityinfo，后续可追加同类表）列表
      */
     private List<String> queryExternalImportSchemaFiles() {
         return Arrays.asList("rrs_external_import_schema.sql");
     }
 
     /**
-     * 查询外部导入表 Demo 脚本（当前含 rrs_securityinfo，后续可追加同类表）。
+     * 查询外部导入表 Demo 脚本（当前含 rrs_securityinfo，后续可追加同类表）
+     *
+     * 执行顺序：
+     * 1. 返回为外部导入表准备演示数据的 rrs_external_import_demo_data.sql
      *
      * @return 外部导入演示数据脚本清单
      */
@@ -2568,7 +3382,10 @@ public class ScriptToolService {
     }
 
     /**
-     * 查询基金专属建表脚本。
+     * 查询基金专属建表脚本
+     *
+     * 执行顺序：
+     * 1. 依次列出基金主档、临时代码、净值和调库表的建表脚本
      *
      * @return 基金专属建表脚本清单
      */
@@ -2582,7 +3399,10 @@ public class ScriptToolService {
     }
 
     /**
-     * 查询基金专属 Demo 脚本。
+     * 查询基金专属 Demo 脚本
+     *
+     * 执行顺序：
+     * 1. 依次列出基金主档、临时代码、净值和调库表的演示脚本
      *
      * @return 基金专属 Demo 脚本清单
      */
@@ -2595,30 +3415,50 @@ public class ScriptToolService {
         );
     }
 
-    /** 股票独立建表顺序：基础数据先于调库运行表。 */
+    /**
+     * 股票独立建表顺序：基础数据先于调库运行表
+     *
+     * 执行顺序：
+     * 1. 先列股票主档建表脚本，再列股票调库表建表脚本
+     *
+     * @return 股票建表文件列表
+     */
     private List<String> queryStockSchemaFiles() {
         return Arrays.asList("stock/rrs_stockinfo_schema.sql", "stock/rrs_stock_pool_adjust_schema.sql");
     }
 
-    /** 股票独立演示顺序：基础、评级、分管先于调库与自选。 */
+    /**
+     * 股票独立演示顺序：基础、评级、分管先于调库与自选
+     *
+     * 执行顺序：
+     * 1. 先列股票基础数据演示脚本，再列股票调库演示脚本
+     *
+     * @return 股票演示数据文件列表
+     */
     private List<String> queryStockDemoFiles() {
         return Arrays.asList("stock/rrs_stockinfo_demo_data.sql", "stock/rrs_stock_pool_adjust_demo_data.sql");
     }
 
     /**
-     * 查询债券或全库批量初始化脚本，先公共业务、后基金与股票。
-     * <p>债券批次包含外部证券基础信息，不重置 AIS、基金和股票专属表；全库覆盖所有注册脚本。</p>
+     * 查询债券或全库批量初始化脚本，先公共业务、后基金与股票
+     *
+     * 债券批次包含外部证券基础信息，不重置 AIS、基金和股票专属表；全库覆盖所有注册脚本
+     *
+     * 执行顺序：
+     * 1. 从全量注册清单取得脚本，避免另建白名单遗漏模块
+     * 2. 取得需要在公共脚本之后执行的基金脚本
+     * 3. 股票建表依赖附件表，Demo 依赖公共池、流程与自选表
      *
      * @param schema 是否为建表脚本
      * @param all 是否覆盖全部资产及 AIS 库
      * @return 按依赖排序的脚本白名单
      */
     private List<String> queryInitializationFiles(boolean schema, boolean all) {
-        // 从全量注册清单取得脚本，避免另建白名单遗漏模块
+        // 1. 从全量注册清单取得脚本，避免另建白名单遗漏模块
         List<String> files = new ArrayList<>(schema ? querySchemaFiles() : queryDemoFiles());
-        // 取得需要在公共脚本之后执行的基金脚本
+        // 2. 取得需要在公共脚本之后执行的基金脚本
         List<String> fundFiles = schema ? queryFundSchemaFiles() : queryFundDemoFiles();
-        // 股票建表依赖附件表，Demo 依赖公共池、流程与自选表
+        // 3. 股票建表依赖附件表，Demo 依赖公共池、流程与自选表
         List<String> stockFiles = schema ? queryStockSchemaFiles() : queryStockDemoFiles();
         files.removeAll(fundFiles);
         files.removeAll(stockFiles);
@@ -2632,79 +3472,116 @@ public class ScriptToolService {
         return files;
     }
 
-    /** 股票运行态表，不含公共附件、报告或其他资产运行表。 */
+    /**
+     * 股票运行态表，不含公共附件、报告或其他资产运行表
+     *
+     * 执行顺序：
+     * 1. 按调库步骤、在池状态、调库日志的顺序返回股票运行表
+     *
+     * @return 股票调库审批使用的运行表名称
+     */
     private List<String> queryStockAdjustFlowRuntimeTables() {
         return Arrays.asList("ip_adjust_step_stock", "ip_pool_status_stock", "ip_adjust_log_stock");
     }
 
     /**
-     * 查询主库建表脚本，排除 AIS 库、外部导入表与基金/股票专属表。
+     * 查询主库建表脚本，排除 AIS 库、外部导入表与基金/股票专属表
+     *
+     * 执行顺序：
+     * 1. 取得全部建表脚本作为主库脚本筛选基础
+     * 2. 排除需独立初始化的 AIS 库建表脚本
+     * 3. 排除需独立初始化的外部导入表建表脚本
+     * 4. 排除需独立初始化的基金专属建表脚本
+     * 5. 股票专属结构仅由独立任务重建
      *
      * @return 主业务库结构脚本清单
      */
     private List<String> queryRrsSchemaFiles() {
-        // 取得全部建表脚本作为主库脚本筛选基础
+        // 1. 取得全部建表脚本作为主库脚本筛选基础
         List<String> files = new ArrayList<>(querySchemaFiles());
-        // 排除需独立初始化的 AIS 库建表脚本
+        // 2. 排除需独立初始化的 AIS 库建表脚本
         files.removeAll(queryAisSchemaFiles());
-        // 排除需独立初始化的外部导入表建表脚本
+        // 3. 排除需独立初始化的外部导入表建表脚本
         files.removeAll(queryExternalImportSchemaFiles());
-        // 排除需独立初始化的基金专属建表脚本
+        // 4. 排除需独立初始化的基金专属建表脚本
         files.removeAll(queryFundSchemaFiles());
-        // 股票专属结构仅由独立任务重建
+        // 5. 股票专属结构仅由独立任务重建
         files.removeAll(queryStockSchemaFiles());
         return files;
     }
 
     /**
-     * 查询主库 Demo 数据脚本，排除 AIS 库、外部导入表与基金/股票专属表。
+     * 查询主库 Demo 数据脚本，排除 AIS 库、外部导入表与基金/股票专属表
+     *
+     * 执行顺序：
+     * 1. 取得全部演示脚本作为主库脚本筛选基础
+     * 2. 排除需独立初始化的 AIS 库演示脚本
+     * 3. 排除需独立初始化的外部导入表演示脚本
+     * 4. 排除需独立初始化的基金专属演示脚本
+     * 5. 股票演示数据仅由独立任务重置
      *
      * @return 主业务库演示数据脚本清单
      */
     private List<String> queryRrsDemoFiles() {
-        // 取得全部演示脚本作为主库脚本筛选基础
+        // 1. 取得全部演示脚本作为主库脚本筛选基础
         List<String> files = new ArrayList<>(queryDemoFiles());
-        // 排除需独立初始化的 AIS 库演示脚本
+        // 2. 排除需独立初始化的 AIS 库演示脚本
         files.removeAll(queryAisDemoFiles());
-        // 排除需独立初始化的外部导入表演示脚本
+        // 3. 排除需独立初始化的外部导入表演示脚本
         files.removeAll(queryExternalImportDemoFiles());
-        // 排除需独立初始化的基金专属演示脚本
+        // 4. 排除需独立初始化的基金专属演示脚本
         files.removeAll(queryFundDemoFiles());
-        // 股票演示数据仅由独立任务重置
+        // 5. 股票演示数据仅由独立任务重置
         files.removeAll(queryStockDemoFiles());
         return files;
     }
 
     /**
-     * 主库批量任务（INIT_SCHEMA / INIT_DEMO / RESET_ALL）不执行的脚本清单，供前端「已排除」展示。
-     * <p>含 AIS 分析库/ODS 的 schema 与 demo、外部导入表及基金专属脚本；须用独立任务入口执行。</p>
+     * 主库批量任务（INIT_SCHEMA / INIT_DEMO / RESET_ALL）不执行的脚本清单，供前端「已排除」展示
+     *
+     * 含 AIS 分析库/ODS 的 schema 与 demo、外部导入表及基金专属脚本；须用独立任务入口执行
+     *
+     * 执行顺序：
+     * 1. 汇总独立初始化的 AIS 库建表脚本
+     * 2. 汇总独立初始化的 AIS 库演示脚本
+     * 3. 汇总独立初始化的外部导入表建表脚本
+     * 4. 汇总独立初始化的外部导入表演示脚本
+     * 5. 汇总与债券运行表分离的基金专属演示脚本
+     * 6. 股票结构和演示均不跟随公共批次执行
+     * 7. 展示股票独立演示批次
      *
      * @return 初始化批次中排除的脚本项目清单
      */
     private List<String> queryRrsBatchExcludedItems() {
         List<String> excluded = new ArrayList<>();
-        // 汇总独立初始化的 AIS 库建表脚本
+        // 1. 汇总独立初始化的 AIS 库建表脚本
         excluded.addAll(queryAisSchemaFiles());
-        // 汇总独立初始化的 AIS 库演示脚本
+        // 2. 汇总独立初始化的 AIS 库演示脚本
         excluded.addAll(queryAisDemoFiles());
-        // 汇总独立初始化的外部导入表建表脚本
+        // 3. 汇总独立初始化的外部导入表建表脚本
         excluded.addAll(queryExternalImportSchemaFiles());
-        // 汇总独立初始化的外部导入表演示脚本
+        // 4. 汇总独立初始化的外部导入表演示脚本
         excluded.addAll(queryExternalImportDemoFiles());
         // 汇总与债券运行表分离的基金专属建表脚本
         excluded.addAll(queryFundSchemaFiles());
-        // 汇总与债券运行表分离的基金专属演示脚本
+        // 5. 汇总与债券运行表分离的基金专属演示脚本
         excluded.addAll(queryFundDemoFiles());
-        // 股票结构和演示均不跟随公共批次执行
+        // 6. 股票结构和演示均不跟随公共批次执行
         excluded.addAll(queryStockSchemaFiles());
-        // 展示股票独立演示批次
+        // 7. 展示股票独立演示批次
         excluded.addAll(queryStockDemoFiles());
         return excluded;
     }
 
     /**
-     * 查询调库运行态清空表，基金调库主运行表由基金专属任务管理。
-     * <p>临时基金替换日志属于运行态记录，登记及操作审计不随本任务清空。</p>
+     * 查询调库运行态清空表，基金调库主运行表由基金专属任务管理
+     *
+     * 临时基金替换日志属于运行态记录，登记及操作审计不随本任务清空
+     *
+     * 执行顺序：
+     * 1. 返回通用调库步骤、日志、在池状态、快照及需要随本任务清理的附属表
+     *
+     * @return 调库运行态清空表，基金调库主运行表由基金专属任务管理列表
      */
     private List<String> queryAdjustFlowRuntimeTables() {
         return Arrays.asList(
@@ -2726,7 +3603,12 @@ public class ScriptToolService {
     }
 
     /**
-     * 查询可清空表白名单索引。
+     * 查询可清空表白名单索引
+     *
+     * 执行顺序：
+     * 1. 构建可清空表分组
+     *
+     * @return 允许清理的库表映射
      */
     private Map<String, ScriptTableDto> queryClearTableMap() {
         Map<String, ScriptTableDto> tableMap = new LinkedHashMap<>();
@@ -2740,19 +3622,32 @@ public class ScriptToolService {
     }
 
     /**
-     * 查询可清空表分组。
+     * 查询可清空表分组
+     *
+     * 执行顺序：
+     * 1. 将证券与 CRMW 调库运行表以及共享附件表归入可清空表分组
+     * 2. 将基金基础信息与逐日净值表归入独立的可清空表分组
+     * 3. 将基金调库运行表归入独立的可清空表分组
+     * 4. 股票基础与调库运行表独立分组，不参与公共调库清空任务
+     * 5. 登记股票日志、步骤与当前状态
      *
      * @return 可清空的数据表分组列表
      */
     private List<ScriptTableGroupDto> queryClearTableGroups() {
         List<ScriptTableGroupDto> groups = new ArrayList<>();
-        // 将证券与 CRMW 调库运行表以及共享附件表归入可清空表分组
+        // 1. 将证券与 CRMW 调库运行表以及共享附件表归入可清空表分组
         groups.add(buildTableGroup("security-adjust", "证券池调库运行表", "znty_rrs", Arrays.asList(
+                // 构建可清空表信息
                 buildTable("znty_rrs", "ip_adjust_step", "调库审批步骤"),
+                // 构建可清空表信息
                 buildTable("znty_rrs", "ip_adjust_log", "调库申请日志"),
+                // 构建可清空表信息
                 buildTable("znty_rrs", "ip_pool_status", "证券当前池状态"),
+                // 构建可清空表信息
                 buildTable("znty_rrs", "ip_pool_status_crmw", "CRMW 当前池状态"),
+                // 构建可清空表信息
                 buildTable("znty_rrs", "ip_adjust_security_snapshot", "证券调库信息快照"),
+                // 构建可清空表信息
                 buildTable("znty_rrs", "ip_adjust_security_snapshot_crmw", "CRMW 调库信息快照"),
                 // 登记基金调库复用的系统附件表
                 buildTable("znty_rrs", "sys_attachment", "系统附件"),
@@ -2760,18 +3655,25 @@ public class ScriptToolService {
                 buildTable("znty_rrs", "rrs_report_in", "入池报告"),
                 // 登记基金调库可引用的外部报告库表
                 buildTable("znty_rrs", "rrs_report_out", "出池报告"),
+                // 构建可清空表信息
                 buildTable("znty_rrs", "sys_imp_tmp", "通用导入临时主表"),
+                // 构建可清空表信息
                 buildTable("znty_rrs", "sys_imp_tmp_detl", "通用导入临时明细")
         )));
+        // 构建可清空表分组
         groups.add(buildTableGroup("security-master", "证券与临时代码", "znty_rrs", Arrays.asList(
+                // 构建可清空表信息
                 buildTable("znty_rrs", "rrs_securityinfo", "证券主数据"),
+                // 构建可清空表信息
                 buildTable("znty_rrs", "rrs_temp_security_code", "临时代码"),
+                // 构建可清空表信息
                 buildTable("znty_rrs", "rrs_temp_security_code_update_log", "临时代码替换日志")
         )));
-        // 将基金基础信息与逐日净值表归入独立的可清空表分组
+        // 2. 将基金基础信息与逐日净值表归入独立的可清空表分组
         groups.add(buildTableGroup("fund-info", "基金基础信息", "znty_rrs", Arrays.asList(
                 // 登记基金基础信息表
                 buildTable("znty_rrs", "rrs_fundinfo", "基金基础信息"),
+                // 构建可清空表信息
                 buildTable("znty_rrs", "rrs_temp_fund_code", "基金临时代码"),
                 // 登记基金临时代码操作审计表
                 buildTable("znty_rrs", "rrs_temp_fund_code_evt", "基金临时代码操作审计"),
@@ -2780,7 +3682,7 @@ public class ScriptToolService {
                 // 登记基金逐日净值表
                 buildTable("znty_rrs", "rrs_fund_nav", "基金逐日净值")
         )));
-        // 将基金调库运行表归入独立的可清空表分组
+        // 3. 将基金调库运行表归入独立的可清空表分组
         groups.add(buildTableGroup("fund-adjust", "基金调库数据", "znty_rrs", Arrays.asList(
                 // 登记基金调库审批步骤表
                 buildTable("znty_rrs", "ip_adjust_step_fund", "基金调库审批步骤"),
@@ -2789,109 +3691,196 @@ public class ScriptToolService {
                 // 登记基金当前池状态表
                 buildTable("znty_rrs", "ip_pool_status_fund", "基金当前池状态")
         )));
-        // 股票基础与调库运行表独立分组，不参与公共调库清空任务
+        // 4. 股票基础与调库运行表独立分组，不参与公共调库清空任务
         groups.add(buildTableGroup("stock-info", "股票基础信息", "znty_rrs", Arrays.asList(
+                // 构建可清空表信息
                 buildTable("znty_rrs", "rrs_stockinfo", "股票基础信息"),
+                // 构建可清空表信息
                 buildTable("znty_rrs", "rrs_stock_rating", "股票研究评级历史"),
+                // 构建可清空表信息
                 buildTable("znty_rrs", "rrs_stock_manager", "股票多人分管关系")
         )));
-        // 登记股票日志、步骤与当前状态
+        // 5. 登记股票日志、步骤与当前状态
         groups.add(buildTableGroup("stock-adjust", "股票调库数据", "znty_rrs", Arrays.asList(
+                // 构建可清空表信息
                 buildTable("znty_rrs", "ip_adjust_step_stock", "股票调库审批步骤"),
+                // 构建可清空表信息
                 buildTable("znty_rrs", "ip_pool_status_stock", "股票当前池状态"),
+                // 构建可清空表信息
                 buildTable("znty_rrs", "ip_adjust_log_stock", "股票调库日志")
         )));
+        // 构建可清空表分组
         groups.add(buildTableGroup("pool-config", "投资池配置", "znty_rrs", Arrays.asList(
+                // 构建可清空表信息
                 buildTable("znty_rrs", "ip_pool_permission_evt", "投资池权限事件"),
+                // 构建可清空表信息
                 buildTable("znty_rrs", "ip_pool_auto_rule_evt", "投资池自动规则事件"),
+                // 构建可清空表信息
                 buildTable("znty_rrs", "ip_pool_relation_evt", "投资池关系事件"),
+                // 构建可清空表信息
                 buildTable("znty_rrs", "ip_investment_pool_evt", "投资池事件"),
+                // 构建可清空表信息
                 buildTable("znty_rrs", "ip_pool_permission", "投资池权限"),
+                // 构建可清空表信息
                 buildTable("znty_rrs", "ip_pool_auto_rule", "投资池自动规则"),
+                // 构建可清空表信息
                 buildTable("znty_rrs", "ip_pool_relation", "投资池关系"),
+                // 构建可清空表信息
                 buildTable("znty_rrs", "ip_investment_pool", "投资池"),
+                // 构建可清空表信息
                 buildTable("znty_rrs", "ip_pool_open_day", "投资池开放日配置")
         )));
+        // 构建可清空表分组
         groups.add(buildTableGroup("flow-config", "流程定义", "znty_rrs", Arrays.asList(
+                // 构建可清空表信息
                 buildTable("znty_rrs", "wf_edge_cond_rule_evt", "条件边规则事件"),
+                // 构建可清空表信息
                 buildTable("znty_rrs", "wf_edge_cond_rule", "条件边规则"),
+                // 构建可清空表信息
                 buildTable("znty_rrs", "wf_flow_edge_evt", "流程连线事件"),
+                // 构建可清空表信息
                 buildTable("znty_rrs", "wf_flow_edge", "流程连线"),
+                // 构建可清空表信息
                 buildTable("znty_rrs", "wf_node_condition_config_evt", "条件节点配置事件"),
+                // 构建可清空表信息
                 buildTable("znty_rrs", "wf_node_condition_config", "条件节点配置"),
+                // 构建可清空表信息
                 buildTable("znty_rrs", "wf_node_notify_config_evt", "通知节点配置事件"),
+                // 构建可清空表信息
                 buildTable("znty_rrs", "wf_node_notify_config", "通知节点配置"),
+                // 构建可清空表信息
                 buildTable("znty_rrs", "wf_node_auto_config_evt", "自动节点配置事件"),
+                // 构建可清空表信息
                 buildTable("znty_rrs", "wf_node_auto_config", "自动节点配置"),
+                // 构建可清空表信息
                 buildTable("znty_rrs", "wf_node_approval_handler_evt", "审批处理人事件"),
+                // 构建可清空表信息
                 buildTable("znty_rrs", "wf_node_approval_handler", "审批处理人"),
+                // 构建可清空表信息
                 buildTable("znty_rrs", "wf_node_approval_config_evt", "审批节点配置事件"),
+                // 构建可清空表信息
                 buildTable("znty_rrs", "wf_node_approval_config", "审批节点配置"),
+                // 构建可清空表信息
                 buildTable("znty_rrs", "wf_flow_node_evt", "流程节点事件"),
+                // 构建可清空表信息
                 buildTable("znty_rrs", "wf_flow_node", "流程节点"),
+                // 构建可清空表信息
                 buildTable("znty_rrs", "wf_flow_version_evt", "流程版本事件"),
+                // 构建可清空表信息
                 buildTable("znty_rrs", "wf_flow_version", "流程版本"),
+                // 构建可清空表信息
                 buildTable("znty_rrs", "wf_flow_definition_evt", "流程定义事件"),
+                // 构建可清空表信息
                 buildTable("znty_rrs", "wf_flow_definition", "流程定义"),
+                // 构建可清空表信息
                 buildTable("znty_rrs", "wf_role_dict_evt", "流程角色字典事件"),
+                // 构建可清空表信息
                 buildTable("znty_rrs", "wf_role_dict", "流程角色字典")
         )));
+        // 构建可清空表分组
         groups.add(buildTableGroup("rule-config", "规则管理", "znty_rrs", Arrays.asList(
+                // 构建可清空表信息
                 buildTable("znty_rrs", "rule_test_run_log", "规则测试运行日志"),
+                // 构建可清空表信息
                 buildTable("znty_rrs", "rule_test_run", "规则测试运行"),
+                // 构建可清空表信息
                 buildTable("znty_rrs", "rule_test_case_param", "规则测试用例参数"),
+                // 构建可清空表信息
                 buildTable("znty_rrs", "rule_test_case", "规则测试用例"),
+                // 构建可清空表信息
                 buildTable("znty_rrs", "rule_param_option", "规则参数选项"),
+                // 构建可清空表信息
                 buildTable("znty_rrs", "rule_param", "规则参数"),
+                // 构建可清空表信息
                 buildTable("znty_rrs", "rule_definition", "规则定义"),
+                // 构建可清空表信息
                 buildTable("znty_rrs", "rule_preset_option_item", "规则预设选项明细"),
+                // 构建可清空表信息
                 buildTable("znty_rrs", "rule_preset_option_set", "规则预设选项集"),
+                // 构建可清空表信息
                 buildTable("znty_rrs", "rule_category", "规则分类")
         )));
+        // 构建可清空表分组
         groups.add(buildTableGroup("dict-grade", "字典与评级规则", "znty_rrs", Arrays.asList(
+                // 构建可清空表信息
                 buildTable("znty_rrs", "dict_external_rating_agency", "外部评级机构字典"),
+                // 构建可清空表信息
                 buildTable("znty_rrs", "dict_security_type", "证券类型字典"),
+                // 构建可清空表信息
                 buildTable("znty_rrs", "credit_bond_pool_grade_rule", "信用债大库评级准入规则"),
+                // 构建可清空表信息
                 buildTable("znty_rrs", "credit_bond_inner_rating_grade", "主体内评分档"),
+                // 构建可清空表信息
                 buildTable("znty_rrs", "credit_bond_term_bucket", "期限分组"),
+                // 构建可清空表信息
                 buildTable("znty_rrs", "ip_grade_rule_alert", "不符合分级规则提醒"),
+                // 构建可清空表信息
                 buildTable("znty_rrs", "ip_grade_rule_alert_evt", "不符合分级规则提醒事件"),
+                // 构建可清空表信息
                 buildTable("znty_rrs", "ip_crmw_rule_alert", "CRMW规则提醒"),
+                // 构建可清空表信息
                 buildTable("znty_rrs", "ip_crmw_rule_alert_evt", "CRMW规则提醒事件"),
+                // 构建可清空表信息
                 buildTable("znty_rrs", "my_security_pool", "我的证券池")
         )));
+        // 构建可清空表分组
         groups.add(buildTableGroup("scheduled-task", "定时任务", "znty_rrs", Arrays.asList(
+                // 构建可清空表信息
                 buildTable("znty_rrs", "sys_scheduled_task_run_log", "定时任务执行历史"),
+                // 构建可清空表信息
                 buildTable("znty_rrs", "sys_scheduled_task_evt", "定时任务配置事件"),
+                // 构建可清空表信息
                 buildTable("znty_rrs", "sys_scheduled_task", "定时任务配置")
         )));
+        // 构建可清空表分组
         groups.add(buildTableGroup("script-tool", "脚本工具审计", "znty_rrs", Arrays.asList(
+                // 构建可清空表信息
                 buildTable("znty_rrs", "sys_script_tool_run_log", "脚本工具写操作审计")
         )));
+        // 构建可清空表分组
         groups.add(buildTableGroup("ais-analysis", "AIS 投资分析库", "ais_inv_analysis", Arrays.asList(
+                // 构建可清空表信息
                 buildTable("ais_inv_analysis", "company_observer_view", "主体观察名单"),
+                // 构建可清空表信息
                 buildTable("ais_inv_analysis", "v_inv_grade_result", "担保人内评结果"),
+                // 构建可清空表信息
                 buildTable("ais_inv_analysis", "t_inv_grade_result", "主体评级结果"),
+                // 构建可清空表信息
                 buildTable("ais_inv_analysis", "t_inv_company", "投资分析主体"),
+                // 构建可清空表信息
                 buildTable("ais_inv_analysis", "t_sys_user_role", "用户角色关系"),
+                // 构建可清空表信息
                 buildTable("ais_inv_analysis", "t_sys_user", "用户"),
+                // 构建可清空表信息
                 buildTable("ais_inv_analysis", "t_sys_role", "角色"),
+                // 构建可清空表信息
                 buildTable("ais_inv_analysis", "t_sys_permission", "权限"),
+                // 构建可清空表信息
                 buildTable("ais_inv_analysis", "t_sys_resource", "资源")
         )));
+        // 构建可清空表分组
         groups.add(buildTableGroup("ais-ods", "AIS 投资 ODS 库", "ais_inv_ods", Arrays.asList(
+                // 构建可清空表信息
                 buildTable("ais_inv_ods", "wind_compintroduction", "Wind 公司简介表（全量主体）"),
+                // 构建可清空表信息
                 buildTable("ais_inv_ods", "wind_cbondissuer", "Wind 中国债券发行主体信息表"),
+                // 构建可清空表信息
                 buildTable("ais_inv_ods", "wind_cbondissuerrating", "Wind 中国债券发行主体信用评级表"),
+                // 构建可清空表信息
                 buildTable("ais_inv_ods", "wind_companyfinancial", "Wind 公司财务指标表"),
+                // 构建可清空表信息
                 buildTable("ais_inv_ods", "wind_windcustomcode", "Wind 跨市场证券代码关联表"),
+                // 构建可清空表信息
                 buildTable("ais_inv_ods", "wind_cbondchangewindcode", "Wind 中国债券 Wind 代码变更表")
         )));
         return groups;
     }
 
     /**
-     * 构建可清空表分组。
+     * 构建可清空表分组
+     *
+     * 执行顺序：
+     * 1. 把分组编码、名称、所在库和可清空的表列表放入同一选项
      *
      * @param groupCode 分组编码
      * @param groupName 分组显示名称
@@ -2909,11 +3898,15 @@ public class ScriptToolService {
     }
 
     /**
-     * 构建可清空表信息。
+     * 构建可清空表信息
+     *
+     * 执行顺序：
+     * 1. 以库名和表名组成唯一表标识，同时保留库名、表名和说明供页面展示
      *
      * @param databaseName 所属数据库名称
      * @param tableName 表名
      * @param tableDesc 表用途说明
+     * @return 脚本表
      */
     private ScriptTableDto buildTable(String databaseName, String tableName, String tableDesc) {
         ScriptTableDto table = new ScriptTableDto();
@@ -2925,15 +3918,24 @@ public class ScriptToolService {
     }
 
     /**
-     * 构建任务白名单。
+     * 构建任务白名单
+     *
+     * 执行顺序：
+     * 1. 主库批量任务统一展示已排除脚本（AIS + 外部导入 + 基金），前端「已排除」芯片与说明对应
+     * 2. 登记主库非基金脚本的重建任务并置于任务列表首位
+     * 3. 加入建表初始化任务（排除 AIS、外部导入表与基金专属表）
+     * 4. 加入 Demo 数据初始化任务（排除 AIS、外部导入表与基金专属表）
+     * 5. 登记调库运行态清空任务，基金主运行表仍由基金专属任务管理
+     * 6. 登记包含外部证券基础信息的债券批量初始化入口
+     * 7. 登记覆盖主库、AIS 分析库和 ODS 本地演示表的全库入口
      *
      * @return 任务编码与任务信息映射
      */
     private Map<String, ScriptTaskDto> queryTaskMap() {
         Map<String, ScriptTaskDto> taskMap = new LinkedHashMap<>();
-        // 主库批量任务统一展示已排除脚本（AIS + 外部导入 + 基金），前端「已排除」芯片与说明对应
+        // 1. 主库批量任务统一展示已排除脚本（AIS + 外部导入 + 基金），前端「已排除」芯片与说明对应
         List<String> rrsBatchExcludedItems = queryRrsBatchExcludedItems();
-        // 登记主库非基金脚本的重建任务并置于任务列表首位
+        // 2. 登记主库非基金脚本的重建任务并置于任务列表首位
         addTask(taskMap, TASK_RESET_ALL, "重建通用业务演示环境",
                 "先执行主库 schema 再执行 demo，仅 znty_rrs 业务库。"
                         + "不执行 AIS：ais_inv_analysis_demo_data.sql、ais_inv_ods_demo_data.sql（及对应 schema）；"
@@ -2947,7 +3949,7 @@ public class ScriptToolService {
                 mergeList(queryRrsSchemaFiles(), queryRrsDemoFiles()),
                 // 统计主库建表脚本覆盖的表数量
                 countTablesInFiles(queryRrsSchemaFiles(), "schema"), rrsBatchExcludedItems);
-        // 加入建表初始化任务（排除 AIS、外部导入表与基金专属表）
+        // 3. 加入建表初始化任务（排除 AIS、外部导入表与基金专属表）
         addTask(taskMap, TASK_INIT_SCHEMA, "初始化建表脚本",
                 "按固定顺序执行主库 schema 重建表结构。"
                         + "已排除 AIS 建表（ais_inv_analysis_schema.sql、ais_inv_ods_schema.sql）"
@@ -2958,7 +3960,7 @@ public class ScriptToolService {
                         + "不含 AIS 库表结构、外部导入表与基金专属表，需单独初始化。",
                 // 读取主库建表脚本并统计表数量
                 queryRrsSchemaFiles(), countTablesInFiles(queryRrsSchemaFiles(), "schema"), rrsBatchExcludedItems);
-        // 加入 Demo 数据初始化任务（排除 AIS、外部导入表与基金专属表）
+        // 4. 加入 Demo 数据初始化任务（排除 AIS、外部导入表与基金专属表）
         addTask(taskMap, TASK_INIT_DEMO, "初始化 Demo 数据",
                 "按固定顺序执行主库 demo。"
                         + "已排除 AIS 演示数据（ais_inv_analysis_demo_data.sql、ais_inv_ods_demo_data.sql）"
@@ -2976,14 +3978,18 @@ public class ScriptToolService {
                 "执行外部导入类表建表脚本（当前含 rrs_securityinfo，后续可追加同类表）。",
                 "high", "INIT_EXTERNAL_IMPORT_SCHEMA",
                 "会 DROP 并重新 CREATE 外部导入表，原数据会被清空。",
+                // 查询外部导入表建表脚本（当前含 rrs_securityinfo，后续可追加同类表）
                 queryExternalImportSchemaFiles(),
+                // 统计脚本实际受影响表数量（去重），再查询外部导入表建表脚本（当前含 rrs_securityinfo，后续可追加同类表）
                 countTablesInFiles(queryExternalImportSchemaFiles(), "schema"), null);
         // 加入外部导入表 Demo 任务
         addTask(taskMap, TASK_INIT_EXTERNAL_IMPORT_DEMO, "初始化外部导入表 Demo",
                 "执行外部导入类表演示数据脚本（当前含 rrs_securityinfo，后续可追加同类表）。",
                 "medium", "INIT_EXTERNAL_IMPORT_DEMO",
                 "会 TRUNCATE 后重新写入外部导入表演示数据。",
+                // 查询外部导入表 Demo 脚本（当前含 rrs_securityinfo，后续可追加同类表）
                 queryExternalImportDemoFiles(),
+                // 统计脚本实际受影响表数量（去重），再查询外部导入表 Demo 脚本（当前含 rrs_securityinfo，后续可追加同类表）
                 countTablesInFiles(queryExternalImportDemoFiles(), "demo"), null);
         // 加入基金专属表建表任务
         addTask(taskMap, TASK_INIT_FUND_SCHEMA, "初始化基金专属表建表",
@@ -3004,75 +4010,102 @@ public class ScriptToolService {
                 "独立重建股票主档、评级历史、多人分管及三张股票调库运行表；须先具备公共池、流程和附件表。",
                 "high", TASK_INIT_STOCK_SCHEMA,
                 "清空六张股票表及股票日志附件关联，保留其他资产数据、公共报告与物理附件。",
+                // 股票独立建表顺序：基础数据先于调库运行表，再统计脚本实际受影响表数量（去重）
                 queryStockSchemaFiles(), countTablesInFiles(queryStockSchemaFiles(), "schema"), null);
         // 股票 Demo 只对本模块运行表及绑定执行重置，自选数据幂等追加
         addTask(taskMap, TASK_INIT_STOCK_DEMO, "初始化股票专属 Demo",
                 "依次重置股票基础、评级、分管和调库样本，复用现有公共池与115～118流程。",
                 "medium", TASK_INIT_STOCK_DEMO,
                 "重置六张股票表，解除股票日志附件关联；股票自选仅幂等追加，不重置公共收藏。",
+                // 股票独立演示顺序：基础、评级、分管先于调库与自选
                 queryStockDemoFiles(), 8, null);
         // 独立清空股票运行态，范围包括股票日志附件绑定
         addTask(taskMap, TASK_CLEAR_STOCK_ADJUST_FLOW, "清空股票调库运行态",
                 "清空股票调库日志、审批步骤和当前池状态，并解除股票日志附件关联。",
                 "danger", TASK_CLEAR_STOCK_ADJUST_FLOW,
                 "保留股票基础信息、评级、分管、自选、其他资产运行表、公共报告和物理文件。",
+                // 合并列表，再股票运行态表，不含公共附件、报告或其他资产运行表
                 mergeList(queryStockAdjustFlowRuntimeTables(), Arrays.asList("sys_attachment(table_name=ip_adjust_log_stock)")), 4, null);
         // 加入 AIS 库建表任务
         addTask(taskMap, TASK_INIT_AIS_SCHEMA, "初始化 AIS 建表脚本",
                 "执行 ais_inv_analysis 与 ais_inv_ods 两个 AIS 库的建表脚本。",
                 "high", "INIT_AIS_SCHEMA",
                 "会重建 AIS 投资分析与 ODS 库表结构。",
+                // 查询 AIS 库建表脚本（ais_inv_analysis + ais_inv_ods），再统计脚本实际受影响表数量（去重）
                 queryAisSchemaFiles(), countTablesInFiles(queryAisSchemaFiles(), "schema"), null);
         // 加入 AIS 库 Demo 任务
         addTask(taskMap, TASK_INIT_AIS_DEMO, "初始化 AIS Demo 数据",
                 "执行 ais_inv_analysis 与 ais_inv_ods 两个 AIS 库的演示数据脚本。",
                 "high", "INIT_AIS_DEMO",
                 "会重置 AIS 投资分析与 ODS 库演示数据。",
+                // 查询 AIS 库 Demo 数据脚本（ais_inv_analysis + ais_inv_ods），再统计脚本实际受影响表数量（去重）
                 queryAisDemoFiles(), countTablesInFiles(queryAisDemoFiles(), "demo"), null);
-        // 登记调库运行态清空任务，基金主运行表仍由基金专属任务管理
+        // 5. 登记调库运行态清空任务，基金主运行表仍由基金专属任务管理
         List<String> clearTables = queryAdjustFlowRuntimeTables();
+        // 加入任务配置
         addTask(taskMap, TASK_CLEAR_ADJUST_FLOW, "清空调库流程数据",
                 "只清空调库申请、步骤、当前池状态、调库信息快照、附件、报告、临时基金替换日志和 Excel 导入临时表等运行态数据。",
                 "danger", "CLEAR_ADJUST_FLOW",
                 "不清空证券主数据、投资池、流程定义、规则和字典配置。",
                 clearTables, clearTables.size(), null);
-        // 登记包含外部证券基础信息的债券批量初始化入口
+        // 6. 登记包含外部证券基础信息的债券批量初始化入口
         addInitializationTaskPair(taskMap, "BOND", "债券", false);
-        // 登记覆盖主库、AIS 分析库和 ODS 本地演示表的全库入口
+        // 7. 登记覆盖主库、AIS 分析库和 ODS 本地演示表的全库入口
         addInitializationTaskPair(taskMap, "ALL", "全库", true);
         return taskMap;
     }
 
-    /** 登记一组左右对应的建表与 Demo 批量任务。 */
+    /**
+     * 登记一组左右对应的建表与 Demo 批量任务
+     *
+     * 执行顺序：
+     * 1. 建表与演示任务复用同一分类范围和依赖排序
+     * 2. 取得对应的演示脚本清单
+     * 3. 统计建表范围并登记高风险任务
+     * 4. 统计演示范围并登记对应的数据重置任务
+     * 5. 对比同组建表与演示范围，标注不预置数据的运行态和审计表
+     * 6. 扣除对应演示脚本涉及的表
+     *
+     * @param taskMap 任务配置索引
+     * @param code 证券代码
+     * @param name 待处理的名称
+     * @param all 是否覆盖全部资产及 AIS 库
+     */
     private void addInitializationTaskPair(Map<String, ScriptTaskDto> taskMap, String code, String name, boolean all) {
-        // 建表与演示任务复用同一分类范围和依赖排序
+        // 1. 建表与演示任务复用同一分类范围和依赖排序
         List<String> schemaFiles = queryInitializationFiles(true, all);
-        // 取得对应的演示脚本清单
+        // 2. 取得对应的演示脚本清单
         List<String> demoFiles = queryInitializationFiles(false, all);
         String scope = all
                 ? "用于本地全量环境，覆盖 sql/（含 fund/、stock/）全部建表和 Demo 脚本，包含 znty_rrs、ais_inv_analysis、ais_inv_ods 三个库及 AIS 用户角色、Wind 基础数据；查询和存量迁移工具脚本不参与初始化。"
                 : "覆盖债券、CRMW、禁投主体、公共业务配置及外部证券基础信息；不执行 AIS、基金和股票专属脚本。公共池、流程、附件及自选也会重置。";
-        // 统计建表范围并登记高风险任务
+        // 3. 统计建表范围并登记高风险任务
         addTask(taskMap, "INIT_" + code + "_SCHEMA", "初始化" + name + "建表语句",
                 "按依赖顺序执行建表脚本。" + scope, "high", "INIT_" + code + "_SCHEMA",
                 "会 DROP 并重新 CREATE 对应表，原表数据清空。" + scope,
+                // 统计脚本实际受影响表数量（去重）
                 schemaFiles, countTablesInFiles(schemaFiles, "schema"), null);
-        // 统计演示范围并登记对应的数据重置任务
+        // 4. 统计演示范围并登记对应的数据重置任务
         addTask(taskMap, "INIT_" + code + "_DEMO", "初始化" + name + " Demo 数据",
                 "请先执行左侧对应建表任务，再执行本任务。公共数据先于基金、股票演示数据。" + scope,
                 all ? "high" : "medium", "INIT_" + code + "_DEMO",
                 "按脚本清空并重置演示数据。" + scope,
+                // 统计脚本实际受影响表数量（去重）
                 demoFiles, countTablesInFiles(demoFiles, "demo"), null);
-        // 对比同组建表与演示范围，标注不预置数据的运行态和审计表
+        // 5. 对比同组建表与演示范围，标注不预置数据的运行态和审计表
         Set<String> unseeded = collectTablesInFiles(schemaFiles, "schema");
-        // 扣除对应演示脚本涉及的表
+        // 6. 扣除对应演示脚本涉及的表
         unseeded.removeAll(collectTablesInFiles(demoFiles, "demo"));
         taskMap.get("INIT_" + code + "_DEMO").setUnseededTables(new ArrayList<>(unseeded));
     }
 
     /**
-     * 收集脚本实际受影响表（去重）。
-     * <p>schema：仅统计 CREATE TABLE；demo：统计 TRUNCATE / INSERT 目标表。不是脚本文件个数。</p>
+     * 收集脚本实际受影响表（去重）
+     *
+     * schema：仅统计 CREATE TABLE；demo：统计 TRUNCATE / INSERT 目标表。不是脚本文件个数
+     *
+     * 执行顺序：
+     * 1. 解析 SQL 文件目录
      *
      * @param fileNames 待统计的脚本文件名列表
      * @param scriptType 建表或演示脚本类型
@@ -3096,9 +4129,11 @@ public class ScriptToolService {
                 String sqlText = new String(Files.readAllBytes(sqlFile.toPath()), StandardCharsets.UTF_8);
                 // 按语句解析受影响表
                 for (String sql : splitSqlStatements(sqlText)) {
+                    // 判断语句是否需要执行
                     if (!isExecutableStatement(sql)) {
                         continue;
                     }
+                    // 清理 SQL 注释并返回可匹配语句
                     String matchSql = normalizeExecutableSql(sql);
                     if ("schema".equals(scriptType)) {
                         Matcher createMatcher = CREATE_TABLE_PATTERN.matcher(matchSql);
@@ -3125,8 +4160,12 @@ public class ScriptToolService {
     }
 
     /**
-     * 统计脚本实际受影响表数量（去重）。
-     * <p>schema：仅统计 CREATE TABLE；demo：统计 TRUNCATE / INSERT 目标表。不是脚本文件个数。</p>
+     * 统计脚本实际受影响表数量（去重）
+     *
+     * schema：仅统计 CREATE TABLE；demo：统计 TRUNCATE / INSERT 目标表。不是脚本文件个数
+     *
+     * 执行顺序：
+     * 1. 按脚本类型提取指定文件涉及的表名，将表名去重后统计数量
      *
      * @param fileNames 待统计的脚本文件名列表
      * @param scriptType 建表或演示脚本类型
@@ -3138,22 +4177,34 @@ public class ScriptToolService {
     }
 
     /**
-     * 主库 schema 建了结构但 demo 未灌数据的表。
-     * <p>导入临时表等运行态表只建结构、不预置 demo 数据，需在页面单独标注，避免与受影响表数量混淆。</p>
+     * 主库 schema 建了结构但 demo 未灌数据的表
+     *
+     * 导入临时表等运行态表只建结构、不预置 demo 数据，需在页面单独标注，避免与受影响表数量混淆
+     *
+     * 执行顺序：
+     * 1. 收集主库建表脚本里的基础表
+     * 2. 收集适用 Demo 数据脚本写入的表
+     * 3. 从基础表清单中扣除已写入 Demo 数据的表
      *
      * @return 未灌入演示数据的表名列表
      */
     private List<String> queryUnseededDemoTables() {
-        // 收集主库 schema 建表表集与 demo 写入表集，取差集
+        // 1. 收集主库建表脚本里的基础表
         Set<String> schemaTables = collectTablesInFiles(queryRrsSchemaFiles(), "schema");
+        // 2. 收集适用 Demo 数据脚本写入的表
         Set<String> demoTables = collectTablesInFiles(queryRrsDemoFiles(), "demo");
+        // 3. 从基础表清单中扣除已写入 Demo 数据的表
         Set<String> unseeded = new LinkedHashSet<>(schemaTables);
         unseeded.removeAll(demoTables);
         return new ArrayList<>(unseeded);
     }
 
     /**
-     * 加入任务配置。
+     * 加入任务配置
+     *
+     * 执行顺序：
+     * 1. 把任务范围、确认文本、脚本条目及影响表数量整理成配置
+     * 2. 以任务编码登记该配置
      *
      * @param taskMap 任务配置索引
      * @param taskCode 任务编码
@@ -3183,7 +4234,14 @@ public class ScriptToolService {
     }
 
     /**
-     * 合并列表。
+     * 合并列表
+     *
+     * 执行顺序：
+     * 1. 新建结果列表，依次加入第一组和第二组元素，保留原来的先后顺序
+     *
+     * @param first 文本列表
+     * @param second 文本列表
+     * @return 按传入顺序合并的文本列表，保留重复元素
      */
     private List<String> mergeList(List<String> first, List<String> second) {
         List<String> result = new ArrayList<>();
@@ -3192,40 +4250,61 @@ public class ScriptToolService {
         return result;
     }
 
-    /** 建表脚本中的期望表结构 */
+    /**
+     * 保存从建表脚本读出的期望表结构
+     *
+     * 以数据库和表名定位对象，保留字段、索引、引擎和排序规则，供实际数据库结构对比
+     */
     private static class ExpectedSchemaTable {
         /** 数据库名称 */
         private String databaseName;
+
         /** 表名称 */
         private String tableName;
+
         /** 数据库与表联合标识 */
         private String tableKey;
+
         /** 存储引擎 */
         private String engine;
+
         /** 排序规则 */
         private String collation;
+
         /** 字段定义 */
         private Map<String, String> columns;
+
         /** 索引定义 */
         private Map<String, String> indexes;
     }
 
-    /** 业务数据完整性规则 */
+    /**
+     * 定义一项业务数据完整性检查
+     *
+     * 绑定检查对象与只读统计 SQL，并保存发现问题时展示的状态、说明和处理建议
+     */
     private static class IntegrityRule {
         /** 规则编码 */
         private String code;
+
         /** 检查分类 */
         private String category;
+
         /** 检查对象 */
         private String objectName;
+
         /** 规则名称 */
         private String name;
+
         /** 只读统计 SQL */
         private String sql;
+
         /** 发现问题时的状态 */
         private String issueStatus;
+
         /** 问题说明 */
         private String message;
+
         /** 处理建议 */
         private String suggestion;
     }

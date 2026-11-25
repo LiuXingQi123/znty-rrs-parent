@@ -19,53 +19,66 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 股票池调整历史服务。
- * <p>负责股票调库历史分页查询、导出，以及筛选条件所需的行业查询。</p>
+ * 查询股票池的调入调出历史
+ *
+ * 按页面筛选条件返回股票调库记录和行业选项，Excel 导出复用相同的筛选范围
+ * 查询结果补齐投资池全路径名称，便于区分同名子池及对应调整记录
  */
 @Service
 public class StockPoolAdjustHistoryService {
 
-    /** 股票池调整历史数据访问组件。 */
+    /** 股票池调整历史数据访问组件 */
     @Resource
     private StockPoolAdjustHistoryMapper stockPoolAdjustHistoryMapper;
 
-    /** 投资池服务。 */
+    /** 投资池服务 */
     @Resource
     private InvestmentPoolService investmentPoolService;
 
     /**
-     * 分页查询股票池调整历史列表。
+     * 分页查询股票池调整历史列表
+     *
+     * 执行顺序：
+     * 1. 将结束日期转换为次日零点的排他上限，再分页查询股票池调整历史
+     * 2. 回填投资池全路径名称
+     * 3. 返回本页记录和查询总条数
      *
      * @param req 股票池调整历史筛选条件
      * @return 分页后的股票池调整历史记录
      */
     public PageResult<StockPoolAdjustHistoryDto> queryStockPoolAdjustHistoryPage(StockPoolAdjustHistoryReq req) {
-        // 开启分页并查询股票池调整历史列表。
+        // 1. 将结束日期转换为次日零点的排他上限，再分页查询股票池调整历史
         req.setAdjustTimeEndExclusive(StockQueryFilterHelper.endExclusive(req.getAdjustTimeStart(), req.getAdjustTimeEnd()));
         PageHelper.startPage(req.getPageIndex(), req.getPageSize());
         List<StockPoolAdjustHistoryDto> list = stockPoolAdjustHistoryMapper.queryStockPoolAdjustHistoryPage(req);
-        // 回填投资池全路径名称，保持页面展示完整。
+        // 2. 回填投资池全路径名称
         fillPoolFullName(list);
-        // 读取分页总数并组装分页结果。
+        // 3. 返回本页记录和查询总条数
         PageInfo<StockPoolAdjustHistoryDto> pageInfo = new PageInfo<>(list);
         return new PageResult<>(list, pageInfo.getTotal(), req.getPageIndex(), req.getPageSize());
     }
 
     /**
-     * 按当前筛选条件导出全部命中的股票池调整历史。
+     * 按当前筛选条件导出全部命中的股票池调整历史
+     *
+     * 执行顺序：
+     * 1. 复用列表 SQL 查询全部命中记录，不受当前分页限制
+     * 2. 回填投资池全路径名称，保证导出与页面展示一致
+     * 3. 将查询记录转换为模板所需的导出行
+     * 4. 按股票历史模板生成 Excel 文件
      *
      * @param req 与列表查询相同的筛选条件（可不传分页）
      * @return 可下载的 Excel 文件
      */
     public CommonFileDto exportStockPoolAdjustHistoryExcel(StockPoolAdjustHistoryReq req) {
-        // 复用列表 SQL 查询全部命中记录，不受当前分页限制。
+        // 1. 复用列表 SQL 查询全部命中记录，不受当前分页限制
         req.setAdjustTimeEndExclusive(StockQueryFilterHelper.endExclusive(req.getAdjustTimeStart(), req.getAdjustTimeEnd()));
         List<StockPoolAdjustHistoryDto> list = stockPoolAdjustHistoryMapper.queryStockPoolAdjustHistoryPage(req);
-        // 回填投资池全路径名称，保证导出与页面展示一致。
+        // 2. 回填投资池全路径名称，保证导出与页面展示一致
         fillPoolFullName(list);
-        // 将查询记录转换为模板所需的导出行。
+        // 3. 将查询记录转换为模板所需的导出行
         List<StockPoolAdjustHistoryExportDto> exportRows = buildExportRows(list);
-        // 按股票历史模板生成 Excel 文件。
+        // 4. 按股票历史模板生成 Excel 文件
         return QueryListExportHelper.fillTemplate(
                 "/xlsx/stock_pool_adjust_history_export_template.xlsx",
                 "股票池调整历史",
@@ -75,7 +88,10 @@ public class StockPoolAdjustHistoryService {
     }
 
     /**
-     * 查询调整历史中出现的股票行业选项。
+     * 查询调整历史中出现的股票行业选项
+     *
+     * 执行顺序：
+     * 1. 从股票池调整历史中读取出现过的行业，供页面下拉筛选
      *
      * @return 股票行业选项列表
      */
@@ -84,7 +100,10 @@ public class StockPoolAdjustHistoryService {
     }
 
     /**
-     * 将页面展示字段转换为 Excel 行。
+     * 将页面展示字段转换为 Excel 行
+     *
+     * 执行顺序：
+     * 1. 逐项格式化入池时间
      *
      * @param list 股票池调整历史记录
      * @return Excel 导出行
@@ -94,7 +113,7 @@ public class StockPoolAdjustHistoryService {
         for (StockPoolAdjustHistoryDto source : list) {
             StockPoolAdjustHistoryExportDto target = new StockPoolAdjustHistoryExportDto();
             target.setAdjusterName(source.getAdjusterName());
-            // 提交时间按页面展示格式写入 Excel。
+            // 提交时间按页面展示格式写入 Excel
             target.setSubmitTime(QueryListExportHelper.formatDateTime(source.getSubmitTime()));
             target.setStockName(source.getStockName());
             target.setStockCode(source.getStockCode());
@@ -102,7 +121,7 @@ public class StockPoolAdjustHistoryService {
             target.setAdjustType(source.getAdjustType());
             target.setAdjustMode(source.getAdjustMode());
             target.setTargetPoolPath(source.getTargetPoolPath());
-            // 审核状态按统一字典转换为导出文案。
+            // 审核状态按统一字典转换为导出文案
             target.setAuditStatusLabel(QueryListExportHelper.auditStatusLabel(source.getAuditStatus()));
             result.add(target);
         }
@@ -110,7 +129,10 @@ public class StockPoolAdjustHistoryService {
     }
 
     /**
-     * 填充投资池全路径名称。
+     * 填充投资池全路径名称
+     *
+     * 执行顺序：
+     * 1. 查询投资池全路径名称映射
      *
      * @param list 查询结果
      */
@@ -118,7 +140,7 @@ public class StockPoolAdjustHistoryService {
         if (list.isEmpty()) {
             return;
         }
-        // 查询投资池全路径名称映射。
+        // 查询投资池全路径名称映射
         Map<Long, String> poolFullNameMap = investmentPoolService.queryPoolFullNameMap();
         for (StockPoolAdjustHistoryDto dto : list) {
             String fullName = poolFullNameMap.get(dto.getTargetPoolId());

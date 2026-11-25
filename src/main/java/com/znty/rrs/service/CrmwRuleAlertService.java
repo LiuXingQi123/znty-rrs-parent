@@ -17,7 +17,12 @@ import javax.annotation.Resource;
 import java.util.Date;
 import java.util.List;
 
-/** CRMW规则提醒页面服务，只负责列表查询和人工处理 */
+/**
+ * 查询和处理 CRMW 规则提醒
+ *
+ * 页面在此查询提醒明细，研究员处理后可把对应提醒标为已处理
+ * 在池风险的扫描和提醒维护由 {@link CrmwRuleAlertTaskService} 定时执行
+ */
 @Service
 public class CrmwRuleAlertService {
 

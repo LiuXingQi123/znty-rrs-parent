@@ -28,7 +28,10 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 报告库查询及调库完成后的内部报告生成服务
+ * 查询报告库并为已完成的调库生成内部报告
+ *
+ * 处理入库、出库报告的列表和详情查询，维护报告及其附件关联
+ * 调库完成后按对应业务生成内部报告，已有报告附件通过 {@link SysAttachmentService} 关联或复制
  */
 @Service
 public class ReportService {
@@ -45,7 +48,15 @@ public class ReportService {
     @Resource
     private InvestmentPoolService investmentPoolService;
 
-    /** 按来源与主键查询报告，完整返回该报告的所有有效附件。 */
+    /**
+     * 按来源与主键查询报告，完整返回该报告的所有有效附件
+     *
+     * 执行顺序：
+     * 1. 一次读取该报告的全部附件，不以调库关联文件数量限制详情
+     *
+     * @param req 报告
+     * @return 报告
+     */
     public ReportDto queryReportDetail(ReportReq req) {
         if (req == null || req.getReportId() == null || req.getReportId() <= 0
                 || !("internal".equals(req.getSource()) || "external".equals(req.getSource()))) {
@@ -55,12 +66,22 @@ public class ReportService {
         if (report == null) {
             throw new BizException("报告不存在或已删除，来源：" + req.getSource() + "，报告 ID：" + req.getReportId());
         }
-        // 一次读取该报告的全部附件，不以调库关联文件数量限制详情。
+        // 一次读取该报告的全部附件，不以调库关联文件数量限制详情
         fillReportAttachments(Collections.singletonList(report), "internal".equals(req.getSource()));
         return report;
     }
 
-    /** 分页查询内部报告库列表 */
+    /**
+     * 分页查询内部报告库列表
+     *
+     * 执行顺序：
+     * 1. 按请求的页码和每页条数开启分页，并用筛选条件查询记录
+     * 2. 回填内部报告附件
+     * 3. 将本页记录和查询总条数一起返回
+     *
+     * @param req 报告
+     * @return 报告及分页信息
+     */
     public PageResult<ReportDto> queryInReportPage(ReportReq req) {
         PageHelper.startPage(req.getPageIndex(), req.getPageSize());
         List<ReportDto> list = reportMapper.queryInReportPage(req);
@@ -70,7 +91,17 @@ public class ReportService {
         return new PageResult<>(list, pageInfo.getTotal(), req.getPageIndex(), req.getPageSize());
     }
 
-    /** 分页查询外部报告库列表 */
+    /**
+     * 分页查询外部报告库列表
+     *
+     * 执行顺序：
+     * 1. 按请求的页码和每页条数开启分页，并用筛选条件查询记录
+     * 2. 回填外部报告附件
+     * 3. 将本页记录和查询总条数一起返回
+     *
+     * @param req 报告
+     * @return 报告及分页信息
+     */
     public PageResult<ReportDto> queryOutReportPage(ReportReq req) {
         PageHelper.startPage(req.getPageIndex(), req.getPageSize());
         List<ReportDto> list = reportMapper.queryOutReportPage(req);
@@ -82,6 +113,12 @@ public class ReportService {
 
     /**
      * 回填报告附件列表
+     *
+     * 执行顺序：
+     * 1. 初始化每条报告的附件列表，并收集可查询的报告 ID
+     * 2. 根据内部库或外部库类型批量查询附件
+     * 3. 按报告 ID 归集附件并回填到各条报告
+     *
      * @param list 报告列表
      * @param internal true=内部报告库，false=外部报告库
      */
@@ -89,6 +126,7 @@ public class ReportService {
         if (list.isEmpty()) {
             return;
         }
+        // 1. 初始化每条报告的附件列表，并收集可查询的报告 ID
         List<Long> reportIds = new ArrayList<>();
         for (ReportDto report : list) {
             report.setAttachments(Collections.<SysAttachmentDto>emptyList());
@@ -99,9 +137,11 @@ public class ReportService {
         if (reportIds.isEmpty()) {
             return;
         }
+        // 2. 根据内部库或外部库类型批量查询附件
         List<SysAttachmentDto> attachments = internal
                 ? reportMapper.queryInReportAttachmentList(reportIds)
                 : reportMapper.queryOutReportAttachmentList(reportIds);
+        // 3. 按报告 ID 归集附件并回填到各条报告
         Map<Long, List<SysAttachmentDto>> attachmentMap = new HashMap<>();
         for (SysAttachmentDto attachment : attachments) {
             Long mainId = attachment.getMainId();
@@ -122,9 +162,13 @@ public class ReportService {
     }
 
     /**
-     * 证券、主体或 CRMW 调库直通或正常审批通过后，逐条调库记录将手工上传的信评报告附件沉淀为内部报告库记录。
-     * 每条调库记录生成 1 条 rrs_report_in，其下所有手工上传信评报告附件复制为该报告的 report_in 附件。
-     * 无手工上传信评报告附件的调库记录跳过。
+     * 证券、主体或 CRMW 调库直通或正常审批通过后，逐条调库记录将手工上传的信评报告附件沉淀为内部报告库记录
+     * 每条调库记录生成 1 条 rrs_report_in，其下所有手工上传信评报告附件复制为该报告的 report_in 附件
+     * 无手工上传信评报告附件的调库记录跳过
+     *
+     * 执行顺序：
+     * 1. 逐项查询指定调库记录下手工上传的信评报告附件
+     * 2. 查询全部投资池 ID → 全路径名称映射
      *
      * @param logList 已通过最终复核并落池的调库记录列表
      */
@@ -176,7 +220,15 @@ public class ReportService {
         }
     }
 
-    /** 股票整组终审落池后，按各日志的手工报告附件生成内部股票报告。 */
+    /**
+     * 股票整组终审落池后，按各日志的手工报告附件生成内部股票报告
+     *
+     * 执行顺序：
+     * 1. 逐项查询股票日志手工报告，完整限定业务表和附件分类
+     * 2. 查询全部投资池 ID → 全路径名称映射
+     *
+     * @param logList 日志列表
+     */
     @Transactional(rollbackFor = Exception.class)
     public void addInternalStockReportsOnFinish(List<StockAdjustLogBo> logList) {
         if (logList == null || logList.isEmpty()) {
@@ -201,7 +253,7 @@ public class ReportService {
             ReportInBo report = new ReportInBo();
             report.setAuthorName(log.getAdjusterName());
             report.setReportTitle(log.getStockName() + log.getAdjustMode() + path + "报告");
-            // 复用已有股票报告方向及类型字典。
+            // 复用已有股票报告方向及类型字典
             report.setReportType(resolveReportType(CategoryType.STOCK.getCode(), log.getAdjustMode()));
             report.setSecurityCode(log.getStockCode());
             report.setSecurityType(CategoryType.STOCK.getCode());
@@ -215,10 +267,15 @@ public class ReportService {
     }
 
     /**
-     * 根据证券大类与调入/调出方向映射内部报告类型。
+     * 根据证券大类与调入/调出方向映射内部报告类型
+     *
+     * 执行顺序：
+     * 1. 先区分调入与调出
+     * 2. 债券、基金和股票分别使用对应方向的报告类型，其余品种使用通用类型
      *
      * @param categoryType 证券大类（bond/fund/stock/company 等）
-     * @param adjustMode   调整方向（调入/调出）
+     * @param adjustMode 调整方向（调入/调出）
+     * @return 报告类型
      */
     private String resolveReportType(String categoryType, String adjustMode) {
         boolean outbound = AdjustMode.OUT.getCode().equals(adjustMode);
@@ -235,9 +292,13 @@ public class ReportService {
     }
 
     /**
-     * 根据证券大类映射内部报告证券类型，未匹配归为其他。
+     * 根据证券大类映射内部报告证券类型，未匹配归为其他
+     *
+     * 执行顺序：
+     * 1. 债券、基金、股票和主体沿用各自分类编码，其余分类返回 other
      *
      * @param categoryType 证券大类（bond/fund/stock/company 等）
+     * @return 报告证券类型
      */
     private String resolveReportSecurityType(String categoryType) {
         if (CategoryType.BOND.getCode().equals(categoryType) || CategoryType.FUND.getCode().equals(categoryType)
@@ -248,9 +309,13 @@ public class ReportService {
     }
 
     /**
-     * 新增内部报告记录，返回回填的主键 ID。
+     * 新增内部报告记录，返回回填的主键 ID
+     *
+     * 执行顺序：
+     * 1. 调用 Mapper 写入内部报告，再从保存对象读取回填的 ID
      *
      * @param bo 内部报告记录
+     * @return 调入报告
      */
     public Long addInReport(ReportInBo bo) {
         reportMapper.addInReport(bo);

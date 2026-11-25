@@ -38,7 +38,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 不符合主体债入池规则提醒（含ABS债，担保债取快照担保人内评）
+ * 不符合主体债入池规则提醒（含ABS债，担保债取快照担保人内评）（仅债券）
  *
  * 执行顺序：
  * 1. 扫描已在信用债分级库且当前生效的债券
@@ -68,6 +68,7 @@ public class GradeRuleAlertService implements RrsScheduledTask {
     /** ABS 主体联动提醒类型 */
     private static final String RULE_TYPE_ABS = "absCompanySync";
 
+    /** 定时任务页面展示的入池规则复核范围和结果说明 */
     private static final String PARAM_HELP =
             "参数说明：本任务无需扩展参数，请将 param_json 留空\n"
                     + "处理范围：扫描已在信用债 1～5 级且生效的债券，含 ABS 债，不含境外债\n"
@@ -109,11 +110,27 @@ public class GradeRuleAlertService implements RrsScheduledTask {
     @Resource
     private InvestmentPoolMapper investmentPoolMapper;
 
+    /**
+     * 提供本定时任务的唯一编码
+     *
+     * 执行顺序：
+     * 1. 返回当前任务定义的固定编码
+     *
+     * @return 任务编码
+     */
     @Override
     public String getTaskCode() {
         return TASK_CODE;
     }
 
+    /**
+     * 提供本定时任务的扩展参数说明
+     *
+     * 执行顺序：
+     * 1. 返回当前任务定义的参数说明
+     *
+     * @return 任务参数说明
+     */
     @Override
     public String getParamHelp() {
         return PARAM_HELP;
@@ -158,13 +175,13 @@ public class GradeRuleAlertService implements RrsScheduledTask {
             if (row.getSecurityCode() == null || row.getCurrentPoolId() == null) {
                 continue;
             }
-            // 3.1 ABS 用主档发行人内评，担保债按本池快照取担保人再查最新内评
+            // ABS 用主档发行人内评，担保债按本池快照取担保人再查最新内评
             String fail = securityPoolAdjustService.evaluateGradedInboundForPool(
                     row.getSecurityCode(), row.getCurrentPoolId(), row.getAdjustLogId());
             if (fail == null || fail.isEmpty()) {
                 continue;
             }
-            // 3.2 按依据新增或刷新待办，沿用已处理结论
+            // 按依据新增或刷新待办，沿用已处理结论
             if (upsertOpenAlert(row, fail, scanTime)) {
                 hitCount++;
             } else {
@@ -190,6 +207,10 @@ public class GradeRuleAlertService implements RrsScheduledTask {
 
     /**
      * 分页查询待办
+     *
+     * 执行顺序：
+     * 1. 按请求的页码和每页条数开启分页，并用筛选条件查询记录
+     * 2. 将本页记录和查询总条数一起返回
      *
      * @param req 查询条件
      * @return 分页结果
@@ -257,7 +278,17 @@ public class GradeRuleAlertService implements RrsScheduledTask {
         return dto;
     }
 
-    /** 查询 ABS 规则提醒中的普通权益人候选 */
+    /**
+     * 查询 ABS 规则提醒中的普通权益人候选
+     *
+     * 执行顺序：
+     * 1. 按证券代码查询证券主档
+     * 2. 证券不是 ABS 或主档不存在时终止处理
+     * 3. 查询 ABS 规则提醒需要展示的普通权益人候选
+     *
+     * @param securityCode 证券代码
+     * @return ABS 规则提醒中的普通权益人候选列表
+     */
     public List<AbsAlertCandidateDto> queryAbsCandidates(String securityCode) {
         SecurityInfoBo security = securityPoolAdjustMapper.querySecurityBoByCode(securityCode);
         if (security == null || !CreditBondSpecialInboundRule.isAbs(security)) {
@@ -313,7 +344,7 @@ public class GradeRuleAlertService implements RrsScheduledTask {
             if (pending != null && absIdentityMapper.editPendingScheduledInboundInvalid(pending.getId()) != 1) {
                 throw new BizException("ABS 待确认入池流程状态已变化，请刷新后重试");
             }
-            // 2.1 清理旧版本可能已经落池的被动记录
+            // 清理旧版本可能已经落池的被动记录
             absIdentityMapper.deletePassiveInboundLog(alert.getSecurityCode(), alert.getCurrentPoolId());
             absIdentityMapper.deletePassiveInboundStatus(alert.getSecurityCode(), alert.getCurrentPoolId());
             alert.setIssuerCode(null);
@@ -327,11 +358,12 @@ public class GradeRuleAlertService implements RrsScheduledTask {
             absIdentityService.applySelection(master, req.getIssuerCode(), req.getIssuerName(),
                     req.getInnerIssuerRating(), req.getRatingBondissuer(), req.getRatingBondissuerAgency());
             absIdentityService.validateConfirmedIdentity(alert.getSecurityCode(), req.getIssuerCode());
+            // 研究员确认 ABS 主体后完成主体落档、池状态落地及关系池调出
             confirmPendingInbound(master, alert);
             alert.setIssuerCode(master.getIssuerCode());
             alert.setIssuerName(master.getIssuer());
             alert.setFailReason("研究员确认主体[" + master.getIssuerCode() + "]，已完成入池");
-            // 2.2 按确认后的身份重算依据摘要，后续同主体同依据不再提醒
+            // 按确认后的身份重算依据摘要，后续同主体同依据不再提醒
             alert.setContextKey(absCompanySyncService.resolveContextKey(
                     alert.getSecurityCode(), master.getIssuerCode(), alert.getCurrentPoolId()));
         } else {
@@ -378,7 +410,7 @@ public class GradeRuleAlertService implements RrsScheduledTask {
         List<Long> currentPoolIds = securityPoolAdjustMapper.querySecurityCurrentPoolIdList(
                 pending.getSecurityCode());
         if (currentPoolIds != null && currentPoolIds.contains(pending.getTargetPoolId())) {
-            // 1.1 其他链路已经先行落池时，只关闭重复的待确认日志并补写主体身份
+            // 其他链路已经先行落池时，只关闭重复的待确认日志并补写主体身份
             if (absIdentityMapper.editPendingScheduledInboundInvalid(pending.getId()) != 1) {
                 throw new BizException("ABS 待确认入池流程状态已变化，请刷新后重试");
             }
@@ -432,10 +464,10 @@ public class GradeRuleAlertService implements RrsScheduledTask {
      * 2. 已有待处理待办时直接刷新，保证同券同池只有一条
      * 3. 没有待处理待办时，同一依据已处理过则跳过，否则新增
      *
-     * @param row      在池行
-     * @param fail     不符合原因
+     * @param row 在池行
+     * @param fail 不符合原因
      * @param scanTime 本轮扫描时间
-     * @return true=已新增或刷新待办；false=同一依据已处理，本轮跳过
+     * @return true=已新增或刷新待办，false=同一依据已处理，本轮跳过
      */
     private boolean upsertOpenAlert(IpGradeRuleAlertBo row, String fail, Date scanTime) {
         // 1. 生成本轮依据摘要
@@ -445,6 +477,7 @@ public class GradeRuleAlertService implements RrsScheduledTask {
         IpGradeRuleAlertBo open = gradeRuleAlertMapper.queryOpenAlert(row.getSecurityCode(), row.getCurrentPoolId());
         // 3. 补充特殊债类型说明
         SecurityInfoBo sec = securityPoolAdjustMapper.querySecurityBoByCode(row.getSecurityCode());
+        // 拼特殊类型说明，便于列表一眼看到为何被扫到
         String specialDesc = buildSpecialTypeDesc(sec, row.getSecurityCode());
         if (open == null) {
             // 4. 同一依据已由研究员标记已处理时，不再重复生成待办
@@ -480,10 +513,13 @@ public class GradeRuleAlertService implements RrsScheduledTask {
     /**
      * 判断同券同池最近一条待办是否已按相同依据处理
      *
-     * @param securityCode  证券代码
+     * 执行顺序：
+     * 1. 查询最新档级规则提醒
+     *
+     * @param securityCode 证券代码
      * @param currentPoolId 当前池
-     * @param contextKey    本轮依据摘要
-     * @return true=已处理且依据未变
+     * @param contextKey 本轮依据摘要
+     * @return true=提醒已处理且依据未变，false=没有同一依据的已处理提醒
      */
     private boolean hasProcessedSameBasis(String securityCode, Long currentPoolId, String contextKey) {
         IpGradeRuleAlertBo latest = gradeRuleAlertMapper.queryLatestGradeAlert(securityCode, currentPoolId);
@@ -496,10 +532,13 @@ public class GradeRuleAlertService implements RrsScheduledTask {
      *
      * 包内可见，便于单元测试直接校验同依据复用口径
      *
-     * @param securityCode  证券代码
+     * 执行顺序：
+     * 1. 将证券代码、当前池 ID、池层级和失败原因交给提醒依据工具计算摘要
+     *
+     * @param securityCode 证券代码
      * @param currentPoolId 当前池
-     * @param currentSort   当前档位
-     * @param failReason    不符合原因
+     * @param currentSort 当前档位
+     * @param failReason 不符合原因
      * @return 十六进制摘要
      */
     static String buildGradeContextKey(String securityCode, Long currentPoolId,
@@ -511,11 +550,16 @@ public class GradeRuleAlertService implements RrsScheduledTask {
     /**
      * 拼特殊类型说明，便于列表一眼看到为何被扫到
      *
-     * @param sec          证券
+     * 执行顺序：
+     * 1. 收集证券的特殊债类型，再检查证券或发行人是否命中观察池、重点观察名单
+     * 2. 有命中项时用斜线连接，无命中项时返回普通债及内评或期限变化提示
+     *
+     * @param sec 证券
      * @param securityCode 证券代码
-     * @return 说明
+     * @return 斜线连接的命中类型和观察名单说明，无命中项时返回默认说明
      */
     private String buildSpecialTypeDesc(SecurityInfoBo sec, String securityCode) {
+        // 1. 汇总特殊债类型和观察名单命中项
         List<String> parts = new ArrayList<String>();
         if (CreditBondSpecialInboundRule.isPrivateBond(sec)) {
             parts.add("私募");
@@ -543,6 +587,7 @@ public class GradeRuleAlertService implements RrsScheduledTask {
                 || securityPoolAdjustMapper.queryIssuerInRestrictedPool(securityCode)) {
             parts.add("重点观察名单");
         }
+        // 2. 按命中情况选择默认说明或拼接类型名称
         if (parts.isEmpty()) {
             return "普通债/内评或期限变化";
         }

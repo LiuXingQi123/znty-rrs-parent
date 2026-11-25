@@ -30,11 +30,11 @@ import java.util.Set;
 import java.util.TreeMap;
 
 /**
- * ABS 在库及在途主体身份约束。
+ * 校验 ABS 债券的主体身份，并保存申请快照和审批通过后的主体信息
  *
- * <p>承担身份判定、选择校验、位置占用查询、审批落档与申请快照五类职责：
- * 同一 ABS 的全部有效在库与未结束申请只能有一个主体代码，首次审核通过后永久固定。
- * 主体联动与规则提醒见 {@link AbsCompanySyncService}，评级主体候选缓存见 {@link AbsRatingCompanyCache}。
+ * 承担身份判定、选择校验、位置占用查询、审批落档与申请快照五类职责：
+ * 同一 ABS 的全部有效在库与未结束申请只能有一个主体代码，首次审核通过后永久固定
+ * 主体联动与规则提醒见 {@link AbsCompanySyncService}，评级主体候选缓存见 {@link AbsRatingCompanyCache}
  */
 @Service
 public class AbsIdentityService {
@@ -54,8 +54,11 @@ public class AbsIdentityService {
     /**
      * 保存已查询的关联候选供后续选择复用
      *
+     * 执行顺序：
+     * 1. 按证券代码将已查询的关联评级主体交给候选缓存保存
+     *
      * @param securityCode 证券代码
-     * @param rows         已查询候选
+     * @param rows 已查询候选
      */
     public void rememberRelated(String securityCode, List<RelatedRatingCompanyDto> rows) {
         absRatingCompanyCache.rememberRelated(securityCode, rows);
@@ -63,6 +66,9 @@ public class AbsIdentityService {
 
     /**
      * 读取本次交互已查询的关联候选
+     *
+     * 执行顺序：
+     * 1. 按证券代码从本次交互缓存读取已经查询的关联评级主体
      *
      * @param securityCode 证券代码
      * @return 已查询候选，未查询或已过期时返回 null
@@ -74,6 +80,9 @@ public class AbsIdentityService {
     /**
      * 查询 ABS 规则提醒需要展示的普通权益人候选
      *
+     * 执行顺序：
+     * 1. 按证券代码调用 ABS 候选查询，供规则提醒显示可选关联主体
+     *
      * @param securityCode 证券代码
      * @return 普通权益人候选
      */
@@ -84,6 +93,9 @@ public class AbsIdentityService {
     /**
      * 保存已查询的自选主体及其完整评级数据
      *
+     * 执行顺序：
+     * 1. 将本次查询得到的自选权益人列表及其评级交给候选缓存保存
+     *
      * @param rows 当前页或精确查询结果
      */
     public void rememberSelf(List<SelfSelectedRightsHolderDto> rows) {
@@ -92,6 +104,9 @@ public class AbsIdentityService {
 
     /**
      * 读取已查询的自选主体
+     *
+     * 执行顺序：
+     * 1. 按主体代码从本次交互缓存读取已查询的自选主体
      *
      * @param companyCode 主体代码
      * @return 已查询候选，未查询或已过期时返回 null
@@ -102,11 +117,13 @@ public class AbsIdentityService {
 
     /**
      * 汇总禁止类池校验需要的主体，已确认身份后不再受其他权益人影响
+     *
      * 执行顺序：
-     * 1. 读取主档已确认身份，有值时只使用该主体
-     * 2. 未确认时按四类候选和本次选择汇总
+     * 1. 证券信息为空时返回空列表
+     * 2. 按证券代码查已确认主体，有确认值时使用该主体，否则按候选和本次选择汇总
+     *
      * @param security 本次证券信息
-     * @return 风险主体代码集合
+     * @return 风险主体代码列表，证券信息为空时返回空列表
      */
     public List<String> queryRiskCompanyCodes(SecurityInfoBo security) {
         if (security == null) {
@@ -118,9 +135,11 @@ public class AbsIdentityService {
 
     /**
      * 使用调用方已加载的确认身份汇总主体，避免重复读取主档
+     *
      * 执行顺序：
      * 1. 已确认身份直接返回唯一主体，B/C 等其他权益人不再参与判断
      * 2. 未确认时复用已查询的四类候选并加入本次最终主体，风险判断不受评分是否存在影响
+     *
      * @param security 本次证券信息
      * @param confirmedCode 主档已确认主体，未确认时传空
      * @return 风险主体代码集合
@@ -129,20 +148,31 @@ public class AbsIdentityService {
         if (security == null) {
             return Collections.emptyList();
         }
-        // 已确认身份只认主档主体，其他权益人不再影响该 ABS
+        // 1. 已有确认主体时直接返回该主体
         if (confirmedCode != null && !confirmedCode.trim().isEmpty()) {
             return Collections.singletonList(confirmedCode.trim());
         }
+        // 2. 读取关联候选并汇总本次需要核对的风险主体
         List<RelatedRatingCompanyDto> candidates = findRelated(security.getWindCode());
         if (candidates == null) {
             candidates = securityPoolAdjustMapper.queryRelatedRatingCompanyList(security.getWindCode());
             // 后台查询也在本轮交互有效期内复用
             rememberRelated(security.getWindCode(), candidates);
         }
+        // 汇总已读取的关联主体和本次实际选中的主体
         return collectRiskCompanyCodes(security, candidates);
     }
 
-    /** 按当前确认身份和本批新读到的候选生成风险主体 */
+    /**
+     * 按当前确认身份和本批新读到的候选生成风险主体
+     *
+     * 执行顺序：
+     * 1. 只汇总本批已读的候选
+     *
+     * @param security 本次证券信息
+     * @param candidates 已按展示顺序排列的关联主体
+     * @return 参与风险校验的主体代码列表
+     */
     List<String> queryRiskCompanyCodesWithCandidates(SecurityInfoBo security,
                                                       List<RelatedRatingCompanyDto> candidates) {
         String confirmed = absIdentityMapper.queryConfirmedIdentityCode(security.getWindCode());
@@ -153,7 +183,17 @@ public class AbsIdentityService {
         return collectRiskCompanyCodes(security, candidates);
     }
 
-    /** 汇总已读取的关联主体和本次实际选中的主体 */
+    /**
+     * 汇总已读取的关联主体和本次实际选中的主体
+     *
+     * 执行顺序：
+     * 1. 按候选顺序收集非空的关联主体代码并去重
+     * 2. 补入证券当前的发行主体代码，按收集顺序返回
+     *
+     * @param security 本次证券信息
+     * @param candidates 已按展示顺序排列的关联主体
+     * @return 已读取的关联主体和本次实际选中的主体列表
+     */
     private List<String> collectRiskCompanyCodes(SecurityInfoBo security, List<RelatedRatingCompanyDto> candidates) {
         Set<String> codes = new LinkedHashSet<>();
         for (RelatedRatingCompanyDto candidate : candidates) {
@@ -169,12 +209,14 @@ public class AbsIdentityService {
 
     /**
      * 按已查询主体集合检查观察或其他类型池
+     *
      * 执行顺序：
      * 1. 复用四类候选及本次自选代码
      * 2. 只查询最新池状态
+     *
      * @param security 本次证券
      * @param poolType 池类型
-     * @return 任一主体是否命中
+     * @return true=任一关联主体命中指定池类型，false=所有关联主体均未命中
      */
     public boolean isRelatedInPool(SecurityInfoBo security, String poolType) {
         // 汇总风险主体代码
@@ -184,8 +226,10 @@ public class AbsIdentityService {
 
     /**
      * 将同一主体的五字段写入 ABS 本次业务对象，保留现有矩阵所需评级字段
+     *
      * 执行顺序：
      * 1. 填写经后端查询的主体和评级，身份冲突在下一步校验中展示
+     *
      * @param security 当前证券
      * @param companyCode 最终选择的主体代码
      * @param companyName 最终选择的主体名称
@@ -210,9 +254,11 @@ public class AbsIdentityService {
 
     /**
      * 校验同一 ABS 所有有效在库及未结束申请只使用一个主体
+     *
      * 执行顺序：
      * 1. 查询所有池的有效在库和在途身份
      * 2. 检查主体是否与成功入库后固定的主档及未结束申请一致
+     *
      * @param securityCode 证券代码
      * @param companyCode 本次主体代码
      */
@@ -224,15 +270,28 @@ public class AbsIdentityService {
         }
     }
 
-    /** 校验确认主体时的已确认身份冲突，不把当前被动入池记录当成阻断条件 */
+    /**
+     * 校验确认主体时的已确认身份冲突，不把当前被动入池记录当成阻断条件
+     *
+     * 执行顺序：
+     * 1. 检查待确认主体代码已填写
+     * 2. 查询证券在库和在途记录中已有的主体身份
+     * 3. 忽略空主体代码，遇到与本次不同的有效主体时终止确认并提示冲突
+     *
+     * @param securityCode 证券代码
+     * @param companyCode 本次主体代码
+     */
     public void validateConfirmedIdentity(String securityCode, String companyCode) {
+        // 1. 检查待确认主体代码已填写
         if (companyCode == null || companyCode.trim().isEmpty()) {
             throw new BizException("ABS[" + securityCode + "]缺少确认主体代码");
         }
+        // 2. 查询证券在库和在途记录中已有的主体身份
         List<String> occupied = absIdentityMapper.queryOccupiedIdentityCodes(securityCode);
         if (occupied == null) {
             return;
         }
+        // 3. 忽略空主体代码，遇到与本次不同的有效主体时终止确认并提示冲突
         for (String code : occupied) {
             if (code != null && !code.trim().isEmpty() && !companyCode.equals(code)) {
                 throw new BizException("ABS[" + securityCode + "]已绑定或存在在途主体[" + code
@@ -243,12 +302,14 @@ public class AbsIdentityService {
 
     /**
      * 查询主体占用冲突，供调整说明展示，正常业务冲突不抛异常
+     *
      * 执行顺序：
-     * 1. 检查本次主体与已固定主档、当前有效在库及在途身份
-     * 2. 存在冲突时返回原因，一致时返回空
+     * 1. 本次主体代码已填写时查询是否已有未确认主体的在库或在途记录
+     * 2. 可以比对身份时查询已占用的主体代码，按结果生成冲突原因
+     *
      * @param securityCode 证券代码
      * @param companyCode 本次主体代码
-     * @return 不可调整原因
+     * @return 不可调整的具体原因，无冲突时返回 null
      */
     public String queryIdentityFailure(String securityCode, String companyCode) {
         boolean missingCompany = companyCode == null || companyCode.trim().isEmpty();
@@ -259,14 +320,30 @@ public class AbsIdentityService {
         return resolveIdentityFailure(securityCode, companyCode, unconfirmed, occupied);
     }
 
-    /** 根据入口读取的主体状态生成身份冲突原因 */
+    /**
+     * 根据入口读取的主体状态生成身份冲突原因
+     *
+     * 执行顺序：
+     * 1. 缺少本次拟入库的主体代码时返回原因
+     * 2. 已有未确认主体的在库或在途记录时提示先处理规则提醒
+     * 3. 比对已占用的非空主体代码，有冲突时返回原因，否则返回 null
+     *
+     * @param securityCode 证券代码
+     * @param companyCode 本次主体代码
+     * @param unconfirmed 本次读取到的在库或在途记录中是否有尚未确认的主体
+     * @param occupied 该证券在有效在库及在途记录中已占用的主体代码
+     * @return 主体冲突的具体原因，无冲突时返回 null
+     */
     private String resolveIdentityFailure(String securityCode, String companyCode, boolean unconfirmed, List<String> occupied) {
+        // 1. 缺少本次拟入库的主体代码时返回原因
         if (companyCode == null || companyCode.trim().isEmpty()) {
             return "ABS[" + securityCode + "]缺少本次入库主体代码";
         }
+        // 2. 已有未确认主体的在库或在途记录时提示先处理规则提醒
         if (unconfirmed) {
             return "ABS[" + securityCode + "]已有未确认主体的在库或在途记录，请先处理规则提醒中的主体确认";
         }
+        // 3. 比对已占用的非空主体代码，有冲突时返回原因，否则返回 null
         if (occupied == null) {
             occupied = Collections.emptyList();
         }
@@ -283,9 +360,11 @@ public class AbsIdentityService {
 
     /**
      * 将当前主体冲突写入调整说明，同组联动、互斥及关联市场项一并阻断
+     *
      * 执行顺序：
      * 1. 普通债直接返回，ABS 按实际代码检查本次所选主体
      * 2. 汇总各组冲突原因，保留已有失败原因并标记不可调整
+     *
      * @param security 本次已回填主体的证券
      * @param items 完整校验结果
      */
@@ -294,7 +373,17 @@ public class AbsIdentityService {
         applyIdentityCheckFailures(security, items, null);
     }
 
-    /** 用已读取的主体占用标记各调库组，单券入口传空时实时查询 */
+    /**
+     * 用已读取的主体占用标记各调库组，单券入口传空时实时查询
+     *
+     * 执行顺序：
+     * 1. 按调库组汇总主体冲突，批量入口直接使用已查占用记录
+     * 2. 逐项为校验项追加一条不可调整原因，兼容原有不可变原因列表
+     *
+     * @param security 本次证券信息
+     * @param items 完整校验结果
+     * @param identitiesByCode 按文本索引的列表
+     */
     void applyIdentityCheckFailures(SecurityInfoBo security, List<AdjustCheckDto.CheckResultItem> items,
                                     Map<String, List<Row>> identitiesByCode) {
         if (!CreditBondSpecialInboundRule.isAbs(security) || items == null) return;
@@ -303,6 +392,7 @@ public class AbsIdentityService {
             String code = item.getSecurityCode() == null ? security.getWindCode() : item.getSecurityCode();
             codesByGroup.computeIfAbsent(item.getAdjustGroupKey(), key -> new LinkedHashSet<>()).add(code);
         }
+        // 按调库组汇总主体冲突，批量入口直接使用已查占用记录
         Map<String, Set<String>> failuresByGroup = queryIdentityGroupFailures(security, codesByGroup, identitiesByCode);
         for (AdjustCheckDto.CheckResultItem item : items) {
             Set<String> failures = failuresByGroup.get(item.getAdjustGroupKey());
@@ -317,9 +407,11 @@ public class AbsIdentityService {
 
     /**
      * 按调库组汇总主体冲突，证券与 CRMW 的不同返回结构共用同一校验
+     *
      * 执行顺序：
      * 1. 每个实际证券代码仅查询一次主体占用
      * 2. 将冲突原因归入其所在的调库组
+     *
      * @param security 本次已选择主体的证券
      * @param codesByGroup 各组实际证券代码
      * @return 各组的主体冲突原因
@@ -329,7 +421,18 @@ public class AbsIdentityService {
         return queryIdentityGroupFailures(security, codesByGroup, null);
     }
 
-    /** 按调库组汇总主体冲突，批量入口直接使用已查占用记录 */
+    /**
+     * 按调库组汇总主体冲突，批量入口直接使用已查占用记录
+     *
+     * 执行顺序：
+     * 1. 逐项查询主体占用冲突，供调整说明展示，正常业务冲突不抛异常
+     * 2. 用批量查到的占用记录生成本券的主体冲突原因
+     *
+     * @param security 本次证券信息
+     * @param codesByGroup 各组实际证券代码
+     * @param identitiesByCode 按文本索引的列表
+     * @return 各组的主体冲突原因
+     */
     private Map<String, Set<String>> queryIdentityGroupFailures(SecurityInfoBo security,
             Map<String, Set<String>> codesByGroup, Map<String, List<Row>> identitiesByCode) {
         Map<String, Set<String>> failures = new HashMap<>();
@@ -342,6 +445,7 @@ public class AbsIdentityService {
                     // 每个实际证券只检查一次，批量入口复用已查占用
                     String failure = identitiesByCode == null
                             ? queryIdentityFailure(code, companyCode)
+                            // 用批量查到的占用记录生成本券的主体冲突原因
                             : resolveBatchIdentityFailure(code, companyCode,
                                     identitiesByCode.getOrDefault(code, Collections.emptyList()));
                     failuresByCode.put(code, failure);
@@ -353,7 +457,17 @@ public class AbsIdentityService {
         return failures;
     }
 
-    /** 用批量查到的占用记录生成本券的主体冲突原因 */
+    /**
+     * 用批量查到的占用记录生成本券的主体冲突原因
+     *
+     * 执行顺序：
+     * 1. 使用同一规则生成冲突原因，未确认主体优先于已占用主体
+     *
+     * @param securityCode 证券代码
+     * @param companyCode 本次主体代码
+     * @param identities 行列表
+     * @return 当前证券的主体冲突原因，无冲突时为空
+     */
     private String resolveBatchIdentityFailure(String securityCode, String companyCode, List<Row> identities) {
         boolean unconfirmed = false;
         List<String> occupied = new ArrayList<>();
@@ -370,8 +484,10 @@ public class AbsIdentityService {
 
     /**
      * 为校验项追加一条不可调整原因，兼容原有不可变原因列表
+     *
      * 执行顺序：
      * 1. 复制并去重原原因，清除该项可提交流程及材料豁免
+     *
      * @param item 校验结果项
      * @param failure 本次失败原因
      */
@@ -387,9 +503,11 @@ public class AbsIdentityService {
 
     /**
      * 查询同批 ABS 不同主体选择的冲突，返回逐券原因而不中断整批校验
+     *
      * 执行顺序：
      * 1. 筛选同批多次选择主体的 ABS，普通债保持原规则
      * 2. 同代码不同角色不冲突，省略选择时按原候选首条确定主体
+     *
      * @param selections 各证券的最终主体代码集合
      * @return 存在冲突的证券及原因
      */
@@ -417,9 +535,11 @@ public class AbsIdentityService {
 
     /**
      * 分组前拒绝同批同一 ABS 的不同主体，不能先合并明细后丢掉冲突选择
+     *
      * 执行顺序：
      * 1. 未携带证券类型的内部调用读取主档识别 ABS
      * 2. 比较各来源主项最终选择的主体代码
+     *
      * @param securityCode 来源证券代码
      * @param rightsHolderCode 普通权益人
      * @param selfSelectedCode 自选权益人
@@ -438,6 +558,7 @@ public class AbsIdentityService {
      *
      * 执行顺序：
      * 1. 非 ABS 直接返回，ABS 比较本批已选主体
+     *
      * @param securityCode 来源证券代码
      * @param securityType 页面已知证券类型
      * @param rightsHolderCode 普通权益人
@@ -449,15 +570,31 @@ public class AbsIdentityService {
         validateBatchSelection(securityCode, securityType, rightsHolderCode, selfSelectedCode, selectedBySecurity, null);
     }
 
-    /** 使用本次集中读取的默认权益人，继续核对同券的主体选择 */
+    /**
+     * 使用本次集中读取的默认权益人，继续核对同券的主体选择
+     *
+     * 执行顺序：
+     * 1. 仅对 ABS 校验主体选择，优先取自选权益人，再取关联权益人
+     * 2. 两者均未填写时，从本批默认主体或已查询的关联候选补入默认值
+     * 3. 仍无主体时提示选择，发现同一 ABS 在本批选择了不同主体时终止校验
+     *
+     * @param securityCode 证券代码
+     * @param securityType 页面已知证券类型
+     * @param rightsHolderCode 普通权益人
+     * @param selfSelectedCode 自选权益人
+     * @param selectedBySecurity 本批已选主体
+     * @param defaultRightsHolders 按文本索引的文本
+     */
     void validateBatchSelection(String securityCode, String securityType, String rightsHolderCode,
                                 String selfSelectedCode, Map<String, String> selectedBySecurity,
                                 Map<String, String> defaultRightsHolders) {
+        // 1. 仅对 ABS 校验主体选择，优先取自选权益人，再取关联权益人
         if (!"abs".equals(securityType)) {
             return;
         }
         String code = selfSelectedCode != null && !selfSelectedCode.trim().isEmpty()
                 ? selfSelectedCode.trim() : rightsHolderCode;
+        // 2. 两者均未填写时，从本批默认主体或已查询的关联候选补入默认值
         if (code == null || code.trim().isEmpty()) {
             if (defaultRightsHolders == null) {
                 // 兼容沿用交互候选的入口
@@ -467,6 +604,7 @@ public class AbsIdentityService {
                 code = defaultRightsHolders.get(securityCode);
             }
         }
+        // 3. 仍无主体时提示选择，发现同一 ABS 在本批选择了不同主体时终止校验
         if (code == null || code.trim().isEmpty()) {
             throw new BizException("ABS[" + securityCode + "]请选择权益人或自选权益人");
         }
@@ -478,10 +616,12 @@ public class AbsIdentityService {
 
     /**
      * 为申请页面提供已固定或在途占用的主体，成功入库后出清仍沿用原主体
+     *
      * 执行顺序：
      * 1. 检查所有在库和在途身份是否一致
      * 2. 主档已保存该身份时直接复用，否则读取尚未通过的申请快照
      * 3. 未转正 ABS 主档只有登记主体时，按主体代码补充评级
+     *
      * @param security 当前主档详情
      * @return 当前占用主体，没有占用时为空
      */
@@ -524,9 +664,11 @@ public class AbsIdentityService {
 
     /**
      * 批量筛选 ABS 并恢复固定或在途占用的唯一主体
+     *
      * 执行顺序：
      * 1. 每批最多一千个代码读取 ABS 主档
      * 2. 只对 ABS 查询在库及在途占用，普通债保留原批量路径
+     *
      * @param securityCodes 已去重证券代码
      * @return 被占用的主体，未占用证券不返回
      */
@@ -545,9 +687,11 @@ public class AbsIdentityService {
 
     /**
      * 从精确申请快照保存审核通过的 ABS 主体，和落池处于同一事务
+     *
      * 执行顺序：
      * 1. 复核所有 ABS 调入项的在库和在途主体
      * 2. 同一批主体一致后，仅更新主档五字段
+     *
      * @param logs 本次已通过最终业务复核的日志
      */
     public void approveIdentities(List<IpAdjustLogBo> logs) {
@@ -557,8 +701,10 @@ public class AbsIdentityService {
 
     /**
      * 最终业务复核前检查 ABS 在库和在途主体
+     *
      * 执行顺序：
      * 1. 从各笔申请快照读取主体并校验，不提前修改主档
+     *
      * @param logs 本次待生效日志
      */
     public void validateApprovalIdentities(List<IpAdjustLogBo> logs) {
@@ -568,8 +714,10 @@ public class AbsIdentityService {
 
     /**
      * CRMW 标的 ABS 与普通池共用身份
+     *
      * 执行顺序：
      * 1. 从组合申请快照读取身份并按指定阶段校验或保存
+     *
      * @param logs 组合申请日志
      * @param save 是否审核通过并保存主档
      */
@@ -580,9 +728,11 @@ public class AbsIdentityService {
 
     /**
      * 从申请快照复核主体并按需保存主档
+     *
      * 执行顺序：
      * 1. 汇总本次主体并检查同批不同身份
      * 2. 检查在库及在途身份，实际通过时更新五字段
+     *
      * @param logs 本次日志
      * @param save 是否更新主档
      * @param crmw 是否读取 CRMW 快照
@@ -634,9 +784,11 @@ public class AbsIdentityService {
 
     /**
      * 为本次每条实际证券日志保存同一主体身份，关联市场也使用各自证券代码
+     *
      * 执行顺序：
      * 1. 从后端选择结果复制五字段和旧矩阵评级字段
      * 2. 逐日志保存不可变申请快照，空前端基本信息也不会漏存
+     *
      * @param security 后端已核验的本次证券信息
      * @param logs 本次产生的日志
      * @param submitterId 提交人
@@ -666,9 +818,11 @@ public class AbsIdentityService {
 
     /**
      * 最终规则复核使用本笔已选主体，同时保留主档最新证券状态和日期
+     *
      * 执行顺序：
      * 1. 按申请来源精确读取快照
      * 2. 仅回填五个主体字段，担保人字段不承载 ABS 评级主体
+     *
      * @param security 当前主档业务对象
      * @param log 本笔日志
      * @param crmw 是否为组合申请
@@ -689,8 +843,10 @@ public class AbsIdentityService {
 
     /**
      * 分批读取代码集合中的 ABS 主档
+     *
      * 执行顺序：
      * 1. 每批最多一千个代码筛选 ABS，并按代码建立索引
+     *
      * @param codes 实际证券代码
      * @return ABS 主档索引
      */

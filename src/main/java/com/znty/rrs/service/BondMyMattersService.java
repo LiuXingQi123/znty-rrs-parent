@@ -14,7 +14,10 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 我的事宜服务，负责查询当前用户相关的流程事项。
+ * 查询当前用户相关的债券调库事项
+ *
+ * 分别查询当前用户的待办、已办和已发起债券事项，并返回页面筛选所需的流程选项
+ * {@link MyMattersService} 按债券业务分派查询，列表使用投资池全路径名称区分同名子池
  */
 @Service
 public class BondMyMattersService {
@@ -28,7 +31,12 @@ public class BondMyMattersService {
     private InvestmentPoolService investmentPoolService;
 
     /**
-     * 分页查询我的事宜列表（待处理 / 已完成）。
+     * 分页查询我的事宜列表（待处理 / 已完成）
+     *
+     * 执行顺序：
+     * 1. 按请求的页码和每页条数开启分页，并用筛选条件查询记录
+     * 2. 将流程描述中的目标池叶子名称替换为全路径
+     * 3. 将本页记录和查询总条数一起返回
      *
      * @param req 筛选与分页参数
      * @return 分页结果
@@ -43,7 +51,12 @@ public class BondMyMattersService {
     }
 
     /**
-     * 分页查询我发起的事宜列表。
+     * 分页查询我发起的事宜列表
+     *
+     * 执行顺序：
+     * 1. 按请求的页码和每页条数开启分页，并用筛选条件查询记录
+     * 2. 将流程描述中的目标池叶子名称替换为全路径
+     * 3. 将本页记录和查询总条数一起返回
      *
      * @param req 筛选与分页参数（按 currentUserId 作为发起人过滤）
      * @return 分页结果
@@ -58,7 +71,10 @@ public class BondMyMattersService {
     }
 
     /**
-     * 查询当前用户事宜中出现过的流程下拉选项。
+     * 查询当前用户事宜中出现过的流程下拉选项
+     *
+     * 执行顺序：
+     * 1. 按当前用户的事宜范围查询出现过的审批流程，作为页面筛选选项
      *
      * @param req 含 currentUserId
      * @return 流程下拉选项
@@ -68,9 +84,14 @@ public class BondMyMattersService {
     }
 
     /**
-     * 将流程描述中的目标池叶子名称替换为全路径名称。
+     * 将流程描述中的目标池叶子名称替换为全路径名称
      * 例如："管理员 将 23某基建PRN001 调入 二级库 的审批申请"
-     *    → "管理员 将 23某基建PRN001 调入 信用债大库/二级库 的审批申请"
+     * → "管理员 将 23某基建PRN001 调入 信用债大库/二级库 的审批申请"
+     *
+     * 执行顺序：
+     * 1. 获取池 ID → 全路径名称映射
+     *
+     * @param list 当前页股票流程事项
      */
     private void replacePoolNameWithFullPath(List<MyMattersDto> list) {
         if (list.isEmpty()) {

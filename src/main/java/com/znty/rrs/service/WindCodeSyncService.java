@@ -24,7 +24,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 /**
- * Wind代码变更同步
+ * Wind代码变更同步（仅债券）
  *
  * 执行顺序：
  * 1. 按扫描天数查询 Wind 代码变更记录
@@ -37,30 +37,50 @@ import org.springframework.util.StringUtils;
 public class WindCodeSyncService implements RrsScheduledTask {
     /** 任务编码 */
     public static final String TASK_CODE = "wind_code_sync";
+
     /** 任务名称 */
     public static final String TASK_NAME = "Wind代码变更同步（仅债券）";
+
     /** 未填写扫描天数时使用 1 天 */
     private static final int DEFAULT_SCAN_DAYS = 1;
+
     /** 解析任务扩展参数，拒绝 JSON 对象后面再拼其他内容 */
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper()
             .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
+
     /** 读取页面保存的任务扩展参数 */
     @Resource
     private ScheduledTaskMapper scheduledTaskMapper;
+
     /** 查询 Wind 代码变更和证券信息 */
     @Resource
     private WindCodeSyncMapper windCodeSyncMapper;
+
     /** 把证券信息、临时代码记录和调库记录中的旧代码改成新代码 */
     @Resource
     private TempSecurityCodeService tempSecurityCodeService;
 
-    /** 返回 Wind代码变更同步任务编码 */
+    /**
+     * 返回 Wind代码变更同步任务编码
+     *
+     * 执行顺序：
+     * 1. 返回当前任务定义的固定编码
+     *
+     * @return 任务编码
+     */
     @Override
     public String getTaskCode() {
         return TASK_CODE;
     }
 
-    /** 提供 Wind代码变更同步任务参数说明 */
+    /**
+     * 提供 Wind代码变更同步任务参数说明
+     *
+     * 执行顺序：
+     * 1. 返回当前任务定义的参数说明
+     *
+     * @return 任务参数说明
+     */
     @Override
     public String getParamHelp() {
         return "参数说明：scanDays 为扫描天数，须为正整数；扩展参数留空或省略 scanDays 时默认 1 天\n"
@@ -98,7 +118,7 @@ public class WindCodeSyncService implements RrsScheduledTask {
             // 2. 查询并逐条换码，由 doSync 记录每条结果
             doSync(detail, summary);
         } catch (Exception e) {
-            // 2.1 查询等操作出错时记为任务失败
+            // 查询等操作出错时记为任务失败
             executionFailed = true;
             summary.failed++;
             log.error("Wind 代码变更扫描异常", e);
@@ -164,7 +184,7 @@ public class WindCodeSyncService implements RrsScheduledTask {
                     throw new IllegalStateException("Wind 单条事务未返回明确结果");
                 }
             } catch (Exception e) {
-                // 6.1 单只证券失败时记录原因，继续处理其他 SEC_ID
+                // 单只证券失败时记录原因，继续处理其他 SEC_ID
                 summary.failed++;
                 log.error("Wind 换码失败，SEC_ID={}，记录旧码={}，最新代码={}", currentChange.getSecId(),
                         currentChange.getOldWindCode(), currentChange.getNewWindCode(), e);
@@ -219,6 +239,9 @@ public class WindCodeSyncService implements RrsScheduledTask {
     /**
      * 按 SEC_ID 整理最新变更，便于检查并列记录是否冲突
      *
+     * 执行顺序：
+     * 1. 按输入顺序把同 SEC_ID 的变更记录放到同一列表，保留并列事件供后续核对
+     *
      * @param windCodeChanges Wind 查询返回的变更记录
      * @return SEC_ID 与变更列表的对应关系，保留各证券首次出现的顺序
      */
@@ -233,6 +256,9 @@ public class WindCodeSyncService implements RrsScheduledTask {
     /**
      * 检查最新日期、最新操作时间下的并列记录是否指向同一个新代码
      *
+     * 执行顺序：
+     * 1. 用列表首条作比较基准，逐条核对新代码和变更日期，出现不同值时抛出异常
+     *
      * @param changes 同一 SEC_ID 在最新 CHANGE_DATE 和 OPDATE 下的变更记录
      */
     private void validateLatestChanges(List<WindCodeChangeDto> changes) {
@@ -246,16 +272,24 @@ public class WindCodeSyncService implements RrsScheduledTask {
         }
     }
 
-    /** 单次任务的业务处理计数，供核心流程与执行结果包装共用 */
+    /**
+     * 汇总本轮 Wind 证券代码变更的执行结果
+     *
+     * 分别统计实际换码、主档缺失、已经是最新代码、重复事件和失败的数量，供任务结束时生成结果
+     */
     private static final class SyncSummary {
         /** 实际换码成功条数 */
         private int updated;
+
         /** 主档缺失跳过条数 */
         private int missing;
+
         /** 主档当前代码已经是最新代码的跳过条数 */
         private int alreadyCurrent;
+
         /** 已完成事件跳过条数 */
         private int repeated;
+
         /** 换码失败或最新记录冲突的证券数量 */
         private int failed;
     }

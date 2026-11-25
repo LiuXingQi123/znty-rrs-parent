@@ -25,23 +25,40 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-/** 主体 Excel 调库校验的本次请求取数 */
+/**
+ * 处理 Excel 主体调库校验的数据准备
+ *
+ * 证券池 Excel 导入页面校验主体调库或清空目标池时，通过 {@link SecurityPoolExcelImportService} 调用本类
+ * 一次读取本批主体及相关池状态、投资池关系和所需评级，为 {@link ForbiddenPoolAdjustService} 逐项校验准备数据
+ */
 @Service
 public class BatchCompanyAdjustCheckService {
 
+    /** 每批读取主体校验数据的最大条数 */
     private static final int QUERY_SIZE = 500;
 
+    /** 批量读取主体调库校验所需的数据 */
     @Resource
     private BatchCompanyAdjustCheckMapper batchCompanyAdjustCheckMapper;
+
+    /** 读取禁投池状态和投资池关系 */
     @Resource
     private ForbiddenPoolAdjustMapper forbiddenPoolAdjustMapper;
+
+    /** 读取本批校验涉及的投资池配置 */
     @Resource
     private InvestmentPoolMapper investmentPoolMapper;
+
+    /** 取得本批认可的外部评级机构编码 */
     @Resource
     private ExternalRatingAgencyService externalRatingAgencyService;
 
     /**
      * 读取主体清空候选的主档，再加载调出校验数据
+     *
+     * 执行顺序：
+     * 1. 逐项查询主体明细
+     * 2. 独立清空按普通出库规则读取外评
      *
      * @param codes 清空差集中的主体代码
      * @param poolIds 清空主体所在目标池
@@ -67,6 +84,7 @@ public class BatchCompanyAdjustCheckService {
     /**
      * 按本次输入的主体和池范围批量读取 Excel 校验数据
      *
+     * 执行顺序：
      * 1. 读取池配置与关系，确定手工及可能生成的联动互斥池
      * 2. 读取池容量、开放日和需要的评级机构配置
      * 3. 分批读取有效在池状态、在途节点、占用池及低外评
@@ -82,13 +100,29 @@ public class BatchCompanyAdjustCheckService {
         return load(companies, poolIds, inbound, inbound);
     }
 
-    /** 批量读取本次规则需要的主体状态和池配置 */
+    /**
+     * 批量读取本次规则需要的主体状态和池配置
+     *
+     * 执行顺序：
+     * 1. 没有待校验主体时返回仅含空池和空关系数据的校验上下文
+     * 2. 读取目标池和池关系，整理本次校验涉及的池
+     * 3. 查询当前在池数量及开放日，准备冻结期和黑名单外评校验所需的数据
+     * 4. 按主体代码分批读取池状态等校验数据并组装上下文
+     *
+     * @param companies 本次识别成功并有待校验行的主体
+     * @param poolIds 清空主体所在目标池
+     * @param inbound 是否为调入
+     * @param checkBlacklistRating 是否校验黑名单评级
+     * @return 本次请求共享的主体校验数据
+     */
     private CompanyAdjustCheckContext load(Map<String, ForbiddenPoolAdjustDto> companies, Set<Long> poolIds,
                                            boolean inbound, boolean checkBlacklistRating) {
         BatchCompanyAdjustCheckData data = new BatchCompanyAdjustCheckData();
+        // 1. 没有待校验主体时返回仅含空池和空关系数据的校验上下文
         if (companies.isEmpty()) {
             return new CompanyAdjustCheckContext(companies, Collections.emptyList(), Collections.emptyList(), data);
         }
+        // 2. 读取目标池和池关系，整理本次校验涉及的池
         List<InvestmentPoolBo> pools = investmentPoolMapper.queryPoolList();
         List<PoolRelationBo> relations = forbiddenPoolAdjustMapper.queryAllPoolRelationList();
         for (InvestmentPoolBo pool : pools) {
@@ -111,6 +145,7 @@ public class BatchCompanyAdjustCheckService {
                 outboundPools.add(relation.getRelationPoolId());
             }
         }
+        // 3. 查询当前在池数量及开放日，准备冻结期和黑名单外评校验所需的数据
         for (Row row : batchCompanyAdjustCheckMapper.queryPoolCounts(relevantPools)) {
             data.capacities.put(row.getTargetPoolId(), row.getCurrentCount());
         }
@@ -128,6 +163,7 @@ public class BatchCompanyAdjustCheckService {
         data.ratingAgenciesConfigured = !agencies.isEmpty();
         data.categoryType = forbiddenPoolAdjustMapper.queryCategoryTypeBySecurityType("company");
 
+        // 4. 按主体代码分批读取池状态等校验数据并组装上下文
         List<String> codes = companies.values().stream().map(ForbiddenPoolAdjustDto::getCompanyCode)
                 .distinct().collect(Collectors.toList());
         for (String code : codes) {
@@ -143,6 +179,10 @@ public class BatchCompanyAdjustCheckService {
 
     /**
      * 加载一批主体的状态及外评
+     *
+     * 执行顺序：
+     * 1. 逐项查询当前投资池
+     * 2. 逐项查询在途投资池
      *
      * @param data 本次校验数据
      * @param codes 本次查询的主体代码

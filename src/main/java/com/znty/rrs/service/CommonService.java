@@ -19,7 +19,10 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * 公共查询业务服务
+ * 提供业务页面共用的投资池、市场和关联主体查询
+ *
+ * 投资池树结合用户权限和页面筛选保留匹配节点，补齐父节点以便页面完整展开路径
+ * 支持查询证券的担保人等关联主体及其最新内评分，ABS 相关候选由 {@link AbsIdentityService} 保存供后续使用
  */
 @Service
 public class CommonService {
@@ -36,13 +39,24 @@ public class CommonService {
     @Resource
     private InvestmentPoolService investmentPoolService;
 
-    /** 查询投资市场共用代码；同券关联和投资池配置校验使用同一枚举。 */
+    /**
+     * 查询投资市场共用代码；同券关联和投资池配置校验使用同一枚举
+     *
+     * 执行顺序：
+     * 1. 查询代码列表
+     *
+     * @return 市场代码列表
+     */
     public List<String> queryMarketCodeList() {
         return MarketCode.queryCodeList();
     }
 
     /**
      * 查询投资池树节点列表
+     *
+     * 执行顺序：
+     * 1. 查询当前用户拥有的指定类型投资池权限
+     * 2. 权限裁剪后再按品种或池编码收窄，祖先只从仍可见的节点里补
      *
      * @param req 公共查询请求
      * @return 投资池树节点列表，poolName 为节点名称，poolFullName 为全路径名称
@@ -56,7 +70,7 @@ public class CommonService {
             // 按投资品种或投资池编码收窄可选树，并保留命中节点的祖先
             return retainRequestedPools(nodes, req);
         }
-        // 查询当前用户拥有的指定类型投资池权限
+        // 1. 查询当前用户拥有的指定类型投资池权限
         Set<Long> permittedIds = investmentPoolService.queryPermittedPoolIdsByUser(
                 req.getCurrentUserId(), req.getPermissionType());
         if (permittedIds == null) {
@@ -80,12 +94,20 @@ public class CommonService {
                 filtered.add(node);
             }
         }
-        // 权限裁剪后再按品种或池编码收窄，祖先只从仍可见的节点里补
+        // 2. 权限裁剪后再按品种或池编码收窄，祖先只从仍可见的节点里补
         return retainRequestedPools(filtered, req);
     }
 
     /**
-     * 按投资品种或投资池编码保留节点，并补齐命中节点的祖先。
+     * 按投资品种或投资池编码保留节点，并补齐命中节点的祖先
+     *
+     * 执行顺序：
+     * 1. 去掉空白编码；空集合表示这个维度不参与过滤
+     * 2. 两个条件都没传时保持原树，开放日等未收窄的页面不受影响
+     * 3. 按 id 建索引，后面才能沿 parentId 补祖先
+     * 4. 同时传入时取交集；只传其中一个时，另一项视为不限制
+     * 5. 父级自己可以不含目标品种，只要下级命中就留下，树才还能展开
+     * 6. 按原查询顺序输出，不打乱 outer_sort / inner_sort
      *
      * @param nodes 当前可见的投资池树节点
      * @param req 公共查询请求
@@ -95,19 +117,20 @@ public class CommonService {
         if (nodes == null || nodes.isEmpty()) {
             return nodes == null ? new ArrayList<PoolTreeDto>() : nodes;
         }
-        // 去掉空白编码；空集合表示这个维度不参与过滤
+        // 1. 去掉空白编码；空集合表示这个维度不参与过滤
         Set<String> varietyCodes = normalizeCodes(req.getIncludeVarietyCodes());
+        // 去掉空白编码，得到精确匹配用的编码集合
         Set<String> poolCodes = normalizeCodes(req.getIncludePoolCodes());
-        // 两个条件都没传时保持原树，开放日等未收窄的页面不受影响
+        // 2. 两个条件都没传时保持原树，开放日等未收窄的页面不受影响
         if (varietyCodes.isEmpty() && poolCodes.isEmpty()) {
             return nodes;
         }
-        // 按 id 建索引，后面才能沿 parentId 补祖先
+        // 3. 按 id 建索引，后面才能沿 parentId 补祖先
         Map<Long, PoolTreeDto> nodeMap = new HashMap<>();
         for (PoolTreeDto node : nodes) {
             nodeMap.put(node.getId(), node);
         }
-        // 同时传入时取交集；只传其中一个时，另一项视为不限制
+        // 4. 同时传入时取交集；只传其中一个时，另一项视为不限制
         Set<Long> matchedIds = new HashSet<>();
         for (PoolTreeDto node : nodes) {
             // 判断该节点的投资品种是否命中请求
@@ -117,7 +140,7 @@ public class CommonService {
                 matchedIds.add(node.getId());
             }
         }
-        // 父级自己可以不含目标品种，只要下级命中就留下，树才还能展开
+        // 5. 父级自己可以不含目标品种，只要下级命中就留下，树才还能展开
         Set<Long> retainedIds = new HashSet<>();
         for (Long poolId : matchedIds) {
             PoolTreeDto current = nodeMap.get(poolId);
@@ -125,7 +148,7 @@ public class CommonService {
                 current = nodeMap.get(current.getParentId());
             }
         }
-        // 按原查询顺序输出，不打乱 outer_sort / inner_sort
+        // 6. 按原查询顺序输出，不打乱 outer_sort / inner_sort
         List<PoolTreeDto> filtered = new ArrayList<>();
         for (PoolTreeDto node : nodes) {
             if (retainedIds.contains(node.getId())) {
@@ -136,7 +159,10 @@ public class CommonService {
     }
 
     /**
-     * 去掉空白编码，得到精确匹配用的编码集合。
+     * 去掉空白编码，得到精确匹配用的编码集合
+     *
+     * 执行顺序：
+     * 1. 跳过空值及仅含空白的编码，按原顺序收集去掉首尾空白后的不同编码
      *
      * @param codes 前端传入的编码列表
      * @return 去空白后的编码集合
@@ -156,11 +182,15 @@ public class CommonService {
     }
 
     /**
-     * 判断投资品种 JSON 是否包含任一目标编码。
+     * 判断投资品种 JSON 是否包含任一目标编码
+     *
+     * 执行顺序：
+     * 1. 投资品种或目标编码为空时直接判为不匹配
+     * 2. 逐个查找带双引号的完整编码，任一命中即返回
      *
      * @param varietyCodes 投资品种 JSON 数组字符串
      * @param expectedCodes 目标品种编码
-     * @return 包含任一目标编码时返回 true
+     * @return true=包含至少一个目标品种编码，false=未包含目标品种编码
      */
     private boolean containsAnyVariety(String varietyCodes, Set<String> expectedCodes) {
         if (varietyCodes == null || varietyCodes.isEmpty() || expectedCodes == null || expectedCodes.isEmpty()) {
@@ -176,7 +206,11 @@ public class CommonService {
     }
 
     /**
-     * 批量查询证券的四类关系主体及其最新主体内评分。
+     * 批量查询证券的四类关系主体及其最新主体内评分
+     *
+     * 执行顺序：
+     * 1. 按去重后的 Wind 证券代码一次性查询四类关系主体及最新内评
+     * 2. 批量查询证券的四类关系主体及其最新主体内评分
      *
      * @param req Wind 证券代码列表
      * @return 担保人、差额支付承诺人、权益相关主体、原始权益人，缺少评级时字段保持为空
@@ -216,7 +250,10 @@ public class CommonService {
     }
 
     /**
-     * 查询当前证券下指定的合格担保人及其最新主体内评分。
+     * 查询当前证券下指定的合格担保人及其最新主体内评分
+     *
+     * 执行顺序：
+     * 1. 复用按证券查询，保证页面展示与调库规则使用同一套担保人关系口径
      *
      * @param securityCode 证券 Wind 代码
      * @param guarantorCode 担保人主体代码
