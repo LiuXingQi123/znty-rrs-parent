@@ -1,23 +1,42 @@
 package com.znty.rrs.common.enums;
 
 /**
- * 存续或到期的查询筛选选项（D 为到期，其余状态为存续）
- * <p>与 {@link SecurityStatus}（{@code rrs_securityinfo.security_status} 上市状态 L/N/D/U）不是同一概念。</p>
+ * 债券存续状态筛选选项
+ *
+ * 证券状态为 {@code D} 时归为到期，其余状态归为存续
+ * 证券主档的上市状态由 {@link SecurityStatus} 表示，取值为 {@code L}、{@code N}、{@code D} 和 {@code U}
  */
 public enum BondStatus {
-    /** 存续 */
+
+    /**
+     * 存续
+     */
     ACTIVE("active"),
-    /** 到期 */
+
+    /**
+     * 到期
+     */
     MATURED("matured");
 
-    /** 枚举 code 值 */
+    /**
+     * 债券存续状态筛选编码
+     */
     private final String code;
 
+    /**
+     * 记录当前枚举项的编码
+     *
+     * @param code 当前枚举项使用的债券存续状态筛选编码
+     */
     BondStatus(String code) {
         this.code = code;
     }
 
-    /** 获取 code 值 */
+    /**
+     * 获取当前枚举项对应的债券存续状态筛选编码
+     *
+     * @return 枚举项定义的固定编码
+     */
     public String getCode() {
         return code;
     }

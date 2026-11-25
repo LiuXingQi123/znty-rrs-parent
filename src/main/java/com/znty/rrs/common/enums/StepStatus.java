@@ -1,28 +1,61 @@
 package com.znty.rrs.common.enums;
 
-/** 流程步骤状态（对应 ip_adjust_step.step_status） */
+/**
+ * 流程步骤状态
+ *
+ * 对应 {@code ip_adjust_step.step_status}，表示该步骤当前等待处理或已产生的处理结果
+ */
 public enum StepStatus {
-    /** 待处理 */
+
+    /**
+     * 待处理
+     */
     PENDING("pending"),
-    /** 通过 */
+
+    /**
+     * 通过
+     */
     APPROVE("approve"),
-    /** 驳回 */
+
+    /**
+     * 驳回
+     */
     REJECT("reject"),
-    /** 提交 */
+
+    /**
+     * 提交
+     */
     SUBMIT("submit"),
-    /** 自动处理 */
+
+    /**
+     * 自动处理
+     */
     AUTO_PROCESS("auto_process"),
-    /** 已撤回 */
+
+    /**
+     * 已撤回
+     */
     CANCELED("canceled");
 
-    /** 枚举 code 值 */
+    /**
+     * 流程步骤状态编码
+     */
     private final String code;
 
+    /**
+     * 记录当前枚举项的编码
+     *
+     * @param code 当前枚举项使用的流程步骤状态编码
+     */
     StepStatus(String code) {
         this.code = code;
     }
 
-    /** 获取 code 值 */
+    /**
+     * 获取当前枚举项对应的流程步骤状态编码
+     *
+     * @return 枚举项定义的固定编码
+     */
     public String getCode() {
         return code;
     }
