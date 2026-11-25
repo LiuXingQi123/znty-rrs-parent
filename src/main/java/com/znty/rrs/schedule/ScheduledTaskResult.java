@@ -6,7 +6,9 @@ import lombok.Data;
 import java.util.Date;
 
 /**
- * 定时任务单次执行结果（成功/失败、说明、过程日志、影响条数、起止时间与耗时）
+ * 记录定时任务单次执行的状态、说明、影响条数和时间
+ *
+ * 结果说明供执行历史列表展示，由 {@link TaskDetailLog} 汇总的过程日志供历史详情查看
  */
 @Data
 public class ScheduledTaskResult {
@@ -17,21 +19,19 @@ public class ScheduledTaskResult {
     /** 任务名称 */
     private String taskName;
 
-    /** 是否成功 */
+    /** 本次执行是否成功 */
     private boolean success;
 
-    /** 结果说明（摘要，列表展示） */
+    /** 执行历史列表展示的结果说明 */
     private String message;
 
-    /**
-     * 执行过程日志（多行文本，写入历史 detail_log，供页面查看）
-     */
+    /** 写入执行历史 detail_log 的多行过程日志，无日志时为 null */
     private String detailLog;
 
-    /** 影响条数（入池/出池等业务计数，无则 0） */
+    /** 本次执行影响的业务记录条数，例如入池或出池条数，失败时为 0 */
     private int affectedCount;
 
-    /** 耗时毫秒 */
+    /** 本次执行耗时，单位为毫秒 */
     private long durationMs;
 
     /** 开始时间 */
@@ -43,7 +43,20 @@ public class ScheduledTaskResult {
     private Date endTime;
 
     /**
-     * 构造成功执行结果（含影响条数、开始时间、耗时与过程日志）
+     * 创建可附带过程日志的成功结果
+     *
+     * 执行顺序：
+     * 1. 标记执行成功，保存任务信息、结果说明、影响条数和过程日志
+     * 2. 保存开始时间和耗时，并据此算出结束时间
+     *
+     * @param taskCode 任务编码
+     * @param taskName 任务名称
+     * @param message 本次执行的结果说明
+     * @param affectedCount 本次执行影响的业务记录条数
+     * @param startTime 本次执行的开始时间
+     * @param durationMs 本次执行耗时，单位为毫秒
+     * @param detailLog 多行过程日志，无日志时传 null
+     * @return 本次执行的成功结果
      */
     public static ScheduledTaskResult success(String taskCode, String taskName, String message,
                                              int affectedCount, Date startTime, long durationMs,
@@ -55,6 +68,7 @@ public class ScheduledTaskResult {
         result.setMessage(message);
         result.setDetailLog(detailLog);
         result.setAffectedCount(affectedCount);
+        // 用开始时间和耗时算出结束时间
         result.setStartTime(startTime);
         result.setDurationMs(durationMs);
         result.setEndTime(new Date(startTime.getTime() + durationMs));
@@ -62,7 +76,18 @@ public class ScheduledTaskResult {
     }
 
     /**
-     * 构造成功执行结果（无过程日志）
+     * 创建无过程日志的成功结果
+     *
+     * 执行顺序：
+     * 1. 将过程日志置为 null，沿用成功结果的构造步骤
+     *
+     * @param taskCode 任务编码
+     * @param taskName 任务名称
+     * @param message 本次执行的结果说明
+     * @param affectedCount 本次执行影响的业务记录条数
+     * @param startTime 本次执行的开始时间
+     * @param durationMs 本次执行耗时，单位为毫秒
+     * @return 过程日志为 null 的成功结果
      */
     public static ScheduledTaskResult success(String taskCode, String taskName, String message,
                                              int affectedCount, Date startTime, long durationMs) {
@@ -70,7 +95,19 @@ public class ScheduledTaskResult {
     }
 
     /**
-     * 构造失败执行结果（含过程日志）
+     * 创建可附带过程日志的失败结果
+     *
+     * 执行顺序：
+     * 1. 标记执行失败，保存任务信息、失败说明和过程日志，并将影响条数记为 0
+     * 2. 保存开始时间和耗时，并据此算出结束时间
+     *
+     * @param taskCode 任务编码
+     * @param taskName 任务名称
+     * @param message 本次执行的失败说明
+     * @param startTime 本次执行的开始时间
+     * @param durationMs 本次执行耗时，单位为毫秒
+     * @param detailLog 多行过程日志，无日志时传 null
+     * @return 影响条数为 0 的失败结果
      */
     public static ScheduledTaskResult failure(String taskCode, String taskName, String message,
                                              Date startTime, long durationMs, String detailLog) {
@@ -81,6 +118,7 @@ public class ScheduledTaskResult {
         result.setMessage(message);
         result.setDetailLog(detailLog);
         result.setAffectedCount(0);
+        // 用开始时间和耗时算出结束时间
         result.setStartTime(startTime);
         result.setDurationMs(durationMs);
         result.setEndTime(new Date(startTime.getTime() + durationMs));
@@ -88,7 +126,17 @@ public class ScheduledTaskResult {
     }
 
     /**
-     * 构造失败执行结果（无过程日志）
+     * 创建无过程日志的失败结果
+     *
+     * 执行顺序：
+     * 1. 将过程日志置为 null，沿用失败结果的构造步骤
+     *
+     * @param taskCode 任务编码
+     * @param taskName 任务名称
+     * @param message 本次执行的失败说明
+     * @param startTime 本次执行的开始时间
+     * @param durationMs 本次执行耗时，单位为毫秒
+     * @return 过程日志为 null 的失败结果
      */
     public static ScheduledTaskResult failure(String taskCode, String taskName, String message,
                                              Date startTime, long durationMs) {
