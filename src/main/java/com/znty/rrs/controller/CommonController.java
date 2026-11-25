@@ -25,7 +25,12 @@ public class CommonController {
     @Resource
     private CommonService commonService;
 
-    /** 查询投资市场共用代码，中文名称由前端映射。 */
+    /**
+     * 查询投资市场共用代码，中文名称由前端映射
+     *
+     * @param req 空请求体
+     * @return 市场代码列表
+     */
     @PostMapping("/queryMarketCodeList")
     public ApiResponse<List<String>> queryMarketCodeList(@RequestBody CommonReq req) {
         return ApiResponse.success(commonService.queryMarketCodeList());
@@ -44,7 +49,7 @@ public class CommonController {
     }
 
     /**
-     * 按担保债/ABS 属性批量筛选合格担保人并查询主体内评分
+     * 按担保债、ABS 属性批量筛选合格担保人并查询主体内评分
      *
      * @param req Wind 证券代码列表
      * @return 担保债返回担保人类型，ABS 返回四类相关主体及其最新内评结果

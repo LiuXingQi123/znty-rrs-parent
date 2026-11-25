@@ -15,22 +15,23 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 基金池查询控制器。
- * <p>负责基金池当前状态查询、基金类型选项查询和结果导出。</p>
+ * 基金池查询控制器
+ *
+ * 负责基金池当前状态查询、基金类型选项查询和结果导出
  */
 @RestController
 @RequestMapping("/api/v1/fundPoolQuery")
 public class FundPoolQueryController {
 
-    /** 基金池查询服务。 */
+    /** 基金池查询服务 */
     @Resource
     private FundPoolQueryService fundPoolQueryService;
 
     /**
-     * 分页查询当前已生效的基金池状态。
+     * 分页查询当前已生效的基金池状态
      *
-     * @param req 基金池筛选及分页条件
-     * @return 基金池分页记录
+     * @param req 在池基金的筛选和分页条件
+     * @return 在池基金及分页信息
      */
     @PostMapping("/queryFundPoolPage")
     public ApiResponse<PageResult<FundPoolQueryDto>> queryFundPoolPage(@RequestBody FundPoolQueryReq req) {
@@ -38,10 +39,10 @@ public class FundPoolQueryController {
     }
 
     /**
-     * 按当前查询条件导出基金池列表。
+     * 按当前查询条件导出基金池列表
      *
-     * @param req 基金池筛选条件
-     * @return 可下载的 Excel 文件
+     * @param req 在池基金的筛选条件
+     * @return Excel 文件名、内容类型、文件大小和 Base64 内容
      */
     @PostMapping("/exportFundPoolExcel")
     public ApiResponse<CommonFileDto> exportFundPoolExcel(@RequestBody FundPoolQueryReq req) {
@@ -49,9 +50,9 @@ public class FundPoolQueryController {
     }
 
     /**
-     * 查询基金类型下拉选项。
+     * 查询基金类型下拉选项
      *
-     * @param req 基金池查询请求
+     * @param req 空请求体
      * @return 当前已生效基金池中出现的基金类型
      */
     @PostMapping("/queryFundTypeList")

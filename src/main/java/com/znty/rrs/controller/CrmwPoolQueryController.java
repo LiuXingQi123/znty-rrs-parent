@@ -23,7 +23,12 @@ public class CrmwPoolQueryController {
     @Resource
     private CrmwPoolQueryService crmwPoolQueryService;
 
-    /** 分页查询CRMW池列表 */
+    /**
+     * 分页查询CRMW池列表
+     *
+     * @param req CRMW 凭证及标的证券组合的筛选条件和分页参数
+     * @return CRMW 凭证及标的证券组合的在池记录和分页信息
+     */
     @PostMapping("/queryCrmwPoolPage")
     public ApiResponse<PageResult<CrmwPoolQueryDto>> queryCrmwPoolPage(@RequestBody CrmwPoolQueryReq req) {
         return ApiResponse.success(crmwPoolQueryService.queryCrmwPoolPage(req));

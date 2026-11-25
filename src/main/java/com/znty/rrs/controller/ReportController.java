@@ -23,7 +23,12 @@ public class ReportController {
     @Resource
     private ReportService reportService;
 
-    /** 查询一份报告的完整信息与附件 */
+    /**
+     * 查询一份报告的完整信息与附件
+     *
+     * @param req 报告 ID 和报告来源
+     * @return 报告详情及附件列表
+     */
     @PostMapping("/queryReportDetail")
     public ApiResponse<ReportDto> queryReportDetail(@RequestBody ReportReq req) {
         return ApiResponse.success(reportService.queryReportDetail(req));
@@ -31,6 +36,9 @@ public class ReportController {
 
     /**
      * 分页查询内部报告列表
+     *
+     * @param req 报告筛选和分页条件
+     * @return 内部报告及分页信息
      */
     @PostMapping("/queryInReportPage")
     public ApiResponse<PageResult<ReportDto>> queryInReportPage(@RequestBody ReportReq req) {
@@ -39,6 +47,9 @@ public class ReportController {
 
     /**
      * 分页查询外部报告列表
+     *
+     * @param req 报告筛选和分页条件
+     * @return 外部报告及分页信息
      */
     @PostMapping("/queryOutReportPage")
     public ApiResponse<PageResult<ReportDto>> queryOutReportPage(@RequestBody ReportReq req) {

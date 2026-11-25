@@ -15,24 +15,36 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/** 股票池调库流程控制器，负责审批处理入口。 */
+/**
+ * 股票池调库流程控制器，负责审批处理入口
+ */
 @RestController
 @RequestMapping("/api/v1/stockPoolAdjust")
 public class StockPoolAdjustFlowController {
+
     /** 股票池调库流程服务 */
     @Resource
     private StockPoolAdjustFlowService stockPoolAdjustFlowService;
 
     /**
-     * 提交股票调库审批处理意见并推进流程。
+     * 提交股票调库审批处理意见并推进流程
      *
      * @param req 调库记录、处理人及审批动作
+     * @return 审批后的批次状态与流程流转结果
      */
     @PostMapping(value = "/submitAdjustAudit", consumes = MediaType.APPLICATION_JSON_VALUE)
     public ApiResponse<StockPoolAdjustAuditDto> submitAdjustAudit(@RequestBody StockPoolAdjustAuditReq req) {
         return ApiResponse.success(stockPoolAdjustFlowService.submitAdjustAudit(req));
     }
-    /** 修改待办同时提交审核及新增附件，原文件名通过文件上下文保存。 */
+
+    /**
+     * 修改待办同时提交审核及新增附件，原文件名通过文件上下文保存
+     *
+     * @param req 当前处理人的审批请求
+     * @param files 随申请上传的材料附件，可不传
+     * @param originalFileNameListJson 附件原始文件名的 JSON 数组，可不传
+     * @return 审批后的批次状态与流程流转结果
+     */
     @PostMapping(value = "/submitAdjustAuditWithFiles", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ApiResponse<StockPoolAdjustAuditDto> submitAdjustAuditWithFiles(
             @RequestPart("request") StockPoolAdjustAuditReq req,

@@ -19,10 +19,9 @@ import java.util.List;
 
 /**
  * 证券池查询控制器
- * <p>
- * 负责证券当前池状态的查询展示，支持按投资池、证券类型、证券状态等多维度筛选。
- * 同时提供"我的证券池"个人收藏功能，用户可将关注的证券加入自己的收藏池便于快速查阅。
- * </p>
+ *
+ * 负责证券当前池状态的查询展示，支持按投资池、证券类型、证券状态等多维度筛选
+ * 提供「我的证券池」收藏功能，方便用户快速查阅关注的证券
  */
 @RestController
 @RequestMapping("/api/v1/securityPoolQuery")
@@ -33,21 +32,32 @@ public class SecurityPoolQueryController {
     private SecurityPoolQueryService securityPoolQueryService;
 
     /**
-     * 分页查询证券池中的证券列表，支持按投资池、证券代码/名称、类型、状态等组合筛选
+     * 分页查询证券池中的证券列表，支持按投资池、证券代码、名称、类型、状态等组合筛选
+     *
+     * @param req 在池证券的筛选和分页条件
+     * @return 在池证券及分页信息
      */
     @PostMapping("/querySecurityPoolPage")
     public ApiResponse<PageResult<SecurityPoolQueryDto>> querySecurityPoolPage(@RequestBody SecurityPoolQueryReq req) {
         return ApiResponse.success(securityPoolQueryService.querySecurityPoolPage(req));
     }
 
-    /** 按当前查询条件导出证券池列表。 */
+    /**
+     * 按当前查询条件导出证券池列表
+     *
+     * @param req 在池证券的筛选条件
+     * @return Excel 文件名、内容类型、文件大小和 Base64 内容
+     */
     @PostMapping("/exportSecurityPoolExcel")
     public ApiResponse<CommonFileDto> exportSecurityPoolExcel(@RequestBody SecurityPoolQueryReq req) {
         return ApiResponse.success(securityPoolQueryService.exportSecurityPoolExcel(req));
     }
 
     /**
-     * 查询证券类型下拉选项（code + name），用于页面筛选条件的类型过滤器
+     * 查询证券类型下拉选项，供列表筛选
+     *
+     * @param req 空请求体
+     * @return 证券类型选项列表，包含编码和名称
      */
     @PostMapping("/querySecurityTypeList")
     public ApiResponse<List<SecurityTypeOptionDto>> querySecurityTypeList(
@@ -57,6 +67,9 @@ public class SecurityPoolQueryController {
 
     /**
      * 查询证券状态下拉选项，返回系统中存在的证券状态 code 列表
+     *
+     * @param req 空请求体
+     * @return 证券状态列表
      */
     @PostMapping("/querySecurityStatusList")
     public ApiResponse<List<String>> querySecurityStatusList(
@@ -66,6 +79,9 @@ public class SecurityPoolQueryController {
 
     /**
      * 将指定证券添加到当前用户的个人收藏池（我的证券池）
+     *
+     * @param req 收藏用户 ID、证券代码、证券类型和市场
+     * @return 用户个人收藏记录
      */
     @PostMapping("/addSecurityToMyPool")
     public ApiResponse<MySecurityPoolBo> addSecurityToMyPool(@RequestBody MySecurityPoolReq req) {
@@ -74,6 +90,9 @@ public class SecurityPoolQueryController {
 
     /**
      * 将指定证券从当前用户的个人收藏池中移除
+     *
+     * @param req 操作用户 ID 和要取消收藏的证券代码
+     * @return 用户个人收藏记录
      */
     @PostMapping("/deleteSecurityFromMyPool")
     public ApiResponse<MySecurityPoolBo> deleteSecurityFromMyPool(@RequestBody MySecurityPoolReq req) {
@@ -82,6 +101,9 @@ public class SecurityPoolQueryController {
 
     /**
      * 批量查询指定用户已收藏的证券代码列表，用于前端渲染收藏状态标记
+     *
+     * @param req 要查询证券收藏的用户 ID
+     * @return 用户已收藏的证券代码列表
      */
     @PostMapping("/queryFavoritedCodeList")
     public ApiResponse<List<String>> queryFavoritedCodeList(@RequestBody MySecurityPoolReq req) {

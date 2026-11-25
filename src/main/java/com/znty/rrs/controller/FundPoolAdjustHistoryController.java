@@ -15,20 +15,24 @@ import org.springframework.web.bind.annotation.RestController;
 import javax.annotation.Resource;
 import java.util.List;
 
-/** 基金池调整历史控制器。 */
+/**
+ * 基金池调整历史控制器
+ */
 @RestController
 @RequestMapping("/api/v1/fundPoolAdjustHistory")
 public class FundPoolAdjustHistoryController {
 
-    /** 基金池调整历史服务。 */
+    /** 基金池调整历史服务 */
     @Resource
     private FundPoolAdjustHistoryService fundPoolAdjustHistoryService;
 
     /**
-     * 分页查询基金池调整历史记录。
-     * <p>按基金信息、调整时间及审核状态等条件筛选，返回全部审核状态的历史记录。</p>
+     * 分页查询基金池调整历史记录
      *
-     * @param req 分页参数和基金池调整历史筛选条件
+     * 按基金信息、调整时间及审核状态等条件筛选，返回全部审核状态的历史记录
+     *
+     * @param req 基金池调整历史的筛选和分页条件
+     * @return 基金池调整历史及分页信息
      */
     @PostMapping("/queryFundPoolAdjustHistoryPage")
     public ApiResponse<PageResult<FundPoolAdjustHistoryDto>> queryFundPoolAdjustHistoryPage(
@@ -37,10 +41,12 @@ public class FundPoolAdjustHistoryController {
     }
 
     /**
-     * 按当前筛选条件导出基金池调整历史。
-     * <p>筛选条件与列表一致，不传分页时导出全部命中记录。</p>
+     * 按当前筛选条件导出基金池调整历史
      *
-     * @param req 基金池调整历史筛选条件
+     * 筛选条件与列表一致，不传分页时导出全部命中记录
+     *
+     * @param req 基金池调整历史的筛选条件
+     * @return Excel 文件名、内容类型、文件大小和 Base64 内容
      */
     @PostMapping("/exportFundPoolAdjustHistoryExcel")
     public ApiResponse<CommonFileDto> exportFundPoolAdjustHistoryExcel(
@@ -49,10 +55,12 @@ public class FundPoolAdjustHistoryController {
     }
 
     /**
-     * 查询调整历史中出现的基金类型选项。
-     * <p>返回存在未删除调库记录的基金类型，供历史筛选条件使用。</p>
+     * 查询调整历史中出现的基金类型选项
      *
-     * @param req 接口请求体，此查询不使用筛选条件
+     * 返回存在未删除调库记录的基金类型，供历史筛选条件使用
+     *
+     * @param req 空请求体
+     * @return 基金类型选项列表
      */
     @PostMapping("/queryFundTypeList")
     public ApiResponse<List<SecurityTypeOptionDto>> queryFundTypeList(

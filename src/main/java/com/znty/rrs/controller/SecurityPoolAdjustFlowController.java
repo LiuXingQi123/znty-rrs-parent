@@ -17,7 +17,7 @@ import javax.annotation.Resource;
 import java.util.Arrays;
 
 /**
- * 证券池调库流程控制器，负责调库审批步骤的处理与流转。
+ * 证券池调库流程控制器，负责调库审批步骤的处理与流转
  */
 @RestController
 @RequestMapping("/api/v1/securityPoolAdjustFlow")
@@ -28,7 +28,10 @@ public class SecurityPoolAdjustFlowController {
     private SecurityPoolAdjustFlowService securityPoolAdjustFlowService;
 
     /**
-     * 提交调库审批处理意见，更新当前步骤并按流程配置推进下一步骤。
+     * 提交调库审批处理意见，更新当前步骤并按流程配置推进下一步骤
+     *
+     * @param req 审批处理请求
+     * @return 审批处理结果
      */
     @PostMapping(value = "/submitAdjustAudit", consumes = MediaType.APPLICATION_JSON_VALUE)
     public ApiResponse<SecurityPoolAdjustAuditDto> submitAdjustAudit(@RequestBody SecurityPoolAdjustAuditReq req) {
@@ -36,7 +39,12 @@ public class SecurityPoolAdjustFlowController {
     }
 
     /**
-     * 以 multipart 方式提交调库审批处理意见和驳回修改附件变更。
+     * 以 multipart 方式提交调库审批处理意见和驳回修改附件变更
+     *
+     * @param req 审批处理请求
+     * @param files 随申请上传的材料附件，可不传
+     * @param originalFileNameListJson 附件原始文件名的 JSON 数组，可不传
+     * @return 审批处理结果
      */
     @PostMapping(value = "/submitAdjustAuditWithFiles", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ApiResponse<SecurityPoolAdjustAuditDto> submitAdjustAuditWithFiles(

@@ -16,7 +16,7 @@ import javax.annotation.Resource;
 import java.util.List;
 
 /**
- * 我的事宜控制器，提供当前用户相关流程事项列表和流程筛选选项。
+ * 我的事宜控制器，提供当前用户相关流程事项列表和流程筛选选项
  */
 @RestController
 @RequestMapping("/api/v1/myMatters")
@@ -26,28 +26,47 @@ public class MyMattersController {
     @Resource
     private MyMattersService myMattersService;
 
-    /** 分页查询我的事宜列表（待处理 / 已完成） */
+    /**
+     * 分页查询我的事宜列表（待处理、已完成）
+     *
+     * @param req 当前用户、业务入口、办理状态等筛选及分页条件
+     * @return 当前用户的办理事宜及分页信息
+     */
     @PostMapping("/queryMyMattersPage")
     public ApiResponse<PageResult<MyMattersDto>> queryMyMattersPage(@RequestBody MyMattersReq req) {
         return ApiResponse.success(myMattersService.queryMyMattersPage(req));
     }
 
     /**
-     * 分页查询我发起的事宜列表。
-     * <p>按当前用户作为发起人过滤，含流程中与已结束记录。</p>
+     * 分页查询我发起的事宜列表
+     *
+     * 按当前用户作为发起人过滤，含流程中与已结束记录
+     *
+     * @param req 当前用户、业务入口等筛选及分页条件
+     * @return 当前用户发起的事宜及分页信息
      */
     @PostMapping("/queryMyInitiatedMattersPage")
     public ApiResponse<PageResult<MyMattersDto>> queryMyInitiatedMattersPage(@RequestBody MyMattersReq req) {
         return ApiResponse.success(myMattersService.queryMyInitiatedMattersPage(req));
     }
 
-    /** 查询当前用户可显示的已接入业务入口 */
+    /**
+     * 查询当前用户可显示的已接入业务入口
+     *
+     * @param req 当前用户 ID
+     * @return 当前用户可见的业务入口列表，供页面初始化使用
+     */
     @PostMapping("/queryBusinessDomainList")
     public ApiResponse<List<BusinessDomainDto>> queryBusinessDomainList(@RequestBody MyMattersReq req) {
         return ApiResponse.success(myMattersService.queryBusinessDomainList(req));
     }
 
-    /** 查询我的事宜流程名称下拉选项 */
+    /**
+     * 查询我的事宜流程名称下拉选项
+     *
+     * @param req 业务入口筛选
+     * @return 流程下拉选项
+     */
     @PostMapping("/queryFlowOptionList")
     public ApiResponse<List<FlowOptionDto>> queryFlowOptionList(@RequestBody MyMattersReq req) {
         return ApiResponse.success(myMattersService.queryFlowOptionList(req));

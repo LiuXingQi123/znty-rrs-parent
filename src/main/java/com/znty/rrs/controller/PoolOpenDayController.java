@@ -24,6 +24,9 @@ public class PoolOpenDayController {
 
     /**
      * 分页查询开放日配置
+     *
+     * @param req 开放日配置的筛选条件和分页参数，允许缺省
+     * @return 投资池开放日区间信息及分页信息
      */
     @PostMapping("/queryPoolOpenDayPage")
     public ApiResponse<PageResult<PoolOpenDayDto>> queryPoolOpenDayPage(@RequestBody PoolOpenDayReq req) {
@@ -32,6 +35,9 @@ public class PoolOpenDayController {
 
     /**
      * 新增开放日配置
+     *
+     * @param req 新增开放日的目标池、起止日期和描述
+     * @return 投资池开放日区间信息
      */
     @PostMapping("/addPoolOpenDay")
     public ApiResponse<PoolOpenDayDto> addPoolOpenDay(@RequestBody PoolOpenDayReq req) {
@@ -40,6 +46,9 @@ public class PoolOpenDayController {
 
     /**
      * 修改开放日配置
+     *
+     * @param req 待修改的开放日记录 ID、投资池、起止日期和描述
+     * @return 投资池开放日区间信息
      */
     @PostMapping("/editPoolOpenDay")
     public ApiResponse<PoolOpenDayDto> editPoolOpenDay(@RequestBody PoolOpenDayReq req) {
@@ -48,6 +57,9 @@ public class PoolOpenDayController {
 
     /**
      * 删除开放日配置（逻辑删除）
+     *
+     * @param req 待删除的开放日配置记录 ID
+     * @return 投资池开放日区间信息
      */
     @PostMapping("/deletePoolOpenDay")
     public ApiResponse<PoolOpenDayDto> deletePoolOpenDay(@RequestBody PoolOpenDayReq req) {

@@ -24,10 +24,9 @@ import java.util.Arrays;
 
 /**
  * 证券池批量调整控制器
- * <p>
- * 负责批量调库目标池查询、候选证券筛选、批量调库校验及批量调库申请提交。
- * 支持 JSON 与 multipart 两种提交方式，multipart 场景用于随申请一并上传材料附件。
- * </p>
+ *
+ * 负责批量调库目标池查询、候选证券筛选、批量调库校验及批量调库申请提交
+ * 支持 JSON 与 multipart 两种提交方式，multipart 场景用于随申请一并上传材料附件
  */
 @RestController
 @RequestMapping("/api/v1/batchSecurityPoolAdjust")
@@ -39,6 +38,9 @@ public class BatchSecurityPoolAdjustController {
 
     /**
      * 分页查询当前用户可调整的启用叶子投资池
+     *
+     * @param req 当前用户、投资池筛选和分页条件
+     * @return 可批量调整的投资池及分页信息
      */
     @PostMapping("/queryPoolPage")
     public ApiResponse<PageResult<BatchSecurityPoolDto>> queryPoolPage(
@@ -48,6 +50,9 @@ public class BatchSecurityPoolAdjustController {
 
     /**
      * 分页查询目标池批量调整候选证券
+     *
+     * @param req 目标池、调整方向、候选筛选和分页条件
+     * @return 可批量调整的证券及分页信息
      */
     @PostMapping("/querySecurityPage")
     public ApiResponse<PageResult<BatchSecurityCandidateDto>> querySecurityPage(
@@ -55,7 +60,12 @@ public class BatchSecurityPoolAdjustController {
         return ApiResponse.success(batchSecurityPoolAdjustService.querySecurityPage(req));
     }
 
-    /** 分页查询批量调库可选的 ABS 权益人主体 */
+    /**
+     * 分页查询批量调库可选的 ABS 权益人主体
+     *
+     * @param req 分页与检索条件
+     * @return 可选主体分页结果
+     */
     @PostMapping("/querySelfSelectedRightsHolderPage")
     public ApiResponse<PageResult<SelfSelectedRightsHolderDto>> querySelfSelectedRightsHolderPage(
             @RequestBody SelfSelectedRightsHolderReq req) {
@@ -64,6 +74,9 @@ public class BatchSecurityPoolAdjustController {
 
     /**
      * 批量调库下一步校验
+     *
+     * @param req 当前用户、目标池、调整方向和所选证券
+     * @return 逐项校验结果及可选审批流程
      */
     @PostMapping("/checkAdjust")
     public ApiResponse<BatchSecurityInboundAdjustDto> checkAdjust(
@@ -73,6 +86,9 @@ public class BatchSecurityPoolAdjustController {
 
     /**
      * 批量提交调库申请
+     *
+     * @param req 经确认的证券调整明细及所选审批流程
+     * @return 整批提交结果，包含提交数量和调库日志 ID
      */
     @PostMapping(value = "/addAdjustLog", consumes = MediaType.APPLICATION_JSON_VALUE)
     public ApiResponse<BatchSecurityInboundAdjustDto> addAdjustLog(
@@ -82,6 +98,11 @@ public class BatchSecurityPoolAdjustController {
 
     /**
      * 以 multipart 方式批量提交调库申请及附件
+     *
+     * @param req 经确认的证券调整明细及所选审批流程
+     * @param files 随申请上传的材料附件，可不传
+     * @param originalFileNameListJson 附件原始文件名的 JSON 数组，可不传
+     * @return 整批提交结果，包含提交数量和调库日志 ID
      */
     @PostMapping(value = "/addAdjustLogWithFiles", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ApiResponse<BatchSecurityInboundAdjustDto> addAdjustLogWithFiles(

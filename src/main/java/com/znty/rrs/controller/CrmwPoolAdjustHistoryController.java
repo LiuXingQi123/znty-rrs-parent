@@ -23,7 +23,12 @@ public class CrmwPoolAdjustHistoryController {
     @Resource
     private CrmwPoolAdjustHistoryService crmwPoolAdjustHistoryService;
 
-    /** 分页查询CRMW池调整历史列表 */
+    /**
+     * 分页查询CRMW池调整历史列表
+     *
+     * @param req CRMW 调库历史的筛选条件和分页参数
+     * @return CRMW 调库记录及分页信息
+     */
     @PostMapping("/queryCrmwPoolAdjustHistoryPage")
     public ApiResponse<PageResult<CrmwPoolAdjustHistoryDto>> queryCrmwPoolAdjustHistoryPage(
             @RequestBody CrmwPoolAdjustHistoryReq req) {

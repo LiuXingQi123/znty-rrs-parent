@@ -15,9 +15,8 @@ import java.util.List;
 
 /**
  * 系统附件接口
- * <p>
- * 负责调库记录附件查询与附件文件下载，附件文件下载以 Base64 字符串统一响应返回。
- * </p>
+ *
+ * 负责调库记录附件查询与附件文件下载，附件文件下载以 Base64 字符串统一响应返回
  */
 @RestController
 @RequestMapping("/api/v1/attachments")
@@ -27,13 +26,23 @@ public class SysAttachmentController {
     @Resource
     private SysAttachmentService sysAttachmentService;
 
-    /** 按单个或多个调库日志 ID 查询附件列表 */
+    /**
+     * 按单个或多个调库日志 ID 查询附件列表
+     *
+     * @param req 单个或多个调库日志 ID
+     * @return 关联调库日志的附件列表
+     */
     @PostMapping("/queryAttachmentList")
     public ApiResponse<List<SysAttachmentDto>> queryAttachmentList(@RequestBody SysAttachmentReq req) {
         return ApiResponse.success(sysAttachmentService.queryAttachmentList(req));
     }
 
-    /** 下载附件 */
+    /**
+     * 下载附件
+     *
+     * @param req 附件 ID
+     * @return 附件文件内容的 Base64 字符串
+     */
     @PostMapping("/downloadAttachment")
     public ApiResponse<String> downloadAttachment(@RequestBody SysAttachmentReq req) {
         SysAttachmentService.DownloadFile downloadFile = sysAttachmentService.downloadAttachment(req);

@@ -24,6 +24,9 @@ public class CommonFileController {
 
     /**
      * 下载 classpath 模板
+     *
+     * @param req 模板下载请求，包含页面选择的模板编码
+     * @return Excel 文件名、内容类型、文件大小和 Base64 内容
      */
     @PostMapping("/downloadTemplate")
     public ApiResponse<CommonFileDto> downloadTemplate(@RequestBody CommonFileReq req) {

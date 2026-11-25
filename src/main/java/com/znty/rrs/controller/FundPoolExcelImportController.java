@@ -16,20 +16,24 @@ import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
-/** 基金池 Excel 导入接口。 */
+/**
+ * 基金池 Excel 导入接口
+ */
 @RestController
 @RequestMapping("/api/v1/fundPoolExcelImport")
 public class FundPoolExcelImportController {
-    /** 基金池 Excel 导入业务组件。 */
+
+    /** 基金池 Excel 导入业务组件 */
     @Resource
     private FundPoolExcelImportService fundPoolExcelImportService;
 
     /**
-     * 上传七列基金模板并创建导入批次。
+     * 上传七列基金模板并创建导入批次
      *
      * @param req 导入方向、清空参数及操作人
      * @param file 七列基金导入 Excel 文件
-     * @param originalFileNameListJson 上传文件原始名称列表 JSON，可为空
+     * @param originalFileNameListJson Excel 文件原始名称的 JSON 数组，可不传
+     * @return 基金 Excel 导入结果
      */
     @PostMapping(value = "/uploadExcel", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ApiResponse<FundPoolExcelImportDto> uploadExcel(
@@ -39,9 +43,10 @@ public class FundPoolExcelImportController {
     }
 
     /**
-     * 查询导入批次及校验快照。
+     * 查询导入批次及校验快照
      *
      * @param req 导入批次号及原始明细分页条件
+     * @return 基金 Excel 导入结果
      */
     @PostMapping("/queryTask")
     public ApiResponse<FundPoolExcelImportDto> queryTask(@RequestBody FundPoolExcelImportReq req) {
@@ -49,9 +54,10 @@ public class FundPoolExcelImportController {
     }
 
     /**
-     * 分页查询基金原始明细。
+     * 分页查询基金原始明细
      *
      * @param req 导入批次号、筛选条件及分页参数
+     * @return 基金 Excel 导入明细及分页信息
      */
     @PostMapping("/queryItemPage")
     public ApiResponse<PageResult<FundPoolExcelImportItemDto>> queryItemPage(
@@ -60,9 +66,10 @@ public class FundPoolExcelImportController {
     }
 
     /**
-     * 校验导入行及清空出库项。
+     * 校验导入行及清空出库项
      *
      * @param req 待校验批次号及当前操作人
+     * @return 基金 Excel 导入结果
      */
     @PostMapping("/checkImport")
     public ApiResponse<FundPoolExcelImportDto> checkImport(@RequestBody FundPoolExcelImportReq req) {
@@ -70,9 +77,10 @@ public class FundPoolExcelImportController {
     }
 
     /**
-     * 从服务器快照提交已通过的来源组。
+     * 从服务器快照提交已通过的来源组
      *
      * @param req 批次号、已有候选流程选择及提交说明
+     * @return 基金 Excel 导入结果
      */
     @PostMapping("/submitImport")
     public ApiResponse<FundPoolExcelImportDto> submitImport(@RequestBody FundPoolExcelImportReq req) {
@@ -80,9 +88,10 @@ public class FundPoolExcelImportController {
     }
 
     /**
-     * 取消尚未提交的导入批次。
+     * 取消尚未提交的导入批次
      *
      * @param req 待取消的未提交批次号
+     * @return 取消成功响应，数据为状态已更新为「已取消」的批次信息
      */
     @PostMapping("/cancelImport")
     public ApiResponse<FundPoolExcelImportDto> cancelImport(@RequestBody FundPoolExcelImportReq req) {

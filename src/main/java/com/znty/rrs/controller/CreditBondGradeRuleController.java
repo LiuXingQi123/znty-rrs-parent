@@ -23,6 +23,9 @@ public class CreditBondGradeRuleController {
 
     /**
      * 查询主体内评分档规则矩阵
+     *
+     * @param req 空请求体
+     * @return 主体内评分档规则矩阵
      */
     @PostMapping("/queryGradeRuleMatrix")
     public ApiResponse<CreditBondGradeRuleDto> queryGradeRuleMatrix(@RequestBody CreditBondGradeRuleReq req) {
@@ -31,6 +34,9 @@ public class CreditBondGradeRuleController {
 
     /**
      * 保存主体内评分档规则矩阵
+     *
+     * @param req 待保存的主体内评分档规则
+     * @return 保存后的规则矩阵
      */
     @PostMapping("/editGradeRuleMatrix")
     public ApiResponse<CreditBondGradeRuleDto> editGradeRuleMatrix(@RequestBody CreditBondGradeRuleReq req) {

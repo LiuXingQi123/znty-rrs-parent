@@ -22,10 +22,6 @@ import java.util.Arrays;
 
 /**
  * CRMW 池批量调整控制器
- * <p>
- * 负责批量调库目标池查询、候选组合筛选、批量调库校验及批量调库申请提交。
- * 支持 JSON 与 multipart 两种提交方式，multipart 场景用于随申请一并上传材料附件。
- * </p>
  */
 @RestController
 @RequestMapping("/api/v1/batchCrmwPoolAdjust")
@@ -36,7 +32,10 @@ public class BatchCrmwPoolAdjustController {
     private BatchCrmwPoolAdjustService batchCrmwPoolAdjustService;
 
     /**
-     * 分页查询当前用户可调整的启用叶子 CRMW 投资池
+     * 分页查询当前用户可调整且已启用的 CRMW 叶子池
+     *
+     * @param req 当前用户、池筛选和分页条件
+     * @return 符合条件的 CRMW 叶子池分页结果
      */
     @PostMapping("/queryPoolPage")
     public ApiResponse<PageResult<BatchCrmwPoolDto>> queryPoolPage(
@@ -45,7 +44,10 @@ public class BatchCrmwPoolAdjustController {
     }
 
     /**
-     * 分页查询目标池可调入候选组合
+     * 分页查询可调入目标池的候选组合
+     *
+     * @param req 当前用户、目标池、候选筛选和分页条件
+     * @return 可调入目标池的 CRMW 组合分页结果
      */
     @PostMapping("/queryInboundCandidatePage")
     public ApiResponse<PageResult<BatchCrmwCandidateDto>> queryInboundCandidatePage(
@@ -54,7 +56,10 @@ public class BatchCrmwPoolAdjustController {
     }
 
     /**
-     * 分页查询目标池可调出候选组合
+     * 分页查询可从目标池调出的候选组合
+     *
+     * @param req 当前用户、目标池、候选筛选和分页条件
+     * @return 可从目标池调出的 CRMW 组合分页结果
      */
     @PostMapping("/queryOutboundCandidatePage")
     public ApiResponse<PageResult<BatchCrmwCandidateDto>> queryOutboundCandidatePage(
@@ -63,7 +68,10 @@ public class BatchCrmwPoolAdjustController {
     }
 
     /**
-     * 批量调库下一步校验
+     * 校验批量调库选中的 CRMW 组合
+     *
+     * @param req 目标池、调整方向和选中的凭证与标的组合
+     * @return 调整明细及各项的校验结果和流程候选
      */
     @PostMapping("/checkAdjust")
     public ApiResponse<BatchCrmwAdjustDto> checkAdjust(
@@ -72,7 +80,10 @@ public class BatchCrmwPoolAdjustController {
     }
 
     /**
-     * 批量提交调库申请
+     * 以 JSON 方式批量提交调库申请
+     *
+     * @param req 批量调库申请
+     * @return 整批提交结果，包含提交数量和调库日志 ID
      */
     @PostMapping(value = "/addAdjustLog", consumes = MediaType.APPLICATION_JSON_VALUE)
     public ApiResponse<BatchCrmwAdjustDto> addAdjustLog(
@@ -81,7 +92,12 @@ public class BatchCrmwPoolAdjustController {
     }
 
     /**
-     * 以 multipart 方式批量提交调库申请及附件
+     * 以 multipart 方式批量提交调库申请，可随申请上传材料附件
+     *
+     * @param req 批量调库申请
+     * @param files 随申请上传的材料附件，可不传
+     * @param originalFileNameListJson 附件原始文件名的 JSON 数组，可不传
+     * @return 整批提交结果，包含提交数量和调库日志 ID
      */
     @PostMapping(value = "/addAdjustLogWithFiles", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ApiResponse<BatchCrmwAdjustDto> addAdjustLogWithFiles(

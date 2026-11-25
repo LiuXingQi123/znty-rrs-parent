@@ -32,6 +32,9 @@ public class CrmwPoolExcelImportController {
 
     /**
      * 查询当前用户可 Excel 导入的启用叶子 CRMW 池
+     *
+     * @param req 含当前用户 ID 的导入池查询请求
+     * @return 允许当前用户导入的 CRMW 池列表
      */
     @PostMapping("/queryPoolList")
     public ApiResponse<List<CrmwPoolExcelImportPoolDto>> queryPoolList(
@@ -42,6 +45,11 @@ public class CrmwPoolExcelImportController {
 
     /**
      * 上传 Excel 并写入临时表
+     *
+     * @param req 含目标池、方向和操作人的导入请求
+     * @param file 上传的 Excel 文件
+     * @param originalFileNameListJson Excel 文件原始名称的 JSON 数组，可不传
+     * @return 上传后的导入任务
      */
     @PostMapping(value = "/uploadExcel", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ApiResponse<CrmwPoolExcelImportDto> uploadExcel(
@@ -52,7 +60,12 @@ public class CrmwPoolExcelImportController {
         return ApiResponse.success(crmwPoolExcelImportService.uploadExcel(req, file, originalFileNameListJson));
     }
 
-    /** 保存导入行的评级主体并清除旧校验结果 */
+    /**
+     * 保存导入行的评级主体并清除旧校验结果
+     *
+     * @param req 携带批次号、明细 ID、主体选择和分页条件的修改请求
+     * @return 保存后的批次任务及当前页明细，主体修改后须重新校验
+     */
     @PostMapping("/editRatingCompany")
     public ApiResponse<CrmwPoolExcelImportDto> editRatingCompany(@RequestBody CrmwPoolExcelImportReq req) {
         return ApiResponse.success(crmwPoolExcelImportService.editRatingCompany(req));
@@ -60,6 +73,9 @@ public class CrmwPoolExcelImportController {
 
     /**
      * 查询导入批次
+     *
+     * @param req 导入批次号和可选的明细分页条件
+     * @return 导入任务详情
      */
     @PostMapping("/queryTask")
     public ApiResponse<CrmwPoolExcelImportDto> queryTask(@RequestBody CrmwPoolExcelImportReq req) {
@@ -69,6 +85,9 @@ public class CrmwPoolExcelImportController {
 
     /**
      * 分页查询导入明细
+     *
+     * @param req 批次号、校验状态、关键字和分页条件
+     * @return 导入明细分页结果
      */
     @PostMapping("/queryItemPage")
     public ApiResponse<PageResult<CrmwPoolExcelImportItemDto>> queryItemPage(
@@ -79,6 +98,9 @@ public class CrmwPoolExcelImportController {
 
     /**
      * 校验导入明细（逐组合委托 CRMW 单笔校验）
+     *
+     * @param req 批次号、当前用户及分页条件
+     * @return 包含逐行结果、调整提示和流程候选的导入任务
      */
     @PostMapping("/checkImport")
     public ApiResponse<CrmwPoolExcelImportDto> checkImport(@RequestBody CrmwPoolExcelImportReq req) {
@@ -88,6 +110,9 @@ public class CrmwPoolExcelImportController {
 
     /**
      * 提交导入（写 CRMW 调库日志）
+     *
+     * @param req 批次号、经办人、原因意见及已选择流程的校验项
+     * @return 提交后的导入任务及调库日志 ID
      */
     @PostMapping("/submitImport")
     public ApiResponse<CrmwPoolExcelImportDto> submitImport(@RequestBody CrmwPoolExcelImportReq req) {
@@ -97,6 +122,9 @@ public class CrmwPoolExcelImportController {
 
     /**
      * 取消导入批次
+     *
+     * @param req 待取消任务的导入批次号
+     * @return 取消成功响应，数据为新建的空导入结果对象
      */
     @PostMapping("/cancelImport")
     public ApiResponse<CrmwPoolExcelImportDto> cancelImport(@RequestBody CrmwPoolExcelImportReq req) {

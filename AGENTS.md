@@ -129,12 +129,12 @@ Mapper       ── 数据库操作接口，对应 XML
 - **编号**：多步骤说明按实际执行顺序使用 `1.`、`2.`、`3.`、`4.`… 连续编号，一条说明一个步骤；方法内部的多步骤注释也按此编号，不为凑数量拆分步骤
 - **标点**：注释正文、步骤及 `@param` / `@return` 说明末尾不加句号
 - **Javadoc 排版**：用空行分隔用途、业务说明、执行顺序和标签。步骤用连续编号，正文用普通段落。禁用 `<p>`、`<br>`、`<ol>`、`<ul>`、`<li>`、`<b>` 等排版标签及以 `-` 开头的项目符号
-- **类**：首行说明类的主要职责。Controller 类使用单行 `/** 说明 */`。实体类（含内部类）和 Mapper 接口使用多行 Javadoc，实体类只有一句说明时也将 `/**`、正文和 `*/` 分行书写。Service 及同包辅助类见下方模板
+- **类**：首行说明类的主要职责。Controller 类、实体类（含内部类）和 Mapper 接口使用多行 Javadoc，只有一句说明时也将 `/**`、正文和 `*/` 分行书写。Service 及同包辅助类见下方模板
 - **字段**：`/** 字段说明 */`，**必须保留**（如 `/** 证券池批量调整数据访问组件 */` 紧邻 `private BatchSecurityPoolAdjustMapper batchSecurityPoolAdjustMapper;`），禁止以“字面翻译型注释”为由删除；判断特征：注释描述的是该字段的用途/类型/职责，与下一行字段声明直接对应。两个相邻字段之间空一行，后一字段的 Javadoc 紧贴其声明或注解
 - 实体类字段、枚举项和枚举字段的 Javadoc **只有一句说明时写成单行**，如 `/** 调入 */`。业务条件和取值约定需要分段说明时使用多行 Javadoc，保留原有细节。注释紧贴声明或注解上方。实体类（含内部类）和枚举声明的左大括号后留一个空行
 - 字段需要说明多个约定取值时使用多行 Javadoc，先写字段含义和必要的业务条件，再空一行列出取值。编码按 `值=含义` 书写，并列取值用 `、` 分隔
 - 字段注释沿用数据库字段备注中的业务名称。单位、展示格式等原有补充说明留在括号内，例如 `证券期限（展示串）`
-- **Controller 方法**：使用单行 Javadoc，如 `/** 分页查询流程列表 */`，简洁说明接口用途
+- **Controller 方法**：使用多行 Javadoc，首行简洁说明接口用途，再空一行写 `@param` 和 `@return`。无参数或无返回值时省略对应标签
 - **Mapper 方法**：使用多行 Javadoc，说明数据库操作、参数和返回值，格式见下文「Mapper 方法注释模板」
 - **Service 方法**：使用下方多行 Javadoc 模板，适用于私有方法、同包辅助类方法、具名内部类方法和匿名内部类回调
 - **其他方法**：Javadoc，说明用途，关键参数加 `@param`
@@ -256,7 +256,8 @@ private String marketCode;
 
 ## Controller 规范
 
-- 类和方法使用单行 `/** 说明 */` 注释，末尾不加句号
+- 类和方法使用多行 Javadoc。类注释说明职责，方法注释说明接口用途、参数和返回值，末尾不加句号
+- Controller 类声明的左大括号后留一个空行，字段注释紧贴注解或声明
 - 只负责接收请求和返回响应，不写业务逻辑
 - 只调用 Service，禁止直接操作 Mapper
 - 类级别 `@RequestMapping` 必须使用完整资源路径（如 `/api/v1/flows`），禁止只写 `/api/v1`
@@ -264,20 +265,34 @@ private String marketCode;
 - 返回类型统一为 `ApiResponse<XxxDto>`，禁止返回 `ApiResponse<?>` 或 `ApiResponse<Void>`
 
 ```java
+/**
+ * 流程管理控制器
+ */
 @RestController
 @RequestMapping("/api/v1/flow")
 public class FlowController {
 
+    /** 流程服务 */
     @Resource
     private FlowService flowService;
 
-    /** 分页查询流程列表 */
+    /**
+     * 分页查询流程列表
+     *
+     * @param req 流程筛选和分页条件
+     * @return 符合条件的流程分页结果
+     */
     @PostMapping("/queryFlowPage")
     public ApiResponse<PageResult<FlowDto>> queryFlowPage(@RequestBody FlowReq req) {
         return ApiResponse.success(flowService.queryFlowPage(req));
     }
 
-    /** 新增流程 */
+    /**
+     * 新增流程
+     *
+     * @param req 待新增的流程信息
+     * @return 新增后的流程信息
+     */
     @PostMapping("/addFlow")
     public ApiResponse<FlowDto> addFlow(@RequestBody FlowReq req) {
         return ApiResponse.success(flowService.addFlow(req));
