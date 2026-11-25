@@ -7,22 +7,36 @@ import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 /**
- * 应用全局配置，包含 QLExpress 规则引擎 Bean 注册和开发期 CORS 跨域配置。
+ * 应用全局配置
+ *
+ * 注册规则服务使用的 QLExpress 执行器，并配置浏览器跨域访问 API 的规则
  */
 @Configuration
 public class AppConfig implements WebMvcConfigurer {
 
-    /** 注册 QLExpress 脚本执行器单例。 */
+    /**
+     * 注册供规则服务共用的 QLExpress 脚本执行器
+     *
+     * @return 由 Spring 管理的脚本执行器单例
+     */
     @Bean
     public ExpressRunner expressRunner() {
         return new ExpressRunner();
     }
 
-    /** 配置 API 跨域访问规则。 */
+    /**
+     * 配置浏览器跨域访问 API 的规则
+     *
+     * 执行顺序：
+     * 1. 为 API 路径注册规则，使用来源模式匹配任意来源
+     * 2. 接受 GET、POST 和 OPTIONS 方法及任意请求头，允许携带凭证，预检结果可缓存 3600 秒
+     *
+     * @param registry Spring MVC 提供的跨域规则注册器
+     */
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/api/**")
-                // Boot 2.4+ / Spring 5.3+：credentials 场景不能使用 allowedOrigins("*")
+                // 允许携带凭证时，通过来源模式匹配任意来源
                 .allowedOriginPatterns("*")
                 .allowedMethods("GET", "POST", "OPTIONS")
                 .allowedHeaders("*")
