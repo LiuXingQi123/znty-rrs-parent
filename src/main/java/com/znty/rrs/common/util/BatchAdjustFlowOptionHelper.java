@@ -11,9 +11,14 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
-/** 根据已加载的目标池配置追加批量流程候选 */
+/**
+ * 证券池批量审批流程候选补充工具
+ *
+ * 使用已加载的目标池配置，供批量调整和 Excel 导入复用单笔匹配结果
+ */
 public final class BatchAdjustFlowOptionHelper {
 
+    /** 工具类禁止实例化 */
     private BatchAdjustFlowOptionHelper() {
     }
 
@@ -22,16 +27,18 @@ public final class BatchAdjustFlowOptionHelper {
      *
      * 执行顺序：
      * 1. 复制原候选，避免修改单笔校验结果及其中的材料豁免信息
-     * 2. 根据方向读取批量配置，未配置时直接保留原候选和推荐
-     * 3. 去除重复的同类批量候选，再将配置的批量流程设为唯一推荐
+     * 2. 池配置缺失、调整方向无效或未配置批量流程时，返回副本并保留原推荐
+     * 3. 从候选副本中去掉将要再次追加的同一个批量流程
+     * 4. 将配置的批量流程放在首位，并设为唯一推荐
      *
-     * @param original 单笔已经匹配的流程候选
+     * @param original 单笔已经匹配的流程候选，缺失时从空列表开始
      * @param pool 已加载的目标池
      * @param adjustMode 调入或调出
-     * @return 单笔匹配候选和额外的批量流程
+     * @return 候选列表的副本，目标池已配置时包含对应的批量候选
      */
     public static List<AdjustCheckDto.FlowOption> appendConfiguredBatchFlow(
             List<AdjustCheckDto.FlowOption> original, InvestmentPoolBo pool, String adjustMode) {
+        // 1. 保留单笔候选中的材料豁免信息和其他匹配结果
         List<AdjustCheckDto.FlowOption> result = new ArrayList<>();
         if (original != null) {
             for (AdjustCheckDto.FlowOption option : original) {
@@ -40,6 +47,7 @@ public final class BatchAdjustFlowOptionHelper {
                 result.add(copy);
             }
         }
+        // 2. 只有有效方向和目标池配置齐全时才需补充流程
         if (pool == null || (!AdjustMode.IN.getCode().equals(adjustMode)
                 && !AdjustMode.OUT.getCode().equals(adjustMode))) {
             return result;
@@ -51,13 +59,15 @@ public final class BatchAdjustFlowOptionHelper {
             return result;
         }
         String flowType = outbound ? FlowType.BATCH_OUTBOUND.getCode() : FlowType.BATCH_INBOUND.getCode();
-        // 追加批量流程前，先删除列表中已存在的同一个批量候选，避免后面重新添加时出现重复选项
-        // 删除条件：流程类型相同，且满足“流程 ID 相同”或“已配置的非空流程 Key 相同”中的任意一项
-        // removeIf 会逐个检查候选，条件为 true 时从当前列表删除，为 false 时保留，不操作数据库
-        // 快速流程与批量流程即使使用同一个 ID 或 Key，也因类型不同而保留，材料豁免统一由主项资格决定
+        // 3. 追加前先移除列表中已有的同一个批量候选，避免出现重复选项
+        // 流程类型须相同，且满足任一条件：已配置的流程 ID 相同，或已配置的非空白流程 Key 相同
+        // removeIf 逐个检查候选，条件为 true 时从列表移除，为 false 时保留，操作仅限内存中的候选副本
+        // 快速流程和批量流程即使用同一个 ID 或 Key，也因类型不同而各自保留
+        // 材料豁免仍按主项资格判断
         result.removeIf(option -> flowType.equals(option.getFlowType())
                 && ((flowId != null && Objects.equals(flowId, option.getFlowId()))
                     || (flowKey != null && !flowKey.trim().isEmpty() && flowKey.equals(option.getFlowKey()))));
+        // 4. 清除原推荐，将配置的批量流程作为唯一推荐
         for (AdjustCheckDto.FlowOption option : result) {
             option.setRecommended(false);
         }

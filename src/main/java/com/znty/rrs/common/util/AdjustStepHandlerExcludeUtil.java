@@ -11,24 +11,31 @@ import java.util.Set;
 import java.util.function.Function;
 
 /**
- * 调库流程步骤处理人排除工具。
- * <p>同一批次中已实际处理过的 handler_id 不得再进入后续人工/自动步骤；
- * 待处理、抢占跳过、系统自动处理不算已参与。</p>
+ * 调库流程处理人排除工具
+ *
+ * 同一批次中，已提交、审批通过或驳回的处理人从后续人工和自动步骤的候选名单中排除
+ * 待处理、抢占跳过和系统自动处理的记录不计入已参与名单
  */
 public final class AdjustStepHandlerExcludeUtil {
 
-    /** 人工节点过滤后无可用审批人时的业务提示。 */
+    /** 人工节点排除已参与人员后无可用审批人时的提示 */
     public static final String NO_AVAILABLE_HANDLER_MSG = "下一节点无可用审批人（已排除本流程已参与人员）";
 
+    /** 工具类禁止实例化 */
     private AdjustStepHandlerExcludeUtil() {
     }
 
     /**
-     * 从本批次已有步骤中收集已实际处理过的 handler_id。
-     * <p>仅统计 submit/approve/reject；pending、skipped、auto_process 不占用后续环节。</p>
+     * 从同一批次的已有步骤中收集已参与处理人
+     *
+     * 按 {@code handler_id} 记录人员，同一人多次参与时只保留第一次
+     *
+     * 执行顺序：
+     * 1. 没有步骤记录时返回空集合
+     * 2. 保留实际参与且有处理人 ID 的步骤，按首次出现顺序收集去重后的 ID
      *
      * @param existingSteps 本批次已有步骤
-     * @return 已参与处理人 ID 集合
+     * @return 已参与处理人的 ID 集合，没有符合条件的步骤时为空集合
      */
     public static Set<String> collectParticipatedHandlerIds(List<IpAdjustStepBo> existingSteps) {
         Set<String> result = new LinkedHashSet<>();
@@ -36,6 +43,7 @@ public final class AdjustStepHandlerExcludeUtil {
             return result;
         }
         for (IpAdjustStepBo step : existingSteps) {
+            // 只收集实际处理过且记录了处理人 ID 的步骤
             if (step == null || step.getHandlerId() == null || !isActualParticipation(step)) {
                 continue;
             }
@@ -48,7 +56,12 @@ public final class AdjustStepHandlerExcludeUtil {
     }
 
     /**
-     * 是否真正审核过：只看 process_action 是否为 submit/approve/reject。
+     * 按步骤动作判断处理人是否已实际参与
+     *
+     * {@code process_action} 只统计 {@code submit}、{@code approve} 和 {@code reject}
+     *
+     * @param step 调库步骤记录
+     * @return true=动作是提交、审批通过或驳回，false=步骤或动作缺失，或动作不在上述范围
      */
     public static boolean isActualParticipation(IpAdjustStepBo step) {
         if (step == null || step.getProcessAction() == null) {
@@ -61,13 +74,17 @@ public final class AdjustStepHandlerExcludeUtil {
     }
 
     /**
-     * 从候选处理人中排除已参与人员，保持原有顺序。
+     * 从候选处理人中排除已参与人员，保留候选的原有顺序
      *
-     * @param handlers         候选处理人
-     * @param participated     已参与处理人 ID
-     * @param handlerIdGetter  取处理人 ID
-     * @param <T>              处理人类型
-     * @return 过滤后的处理人列表
+     * 执行顺序：
+     * 1. 没有候选时返回空列表，没有已参与人员时返回候选列表的副本
+     * 2. 有排除名单时，按候选顺序保留可取得有效 ID 且未参与过的人员
+     *
+     * @param <T> 处理人类型
+     * @param handlers 候选处理人列表
+     * @param participated 已参与处理人 ID 集合
+     * @param handlerIdGetter 读取候选处理人 ID 的方法
+     * @return 过滤后的候选列表，没有可保留的候选时返回空列表
      */
     public static <T> List<T> excludeParticipated(List<T> handlers, Set<String> participated,
                                                   Function<T, String> handlerIdGetter) {

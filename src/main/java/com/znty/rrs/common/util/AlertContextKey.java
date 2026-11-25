@@ -5,28 +5,30 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
 /**
- * 提醒依据摘要：把一条待办的适用范围压成固定长度标识
+ * 生成规则提醒的依据摘要
  *
- * <p>人工处理结论按摘要沿用：摘要不变说明问题依据没变，同一问题不再重复提醒；
- * 摘要变化说明身份、池状态、档位或不符合原因已经变了，需要重新提醒
+ * 已有人工处理结论且摘要一致时，调用方沿用该结论并跳过本次提醒
+ * 身份、池状态、档位或不符合原因变化导致摘要更新时，仍存在的问题重新提醒
  */
 public final class AlertContextKey {
 
-    /** 工具类不允许实例化 */
+    /** 工具类禁止实例化 */
     private AlertContextKey() {
     }
 
     /**
-     * 计算依据摘要
+     * 根据传入的依据生成固定长度的摘要
      *
      * 执行顺序：
-     * 1. 各段内容按传入顺序用竖线连接，空值保留为 null 字样
-     * 2. 对连接结果取 SHA-256 并转成 64 位十六进制
+     * 1. 各段内容按传入顺序用竖线连接，值为 null 的段按 null 字样拼接
+     * 2. 按 UTF-8 计算 SHA-256 摘要，再转成小写十六进制文本
      *
      * @param parts 组成依据的各段内容
-     * @return 十六进制摘要
+     * @return 64 个字符的小写十六进制摘要
+     * @throws IllegalStateException 运行环境缺少 SHA-256
      */
     public static String of(String... parts) {
+        // 1. 按调用方传入的顺序拼接摘要依据
         StringBuilder value = new StringBuilder();
         for (int i = 0; i < parts.length; i++) {
             if (i > 0) {
@@ -35,6 +37,7 @@ public final class AlertContextKey {
             value.append(parts[i]);
         }
         try {
+            // 2. 计算摘要并转成固定长度的十六进制文本
             byte[] bytes = MessageDigest.getInstance("SHA-256")
                     .digest(value.toString().getBytes(StandardCharsets.UTF_8));
             StringBuilder result = new StringBuilder();

@@ -4,35 +4,14 @@ import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.SecurityInfoBo;
 
 /**
- * 信用债大库 1～5 级准入规则。
+ * 信用债分级库准入规则
  *
- * <p>一只券可能同时是私募、次级、永续、担保。先压成<strong>一个</strong>类型标签，后写覆盖先写：
- * 私募 → 次级 → 永续 → 担保。例如永续+担保最终按担保处理。
- * ABS（{@code absFlag=1} 或证券类型 {@code abs}）不看标签，始终走特殊债；{@code abs_all} 不算 ABS。</p>
+ * {@link #resolveExclusiveMemo} 将重叠的特征归成一个标签，优先级从高到低为担保、永续、次级、私募
+ * 例如同时具备永续和担保特征的债券按担保分支处理
+ * ABS 单独走特殊债分支，调库时其评级主体为选定的权益人，自选权益人优先
  *
- * <p>特殊债口径（私募/永续/次级/ABS 的「1 档」都只看<strong>发债主体内评</strong> {@code innerIssuerRating}；
- * ABS 的发行主体即入库时确认并固定的权益人，自选权益人优先，缺少内评则不是 1 档；ABS 不读、也不比较担保人内评）：
- * <ul>
- *   <li>只能调入一级库：仅一级。</li>
- *   <li>下调一级：矩阵最好档再降一档，且只留那一档（最好已是五级则仍是五级）。</li>
- *   <li>至少下调一级：从「矩阵最好档再降一档」起一直开到五级（最好 1 则 2～5）。</li>
- * </ul>
- * ABS：权益人内评 1 档只能调入一级库，缺少内评或非 1 档至少下调一级。
- * 私募：发债主体内评 1 档只能调入一级库，其余至少下调一级。
- * 永续：发债主体内评 1 档下调一级（矩阵最好档再降一档且只留那一档），其余至少下调一级。
- * 次级：发债主体内评 1 档只能调入一级库；2+/2/2- 下调一级（只留那一档）；其余至少下调一级。</p>
- *
- * <p>再按下面顺序选一种准入方式（先命中先走）：
- * <ol>
- *   <li>ABS，或标签仍是私募/次级/永续：按上面口径。</li>
- *   <li>标签是担保，或券/主体在观察池：入库不得高于矩阵最好档，从该档开到五级。担保查矩阵前先把主体内评和担保人内评取更好的一档（只影响查哪一格）。</li>
- *   <li>其余普通债：只能进矩阵单元格里的那些池，不开放更差档。</li>
- * </ol>
- * 含权债不改档位，只改期限（见 {@code CreditBondRemainTermUtil}）。
- * 可转债 / 可交换债 / 可分离转债 / CRMW 不能进信用债 1～5。
- * 重点观察名单不走上面的类型分支，单独 {@link #checkRestricted}：未在分级库不得新增；已在 1～4 级只能去五级或出库；
- * 开关开启时，有担保且担保人内评 1 档可豁免（ABS 不适用，其评级主体是权益人）；CRMW 事先已排除分级库。
- * 境外债不走本规则。</p>
+ * {@link #resolveGradedInboundMode} 决定按矩阵点名池还是按档位准入，{@link #checkRestricted} 单独校验重点观察名单
+ * 含权债的行权期限由 {@link CreditBondRemainTermUtil} 计算，对准入方式沿用相应的债券类型规则
  */
 public final class CreditBondSpecialInboundRule {
 
@@ -42,51 +21,70 @@ public final class CreditBondSpecialInboundRule {
     /** 分级库最好档（一级库） */
     public static final int MIN_LEVEL = 1;
 
-    /** 私募（覆盖顺序第 1 档） */
+    /** 私募标签，优先级最低 */
     public static final String MEMO_PRIVATE = "private";
+
     /** 次级（覆盖私募） */
     public static final String MEMO_SUBORDINATED = "subordinated";
+
     /** 永续（覆盖次级 / 私募） */
     public static final String MEMO_PERPETUAL = "perpetual";
+
     /** 担保（覆盖永续 / 次级 / 私募） */
     public static final String MEMO_GUARANTEED = "guaranteed";
 
     /**
-     * 信用债 1～5 级准入方式。档位从哪一级起、是只留那一级还是开到五级，都由枚举自己判断。
+     * 信用债分级库准入方式
+     *
+     * 按档位准入时，决定起始档以及是否开放更差的档位
      */
     public enum GradedInboundMode {
-        /** 只能调入一级库：仅一级 */
+        /** 只允许调入一级库 */
         LEVEL_ONE_ONLY(true),
-        /** 至少下调一级：矩阵最好档再降一档后，从该档开到五级 */
+
+        /** 矩阵最好档再降一档后，从该档开放到五级，例如最好档为一级时开放二至五级 */
         DOWNGRADE_CEILING(false),
-        /** 下调一级：矩阵最好档再降一档，且只留那一档 */
+
+        /** 矩阵最好档再降一档，只允许该档 */
         DOWNGRADE_EXACT(true),
-        /** 担保债或已在观察池：不得高于矩阵最好档，从该档开到五级 */
+
+        /** 担保债或已在观察池时，从矩阵最好档开放到五级 */
         BEST_AND_WORSE(false),
-        /** 普通债：矩阵写了哪几个池就只能进那几个，不自动带上更差档 */
+
+        /** 普通债只允许进入矩阵指定的池 */
         EXACT_MATRIX(false);
 
-        /** true=只留起始档那一级；false=起始档及更差 */
+        /** 按档位判断时，true 只允许起始档，false 允许起始档及更差的档位 */
         private final boolean exactSort;
 
+        /**
+         * 记录按档位准入时是否只允许起始档
+         *
+         * @param exactSort 是否只允许起始档
+         */
         GradedInboundMode(boolean exactSort) {
             this.exactSort = exactSort;
         }
 
         /**
-         * 是否按档位判断叶子（不是只认矩阵点名的池 ID）。
+         * 判断准入是否使用目标池档位
          *
-         * @return true=按 inner_sort 判断
+         * @return true=按目标池档位判断，false=按矩阵指定的池判断
          */
         public boolean usesSort() {
             return this != EXACT_MATRIX;
         }
 
         /**
-         * 算出起始档。矩阵未命中或普通债返回 null。
+         * 根据准入方式和矩阵最好档计算起始档
          *
-         * @param bestAllowedSort 矩阵允许池里最好的 inner_sort
-         * @return 起始档 1～5；不适用为 null
+         * 执行顺序：
+         * 1. 没有矩阵最好档或按矩阵指定池准入时返回 null
+         * 2. 只允许一级库时返回一级
+         * 3. 需要降档时从矩阵最好档再降一级，否则沿用矩阵最好档，结果限制在一至五级
+         *
+         * @param bestAllowedSort 矩阵允许调入的最好档位
+         * @return 可调入的起始档位，缺少矩阵结果或按矩阵指定池准入时返回 null
          */
         public Integer resolveStartSort(Integer bestAllowedSort) {
             if (bestAllowedSort == null || this == EXACT_MATRIX) {
@@ -96,6 +94,7 @@ public final class CreditBondSpecialInboundRule {
                 return MIN_LEVEL;
             }
             if (this == DOWNGRADE_CEILING || this == DOWNGRADE_EXACT) {
+                // 矩阵最好档已是五级时，降档结果仍为五级
                 return clampLevel(bestAllowedSort + 1);
             }
             // 担保债 / 观察池：矩阵最好档本身（不得高于该档，开到五级）
@@ -103,11 +102,15 @@ public final class CreditBondSpecialInboundRule {
         }
 
         /**
-         * 这一级能不能按档位规则调入。
+         * 检查目标档位是否符合当前准入方式
          *
-         * @param poolSort 目标池 inner_sort
+         * 执行顺序：
+         * 1. 目标档或起始档缺失，或该方式按矩阵指定池判断时返回 false
+         * 2. 只允许起始档时比较是否相等，否则比较目标档是否等于起始档或更差
+         *
+         * @param poolSort 目标池档位，对应 inner_sort
          * @param startSort 起始档
-         * @return true=允许调入
+         * @return true=档位满足准入方式，false=档位缺失、不适用档位判断或目标档不符
          */
         public boolean allows(Integer poolSort, Integer startSort) {
             if (poolSort == null || startSort == null || !usesSort()) {
@@ -122,7 +125,7 @@ public final class CreditBondSpecialInboundRule {
         }
 
         /**
-         * 档位规则失败时的允许范围说明。
+         * 生成档位校验失败时展示的允许范围
          *
          * @param startSort 起始档
          * @return 如「仅 1 级」或「仅 2 级及更差」
@@ -140,10 +143,10 @@ public final class CreditBondSpecialInboundRule {
     }
 
     /**
-     * 是否私募债：发行方式或内部分类含「私募」。
+     * 按发行方式和内部分类识别私募债
      *
      * @param sec 证券主数据
-     * @return true=私募债
+     * @return true=任一字段含「私募」，false=证券缺失或两个字段均不含「私募」
      */
     public static boolean isPrivateBond(SecurityInfoBo sec) {
         if (sec == null) {
@@ -154,30 +157,32 @@ public final class CreditBondSpecialInboundRule {
     }
 
     /**
-     * 是否永续债。
+     * 按主数据的永续标记识别永续债
      *
      * @param sec 证券主数据
-     * @return true=永续债
+     * @return true=永续标记为 1，false=证券或标记缺失，或标记不为 1
      */
     public static boolean isPerpetual(SecurityInfoBo sec) {
         return sec != null && sec.getYxFlag() != null && sec.getYxFlag() == 1;
     }
 
     /**
-     * 是否次级债。
+     * 按主数据的次级标记识别次级债
      *
      * @param sec 证券主数据
-     * @return true=次级债
+     * @return true=次级标记为 1，false=证券或标记缺失，或标记不为 1
      */
     public static boolean isSubordinated(SecurityInfoBo sec) {
         return sec != null && sec.getCjFlag() != null && sec.getCjFlag() == 1;
     }
 
     /**
-     * 是否资产支持证券 / ABS（仅 {@code abs}；{@code abs_all} 资产证券化不算）。
+     * 按主数据的标记或证券类型识别 ABS
+     *
+     * 类型为 {@code abs_all} 时，只有独立的 ABS 标记为 1 才会命中
      *
      * @param sec 证券主数据
-     * @return true=ABS
+     * @return true=ABS 标记为 1 或类型为 {@code abs}，false=证券缺失或两项均不满足
      */
     public static boolean isAbs(SecurityInfoBo sec) {
         if (sec == null) {
@@ -190,10 +195,12 @@ public final class CreditBondSpecialInboundRule {
     }
 
     /**
-     * 可转债 / 可交换债 / 可分离转债 / CRMW：信用债 1～5 不适用。
+     * 判断证券类型是否应从信用债分级库准入中排除
+     *
+     * 命中排除条件时，选池阶段去掉分级库，校验阶段阻止调入分级库
      *
      * @param sec 证券主数据
-     * @return true=选池去掉分级库，校验目标为分级库时失败
+     * @return true=可转债、可交换债、可分离转债或 CRMW，false=证券缺失或属于其他类型
      */
     public static boolean isExcludedFromCreditBondGradedPool(SecurityInfoBo sec) {
         if (sec == null) {
@@ -207,44 +214,47 @@ public final class CreditBondSpecialInboundRule {
     }
 
     /**
-     * 是否担保债。
+     * 按主数据的担保标记识别担保债
      *
      * @param sec 证券主数据
-     * @return true=担保债
+     * @return true=担保标记为 1，false=证券或标记缺失，或标记不为 1
      */
     public static boolean isGuaranteed(SecurityInfoBo sec) {
         return sec != null && sec.getGuarantFlag() != null && sec.getGuarantFlag() == 1;
     }
 
     /**
-     * 是否含权债。
+     * 按主数据的含权标记识别含权债
      *
      * @param sec 证券主数据
-     * @return true=含权债
+     * @return true=含权标记为 1，false=证券或标记缺失，或标记不为 1
      */
     public static boolean isInright(SecurityInfoBo sec) {
         return sec != null && sec.getInrightFlag() != null && sec.getInrightFlag() == 1;
     }
 
     /**
-     * 强担保豁免：开关开启、有担保且担保人内评档为 1
+     * 判断债券是否满足强担保豁免条件
      *
-     * ABS 的评级主体是已固定的权益人，担保标记不参与其准入判定，因此不适用本豁免
+     * ABS 的评级主体是已固定的权益人，强担保豁免只适用于担保人内评为 1 档的非 ABS 担保债
      *
      * @param sec 证券主数据
      * @param strongGuaranteeEnabled 是否启用强担保豁免
-     * @return true=强担保，重点观察名单可豁免
+     * @return true=开关开启且满足豁免条件，false=开关关闭或不满足条件
      */
     public static boolean isStrongGuarantee(SecurityInfoBo sec, boolean strongGuaranteeEnabled) {
+        // 非 ABS 担保债使用担保人内评判断是否满足 1 档豁免条件
         return strongGuaranteeEnabled && !isAbs(sec) && isGuaranteed(sec)
                 && isGradeOne(sec.getInnerGuarantorRating());
     }
 
     /**
-     * 把并存的债券类型压成一个标签。后写覆盖先写：私募 → 次级 → 永续 → 担保。
+     * 将可能并存的债券特征归成一个准入标签
+     *
+     * 依次检查私募、次级、永续、担保，后命中的特征覆盖前一个标签
      *
      * @param sec 证券主数据
-     * @return private / subordinated / perpetual / guaranteed；皆无则 null
+     * @return 命中优先级最高的标签，证券缺失或无对应特征时返回 null
      */
     public static String resolveExclusiveMemo(SecurityInfoBo sec) {
         if (sec == null) {
@@ -268,11 +278,12 @@ public final class CreditBondSpecialInboundRule {
     }
 
     /**
-     * 是否按特殊债处理：ABS，或覆盖后的标签仍是私募 / 次级 / 永续。
-     * 担保会覆盖永续等标签，因此永续+担保这里为 false（改走担保）。
+     * 判断是否使用特殊债分支
+     *
+     * ABS 可直接命中，其余证券使用覆盖后的标签判断
      *
      * @param sec 证券主数据
-     * @return true=特殊债
+     * @return true=ABS 或最终标签为私募、次级、永续之一，false=证券缺失或应采用其他分支
      */
     public static boolean isSpecialBranch(SecurityInfoBo sec) {
         if (isAbs(sec)) {
@@ -283,37 +294,50 @@ public final class CreditBondSpecialInboundRule {
     }
 
     /**
-     * 解析准入方式。顺序：特殊债（ABS 或私募/次级/永续）→ 担保债或已在观察池 → 普通债只认矩阵点名的池。
-     * 私募/永续/次级「1 档 / 2+/2/2-」只看发债主体内评；ABS「1 档」只看传入的 innerGuarantorRating（证券池调库为权益人内评，自选优先；缺少内评则不是 1 档）。
-     * 重点观察名单不在这里，见 {@link #checkRestricted}。
+     * 按债券类型和观察池状态选出准入方式
      *
-     * @param sec       证券主数据
-     * @param inObserve 证券或主体在观察池
+     * 特殊债读取 {@code innerIssuerRating}，其中 ABS 使用调用方写入发行人字段的权益人内评
+     * 非 ABS 担保债由调用方取发行人与担保人的较优内评来选矩阵单元格，特殊债的降档仍按发行人内评判断
+     * 重点观察名单由 {@link #checkRestricted} 单独校验
+     *
+     * 执行顺序：
+     * 1. ABS 使用权益人内评，1 档只允许一级，内评缺失或属于其他档时至少下调一级
+     * 2. 计算最终标签，私募内评 1 档只允许一级，其余至少下调一级
+     * 3. 永续内评 1 档下调一级且只允许该档，其余至少下调一级
+     * 4. 次级内评 1 档只允许一级，2+、2、2- 下调一级且只允许该档，其余至少下调一级
+     * 5. 担保或已在观察池时，从矩阵最好档开放到五级，其余只接受矩阵指定的池
+     *
+     * @param sec 证券主数据
+     * @param inObserve 证券或主体是否在观察池
      * @return 准入方式
      */
     public static GradedInboundMode resolveGradedInboundMode(SecurityInfoBo sec, boolean inObserve) {
+        // 1. 读取发行人内评，ABS 使用该字段保存的权益人内评
         boolean issuerOne = isIssuerGradeOne(sec);
         if (isAbs(sec)) {
-            // ABS 的评级主体是已固定的权益人，读主档发行人内评；缺少内评或非 1 档走至少下调一级
             return issuerOne ? GradedInboundMode.LEVEL_ONE_ONLY : GradedInboundMode.DOWNGRADE_CEILING;
         }
+        // 2. 先确定标签，再处理私募债
         String memo = resolveExclusiveMemo(sec);
         if (MEMO_PRIVATE.equals(memo)) {
             return issuerOne ? GradedInboundMode.LEVEL_ONE_ONLY : GradedInboundMode.DOWNGRADE_CEILING;
         }
+        // 3. 永续债内评 1 档时只允许降一档后的库
         if (MEMO_PERPETUAL.equals(memo)) {
-            // 发债主体内评 1 档：按矩阵最好档下调一级，只留那一档
             return issuerOne ? GradedInboundMode.DOWNGRADE_EXACT : GradedInboundMode.DOWNGRADE_CEILING;
         }
+        // 4. 次级债按发行人内评分别处理 1 档、2 档区间和其他档
         if (MEMO_SUBORDINATED.equals(memo)) {
             if (issuerOne) {
                 return GradedInboundMode.LEVEL_ONE_ONLY;
             }
+            // 检查 2+、2、2- 三档是否适用只降一级
             if (isIssuerGradeTwoBand(sec)) {
                 return GradedInboundMode.DOWNGRADE_EXACT;
             }
             return GradedInboundMode.DOWNGRADE_CEILING;
         }
+        // 5. 担保或观察池按档位放行，其余债券只按矩阵指定池放行
         if (MEMO_GUARANTEED.equals(memo) || inObserve) {
             return GradedInboundMode.BEST_AND_WORSE;
         }
@@ -321,16 +345,21 @@ public final class CreditBondSpecialInboundRule {
     }
 
     /**
-     * 已在重点观察名单时的入库校验（仅目标为信用债 1～5 级时拦截）。
-     * 未在分级库：不得新增；已在 1～4 级：只能去五级或出库；已在五级：不可上调。
-     * 开关开启时，强担保（有担保且担保人内评 1 档）返回 null，由调用方继续走其它规则
+     * 校验重点观察名单证券能否调入信用债分级库
      *
-     * @param sec               证券
-     * @param inRestricted      证券或主体在重点观察名单
-     * @param currentGradedSort 当前已在分级库的最好档；未在分级库为 null
-     * @param targetSort        目标分级库档；非分级库目标为 null（本方法不拦）
+     * 已在一至四级的债券仍可按出库规则办理出库，本方法校验调入的目标档位
+     *
+     * 执行顺序：
+     * 1. 未在重点观察名单或目标无分级档位时，跳过本项校验
+     * 2. 满足强担保豁免时通过本项校验，由调用方继续检查其他规则
+     * 3. 尚未在分级库时禁止新增，已在一至四级时只允许调入五级，已在五级时禁止上调
+     *
+     * @param sec 证券主数据
+     * @param inRestricted 证券或主体是否在重点观察名单
+     * @param currentGradedSort 当前所在分级库的最好档，未在分级库时为 null
+     * @param targetSort 目标分级库档位，非分级库目标为 null
      * @param strongGuaranteeEnabled 是否启用强担保豁免
-     * @return 失败文案；通过为 null
+     * @return 限制原因，跳过或通过本项校验时返回 null
      */
     public static String checkRestricted(SecurityInfoBo sec, boolean inRestricted,
                                          Integer currentGradedSort, Integer targetSort,
@@ -354,20 +383,24 @@ public final class CreditBondSpecialInboundRule {
     }
 
     /**
-     * 是否信用债大库树（含根节点）。境外债不纳入主体评分档套件。
+     * 判断池类型是否属于信用债大库，包含根节点
+     *
+     * 信用债大库使用这套主体评分分级矩阵，境外债池采用独立的池类型
      *
      * @param poolType 投资池类型
-     * @return true=信用债
+     * @return true=池类型为 {@code credit_bond}，false=类型缺失或属于其他池
      */
     public static boolean isGradedBondPoolType(String poolType) {
         return "credit_bond".equals(poolType);
     }
 
     /**
-     * 是否信用债分级库叶子（一～五级）。根节点 pool_level=1 排除。
+     * 判断池是否为信用债大库下的一至五级分级库
+     *
+     * 池类型须为信用债，档位须在一至五级，树层级接受二级或未填写
      *
      * @param pool 投资池
-     * @return true=信用债一～五级叶子
+     * @return true=池满足分级库条件，false=池缺失或任一条件不符
      */
     public static boolean isGradedLevelPool(InvestmentPoolBo pool) {
         if (pool == null || !isGradedBondPoolType(pool.getPoolType())) {
@@ -381,10 +414,10 @@ public final class CreditBondSpecialInboundRule {
     }
 
     /**
-     * 将档位限制在 1～5。
+     * 将档位限制在信用债分级库的一至五级范围
      *
      * @param sort 原始档位
-     * @return 限制后的档位
+     * @return 小于 1 时返回 1，大于 5 时返回 5，范围内原样返回
      */
     public static int clampLevel(int sort) {
         if (sort < MIN_LEVEL) {
@@ -397,30 +430,31 @@ public final class CreditBondSpecialInboundRule {
     }
 
     /**
-     * 内评档编码是否为 1 档。
+     * 按内评编码判断是否为 1 档
      *
      * @param gradeCode 内评档编码
-     * @return true=1 档
+     * @return true=去掉首尾空白后编码为 1，false=编码为空或属于其他档
      */
     private static boolean isGradeOne(String gradeCode) {
         return gradeCode != null && "1".equals(gradeCode.trim());
     }
 
     /**
-     * 发债主体内评是否为 1 档。只看 {@code innerIssuerRating}。
+     * 检查发行人内评字段 {@code innerIssuerRating} 是否为 1 档
      *
      * @param sec 证券主数据
-     * @return true=发债主体内评 1 档
+     * @return true=发行人内评为 1 档，false=证券或内评缺失，或内评属于其他档
      */
     private static boolean isIssuerGradeOne(SecurityInfoBo sec) {
+        // 用统一的 1 档编码判断发行人内评
         return sec != null && isGradeOne(sec.getInnerIssuerRating());
     }
 
     /**
-     * 发债主体内评是否为 2+/2/2-。只看 {@code innerIssuerRating}。
+     * 检查发行人内评字段 {@code innerIssuerRating} 是否在 2 档区间
      *
      * @param sec 证券主数据
-     * @return true=2+/2/2-
+     * @return true=发行人内评为 2+、2 或 2-，false=证券或内评缺失，或内评属于其他档
      */
     private static boolean isIssuerGradeTwoBand(SecurityInfoBo sec) {
         if (sec == null || sec.getInnerIssuerRating() == null) {
@@ -431,10 +465,10 @@ public final class CreditBondSpecialInboundRule {
     }
 
     /**
-     * 文案是否包含「私募」。
+     * 检查证券分类文本是否包含「私募」
      *
      * @param text 发行方式或内部分类
-     * @return true=含私募
+     * @return true=文本含「私募」，false=文本为空或不含「私募」
      */
     private static boolean containsPrivate(String text) {
         return text != null && text.contains("私募");
