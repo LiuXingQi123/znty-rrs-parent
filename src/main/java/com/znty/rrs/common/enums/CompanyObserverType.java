@@ -7,24 +7,16 @@ package com.znty.rrs.common.enums;
  */
 public enum CompanyObserverType {
 
-    /**
-     * 空
-     */
+    /** 空 */
     NONE("1"),
 
-    /**
-     * 观察
-     */
+    /** 观察 */
     OBSERVE("2"),
 
-    /**
-     * 重点观察
-     */
+    /** 重点观察 */
     KEY_OBSERVE("3");
 
-    /**
-     * AIS 主体观察者类型编码
-     */
+    /** AIS 主体观察者类型编码 */
     private final String code;
 
     /**

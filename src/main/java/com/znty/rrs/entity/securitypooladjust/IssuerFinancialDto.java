@@ -52,6 +52,6 @@ public class IssuerFinancialDto {
     /** EBITDA（亿元） */
     private BigDecimal ebitda;
 
-    /** 总债务/EBITDA，对应 DEBT_TO_EBITDA */
+    /** 总债务、EBITDA，对应 DEBT_TO_EBITDA */
     private BigDecimal debtToEbitda;
 }

@@ -33,7 +33,11 @@ public class ForbiddenPoolHistoryReq extends PageRequest {
     /** 证券名称（模糊搜索） */
     private String securityShortName;
 
-    /** 对象类型：company=主体 / bond=债券 */
+    /**
+     * 对象类型
+     *
+     * company=主体、bond=债券
+     */
     private String categoryType;
 
     /** 提交日期起（yyyy-MM-dd） */
@@ -45,7 +49,11 @@ public class ForbiddenPoolHistoryReq extends PageRequest {
     /** 调整人（模糊搜索） */
     private String adjusterName;
 
-    /** 调整方向：调入 / 调出 */
+    /**
+     * 调整方向
+     *
+     * 取值为调入、调出
+     */
     private String adjustMode;
 
     /** 调整状态 */

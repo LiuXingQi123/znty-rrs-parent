@@ -7,10 +7,17 @@ import lombok.Data;
  */
 @Data
 public class CondRuleItemDto {
+
     /** 条件字段 */
     private String field;
-    /** 操作符：eq/ne/gt/lt/in */
+
+    /**
+     * 操作符
+     *
+     * eq=等于、ne=不等于、gt=大于、lt=小于、in=包含
+     */
     private String op;
+
     /** 条件值 */
     private String val;
 }

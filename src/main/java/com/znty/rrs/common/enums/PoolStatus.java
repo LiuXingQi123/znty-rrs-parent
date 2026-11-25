@@ -7,19 +7,13 @@ package com.znty.rrs.common.enums;
  */
 public enum PoolStatus {
 
-    /**
-     * 启用
-     */
+    /** 启用 */
     ENABLED("enabled"),
 
-    /**
-     * 停用
-     */
+    /** 停用 */
     DISABLED("disabled");
 
-    /**
-     * 投资池启用状态编码
-     */
+    /** 投资池启用状态编码 */
     private final String code;
 
     /**

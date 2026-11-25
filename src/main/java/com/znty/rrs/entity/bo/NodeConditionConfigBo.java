@@ -10,16 +10,21 @@ import java.util.Date;
  */
 @Data
 public class NodeConditionConfigBo {
+
     /** 主键 */
     private Long id;
+
     /** 节点 ID */
     private Long nodeId;
+
     /** 条件备注 */
     private String conditionRemark;
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
+
     /** 创建时间 */
-    private Date crteTime;
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
+    private Date crteTime;
+
     /** 更新时间 */
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private Date updtTime;
 }

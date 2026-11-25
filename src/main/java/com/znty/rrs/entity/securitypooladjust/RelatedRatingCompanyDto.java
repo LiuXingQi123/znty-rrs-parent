@@ -6,7 +6,7 @@ import lombok.Data;
 import java.util.Date;
 
 /**
- * 证券池调库相关评级主体 DTO。
+ * 证券池调库相关评级主体 DTO
  */
 @Data
 public class RelatedRatingCompanyDto {

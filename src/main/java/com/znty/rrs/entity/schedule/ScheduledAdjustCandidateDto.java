@@ -4,7 +4,9 @@ import com.znty.rrs.entity.bo.IpAdjustLogBo;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
-/** 定时任务自动调库候选记录，承载日志字段及规则判断辅助信息。 */
+/**
+ * 定时任务自动调库候选记录，承载日志字段及规则判断辅助信息
+ */
 @Data
 @EqualsAndHashCode(callSuper = true)
 public class ScheduledAdjustCandidateDto extends IpAdjustLogBo {
@@ -42,12 +44,24 @@ public class ScheduledAdjustCandidateDto extends IpAdjustLogBo {
     /** 近一年认可外评孰低值 */
     private String outerRating;
 
-    /** 当前是否在公司信用债禁止库：1=是 */
+    /**
+     * 当前是否在公司信用债禁止库
+     *
+     * 1=是、0=否
+     */
     private Integer inForbiddenPool;
 
-    /** 当前是否在重点观察名单：1=是 */
+    /**
+     * 当前是否在重点观察名单
+     *
+     * 1=是、0=否
+     */
     private Integer inRestrictedPool;
 
-    /** 近一年认可外评孰低是否为 AA-及以下：1=是 */
+    /**
+     * 近一年认可外评孰低是否为 AA- 及以下
+     *
+     * 1=是、0=否
+     */
     private Integer inLowOuterRating;
 }

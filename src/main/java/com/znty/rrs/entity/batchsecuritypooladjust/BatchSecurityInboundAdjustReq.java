@@ -24,7 +24,11 @@ public class BatchSecurityInboundAdjustReq {
     /** 目标投资池 ID */
     private Long poolId;
 
-    /** 调整方向：in=调入 / out=调出 */
+    /**
+     * 调整方向
+     *
+     * in=调入、out=调出
+     */
     private String direction;
 
     /** 目标投资池名称 */
@@ -39,7 +43,11 @@ public class BatchSecurityInboundAdjustReq {
     /** 调整建议 */
     private String adjustAdvice;
 
-    /** 是否放开主体债入库矩阵规则：yes=放开 / no=不放开 */
+    /**
+     * 是否放开主体债入库矩阵规则
+     *
+     * yes=放开、no=不放开
+     */
     private String releaseRules;
 
     /** 整批信评报告附件在 multipart 文件数组中的下标 */
@@ -130,16 +138,24 @@ public class BatchSecurityInboundAdjustReq {
         /** 投资池类型 */
         private String poolType;
 
-        /** 调整方向：调入 / 调出 */
+        /**
+         * 调整方向
+         *
+         * 取值为调入、调出
+         */
         private String adjustMode;
 
-        /** 调整项来源：manual=手工 / linkage=联动 / mutex=互斥 / related=多市场关联码 */
+        /**
+         * 调整项来源
+         *
+         * manual=手工、linkage=联动、mutex=互斥、related=多市场关联码
+         */
         private String itemTag;
 
         /** 调库分组 Key */
         private String adjustGroupKey;
 
-        /** 触发扩批的主证券代码（related 项=选中主券；其余默认自身） */
+        /** 触发扩批的主证券代码（关联项取选中主券，其余默认自身） */
         private String sourceSecurityCode;
 
         /** 审批流程 ID */

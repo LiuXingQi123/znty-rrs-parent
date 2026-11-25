@@ -7,19 +7,13 @@ package com.znty.rrs.common.enums;
  */
 public enum RuleStatus {
 
-    /**
-     * 已启用
-     */
+    /** 已启用 */
     ACTIVE("active"),
 
-    /**
-     * 已禁用
-     */
+    /** 已禁用 */
     DISABLED("disabled");
 
-    /**
-     * 规则启用状态编码
-     */
+    /** 规则启用状态编码 */
     private final String code;
 
     /**

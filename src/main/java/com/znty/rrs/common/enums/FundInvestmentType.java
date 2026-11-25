@@ -7,34 +7,22 @@ package com.znty.rrs.common.enums;
  */
 public enum FundInvestmentType {
 
-    /**
-     * 股票型
-     */
+    /** 股票型 */
     STOCK("stock"),
 
-    /**
-     * 偏股混合型
-     */
+    /** 偏股混合型 */
     EQUITY_HYBRID("equity_hybrid"),
 
-    /**
-     * 货币型
-     */
+    /** 货币型 */
     MONEY_MARKET("money_market"),
 
-    /**
-     * 偏债混合型
-     */
+    /** 偏债混合型 */
     BOND_HYBRID("bond_hybrid"),
 
-    /**
-     * 其余类型
-     */
+    /** 其余类型 */
     OTHER("other");
 
-    /**
-     * 基金投资类型编码
-     */
+    /** 基金投资类型编码 */
     private final String code;
 
     /**

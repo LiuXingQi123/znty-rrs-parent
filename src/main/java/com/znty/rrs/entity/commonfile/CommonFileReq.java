@@ -8,6 +8,6 @@ import lombok.Data;
 @Data
 public class CommonFileReq {
 
-    /** 模板编码（如 security_pool_import / company_pool_import） */
+    /** 模板编码（如 security_pool_import、company_pool_import） */
     private String templateCode;
 }

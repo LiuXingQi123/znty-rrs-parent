@@ -42,7 +42,11 @@ public class AdjustCheckContext {
     /** 目标池当前证券数量（用于容量校验） */
     private int poolCurrentCount;
 
-    /** 调整方向：调入 / 调出 */
+    /**
+     * 调整方向
+     *
+     * 取值为调入、调出
+     */
     private String adjustMode;
 
     /** 目标池的所有关系配置（relation_type → 关联池 ID 列表） */
@@ -78,7 +82,11 @@ public class AdjustCheckContext {
     /** 证券在目标池的入池时间（ip_pool_status.entry_time，audit_status=20），用于调出冻结期校验，调入时为 null */
     private Date targetPoolEntryTime;
 
-    /** 证券品种大类（bond/fund/stock/company，查 dict_security_type），用于类型特有校验路由 */
+    /**
+     * 证券品种大类（查 dict_security_type），用于类型特有校验
+     *
+     * bond=债券、fund=基金、stock=股票、company=公司主体
+     */
     private String categoryType;
 
     /** 是否放开主体债入库矩阵规则 */

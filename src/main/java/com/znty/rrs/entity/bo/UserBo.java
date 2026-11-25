@@ -17,7 +17,7 @@ public class UserBo {
     /** 用户姓名 */
     private String name;
 
-    /** 登录用户名/拼音 */
+    /** 登录用户名、拼音 */
     private String userName;
 
     /** 逻辑删除标志 */

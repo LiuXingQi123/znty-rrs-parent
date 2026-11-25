@@ -7,19 +7,13 @@ package com.znty.rrs.common.enums;
  */
 public enum ScheduleTriggerType {
 
-    /**
-     * 手动触发
-     */
+    /** 手动触发 */
     MANUAL("manual"),
 
-    /**
-     * 定时 cron 触发
-     */
+    /** 定时 cron 触发 */
     CRON("cron");
 
-    /**
-     * 定时任务触发方式编码
-     */
+    /** 定时任务触发方式编码 */
     private final String code;
 
     /**

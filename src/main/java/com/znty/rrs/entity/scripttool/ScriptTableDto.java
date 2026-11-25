@@ -3,7 +3,7 @@ package com.znty.rrs.entity.scripttool;
 import lombok.Data;
 
 /**
- * 脚本工具可清空表信息。
+ * 脚本工具可清空表信息
  */
 @Data
 public class ScriptTableDto {

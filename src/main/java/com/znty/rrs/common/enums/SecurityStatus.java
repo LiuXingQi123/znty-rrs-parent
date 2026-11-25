@@ -7,29 +7,19 @@ package com.znty.rrs.common.enums;
  */
 public enum SecurityStatus {
 
-    /**
-     * 上市中
-     */
+    /** 上市中 */
     LISTED("L"),
 
-    /**
-     * 待上市
-     */
+    /** 待上市 */
     PENDING("N"),
 
-    /**
-     * 退市
-     */
+    /** 退市 */
     DELISTED("D"),
 
-    /**
-     * 未知（债券到期判断时归为未到期）
-     */
+    /** 未知（债券到期判断时归为未到期） */
     UNKNOWN("U");
 
-    /**
-     * 证券上市状态编码
-     */
+    /** 证券上市状态编码 */
     private final String code;
 
     /**

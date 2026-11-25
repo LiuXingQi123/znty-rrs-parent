@@ -40,13 +40,21 @@ public class IpGradeRuleAlertBo {
     /** 命中的特殊类型说明 */
     private String specialTypeDesc;
 
-    /** 规则类型：grade=分级规则 / absCompanySync=ABS主体联动 */
+    /**
+     * 规则类型
+     *
+     * grade=分级规则、absCompanySync=ABS主体联动
+     */
     private String ruleType;
 
     /** 本次主体身份和池状态依据摘要 */
     private String contextKey;
 
-    /** 待办状态：00=待处理 / 20=已处理 / 99=已失效 */
+    /**
+     * 待办状态
+     *
+     * 00=待处理、20=已处理、99=已失效
+     */
     private String alertStatus;
 
     /** 最近一次扫描命中时间 */

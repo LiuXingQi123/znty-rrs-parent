@@ -7,44 +7,28 @@ package com.znty.rrs.common.enums;
  */
 public enum ReportType {
 
-    /**
-     * 债券入库报告
-     */
+    /** 债券入库报告 */
     BOND_IN_REPORT("bond_in_report"),
 
-    /**
-     * 债券出库报告
-     */
+    /** 债券出库报告 */
     BOND_OUT_REPORT("bond_out_report"),
 
-    /**
-     * 基金入库报告
-     */
+    /** 基金入库报告 */
     FUND_IN_REPORT("fund_in_report"),
 
-    /**
-     * 基金出库报告
-     */
+    /** 基金出库报告 */
     FUND_OUT_REPORT("fund_out_report"),
 
-    /**
-     * 股票入库报告
-     */
+    /** 股票入库报告 */
     STOCK_IN_REPORT("stock_in_report"),
 
-    /**
-     * 股票出库报告
-     */
+    /** 股票出库报告 */
     STOCK_OUT_REPORT("stock_out_report"),
 
-    /**
-     * 其他报告
-     */
+    /** 其他报告 */
     OTHER_REPORT("other_report");
 
-    /**
-     * 报告类型编码
-     */
+    /** 报告类型编码 */
     private final String code;
 
     /**

@@ -4,7 +4,7 @@ import java.util.List;
 import lombok.Data;
 
 /**
- * 定时提醒投递消息，隔离业务扫描与后续邮件、站内信实现。
+ * 定时提醒投递消息，隔离业务扫描与后续邮件、站内信实现
  */
 @Data
 public class ScheduledReminderMessageDto {

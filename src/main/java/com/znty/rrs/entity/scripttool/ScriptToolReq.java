@@ -5,7 +5,7 @@ import lombok.Data;
 import java.util.List;
 
 /**
- * 脚本工具请求参数。
+ * 脚本工具请求参数
  */
 @Data
 public class ScriptToolReq {

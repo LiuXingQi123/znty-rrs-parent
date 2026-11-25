@@ -27,7 +27,11 @@ public class IpPoolOpenDayBo {
     /** 描述 */
     private String description;
 
-    /** 逻辑删除标志：0=正常 / 1=已删除 */
+    /**
+     * 逻辑删除标志
+     *
+     * 0=正常、1=已删除
+     */
     private Integer isDeleted;
 
     /** 创建时间 */

@@ -7,24 +7,16 @@ package com.znty.rrs.common.enums;
  */
 public enum FlowStatus {
 
-    /**
-     * 草稿
-     */
+    /** 草稿 */
     DRAFT("draft"),
 
-    /**
-     * 已发布
-     */
+    /** 已发布 */
     ACTIVE("active"),
 
-    /**
-     * 已停用
-     */
+    /** 已停用 */
     DISABLED("disabled");
 
-    /**
-     * 流程状态编码
-     */
+    /** 流程状态编码 */
     private final String code;
 
     /**

@@ -20,8 +20,10 @@ public class SecurityPoolAdjustReq extends PageRequest {
 
     /** 页面已选评级主体，直接复用名称及内外评 */
     private RatingCompanySelectionReq selectedRatingCompany;
+
     /** 证券代码（模糊搜索） */
     private String securityCode;
+
     /** 证券简称（模糊搜索） */
     private String securityShortName;
 
@@ -30,33 +32,55 @@ public class SecurityPoolAdjustReq extends PageRequest {
 
     /** 主体编码（模糊搜索） */
     private String issuerCode;
+
     /** 证券类型（精确匹配 dict_security_type.security_type） */
     private String securityType;
+
     /** 发行人（模糊搜索） */
     private String issuer;
+
     /**
-     * 是否特征多选（勾选即筛「是」，多选 AND）：
-     * guarant / inright / yx / private / abs / cj / stdCredit（标准信用债）
+     * 是否特征多选（勾选即筛「是」，多选 AND）
+     *
+     * guarant=担保、inright=含权、yx=永续、private=私募、abs=ABS、cj=次级、stdCredit=标准信用债
      */
     private List<String> bondYesFlags;
-    /** 调库方向：in=可调入库 / out=可调出库 */
+
+    /**
+     * 调库方向
+     *
+     * in=可调入库、out=可调出库
+     */
     private String adjustDirection;
+
     /** 当前用户 ID，1 视为管理员 */
     private String currentUserId;
+
     /** 目标投资池 ID（从具体投资池入口查看时使用） */
     private Long targetPoolId;
+
     /** 调库记录 ID（查询流程步骤及审批改判候选池时使用） */
     private Long adjustLogId;
+
     /** 财务报告日期（yyyyMMdd，按指定报告期查询时使用） */
     private Long reportDate;
+
     /** 调库批次号（查询同批次共用流程步骤时使用） */
     private String adjustBatchNo;
-    /** 是否放开规则（false=信用债大库池需满足主体债入库矩阵才显示可调；true=不卡矩阵） */
+
+    /**
+     * 是否放开规则
+     *
+     * false=信用债大库池需满足主体债入库矩阵才显示可调、true=不卡矩阵
+     */
     private boolean releaseRules;
+
     /** 当前选择的担保人主体代码（查询可调入池时用于匹配最新担保人内评） */
     private String guarantorCode;
+
     /** ABS 当前选择的权益人主体代码 */
     private String rightsHolderCode;
+
     /** ABS 当前选择的自选权益人主体代码，自选时优先于 rightsHolderCode */
     private String selfSelectedRightsHolderCode;
 }

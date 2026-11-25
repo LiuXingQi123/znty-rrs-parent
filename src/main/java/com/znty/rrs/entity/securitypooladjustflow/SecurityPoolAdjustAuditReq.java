@@ -5,7 +5,7 @@ import lombok.Data;
 import java.util.List;
 
 /**
- * 证券池调库审批处理请求，用于提交当前流程步骤的通过或驳回意见。
+ * 证券池调库审批处理请求，用于提交当前流程步骤的通过或驳回意见
  */
 @Data
 public class SecurityPoolAdjustAuditReq {
@@ -19,7 +19,11 @@ public class SecurityPoolAdjustAuditReq {
     /** 当前处理的流程步骤 ID */
     private Long stepId;
 
-    /** 处理动作：approve=通过 / reject=驳回 */
+    /**
+     * 处理动作
+     *
+     * approve=通过、reject=驳回
+     */
     private String processAction;
 
     /** 处理意见 */
@@ -38,10 +42,10 @@ public class SecurityPoolAdjustAuditReq {
     private String handlerName;
 
     /**
-     * 调入改判目标池 ID（评级联动，可选）。
+     * 调入改判目标池 ID（评级联动，可选）
      *
-     * <p>仅信用债大库调入审批通过时有意义：审核人按主体评级×期限档矩阵改判到不同层级池（上调/降库）。
-     * 为空时按原提交目标池落地；非空时校验须在矩阵允许池列表内，并改判落地到该池。
+     * 仅信用债大库调入审批通过时有意义：审核人按主体评级×期限档矩阵改判到不同层级池（上调、降库）
+     * 为空时按原提交目标池落地；非空时校验须在矩阵允许池列表内，并改判落地到该池
      */
     private Long redirectPoolId;
 

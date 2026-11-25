@@ -54,7 +54,6 @@ public class ForbiddenPoolQueryDto {
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private Date entryTime;
 
-
     /** 证券主档状态，D 为到期 */
     private String securityStatus;
 

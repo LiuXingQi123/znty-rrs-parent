@@ -30,6 +30,7 @@ public class AdjustCheckDto {
 
     /**
      * 保存一条调整项的校验结果，记录实际凭证、标的证券、目标池和调整方向
+     *
      * 手工项与配套项通过分组标识关联，校验原因和提示随该项返回
      */
     @Data
@@ -65,10 +66,18 @@ public class AdjustCheckDto {
         /** 投资池类型 */
         private String poolType;
 
-        /** 调整方向（调入 / 调出） */
+        /**
+         * 调整方向
+         *
+         * 取值为调入、调出
+         */
         private String adjustMode;
 
-        /** 调整项来源（manual=手工选择 / linkage=联动调整 / mutex=互斥调整 / related=同券跨市场调整） */
+        /**
+         * 调整项来源
+         *
+         * manual=手工选择、linkage=联动调整、mutex=互斥调整、related=同券跨市场调整
+         */
         private String itemTag;
 
         /** 调库分组标识，由手工项及其触发的联动、互斥和同券跨市场项共用 */
@@ -89,12 +98,18 @@ public class AdjustCheckDto {
 
     /**
      * 保存一个审批流程候选及其推荐、匹配和可选状态
+     *
      * 页面使用匹配与未匹配原因说明该流程为什么可选或不可选
      */
     @Data
     public static class FlowOption {
 
-        /** 流程类型编码（whitelistInbound / simpleInbound / normalInbound / specialInbound / upgradeInbound / downgradeInbound / normalOutbound / batchInbound / batchOutbound） */
+        /**
+         * 流程类型编码
+         *
+         * whitelistInbound=白名单调入、simpleInbound=简易调入、normalInbound=默认调入、specialInbound=特殊审批、upgradeInbound=上调、
+         * downgradeInbound=下调、normalOutbound=默认调出、batchInbound=批量调入、batchOutbound=批量调出
+         */
         private String flowType;
 
         /** 流程名称 */

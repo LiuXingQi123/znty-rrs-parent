@@ -10,4 +10,5 @@ import lombok.EqualsAndHashCode;
 @Data
 @EqualsAndHashCode(callSuper = true)
 public class GradeRuleAlertDto extends IpGradeRuleAlertBo {
+
 }

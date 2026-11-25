@@ -23,7 +23,11 @@ public class StockSecurityBatchAdjustReq extends PageRequest {
     /** 目标投资池 ID */
     private Long poolId;
 
-    /** 调整方向：in=调入 / out=调出 */
+    /**
+     * 调整方向
+     *
+     * in=调入、out=调出
+     */
     private String direction;
 
     /** 证券代码（模糊） */
@@ -39,21 +43,23 @@ public class StockSecurityBatchAdjustReq extends PageRequest {
     private String issuerCode;
 
     /**
-     * 市场编码列表：
-     * SSE=上海证券交易所 / SZSE=深圳证券交易所 / NIB=银行间市场 / BSE=北京证券交易所 /
-     * COMPANY=主体 / OTC=场外市场 / QDII=其他QDII市场 / JWCW=JWCW市场 / UNKNOWN=未知 / OTHER=其他
+     * 市场编码列表
+     *
+     * SSE=上海证券交易所、SZSE=深圳证券交易所、NIB=银行间市场、BSE=北京证券交易所、COMPANY=主体、OTC=场外市场、
+     * HKEX=香港交易所、QDII=其他 QDII 市场、JWCW=JWCW 市场、UNKNOWN=未知、OTHER=其他
      */
     private List<String> marketCodes;
 
     /**
-     * 是否特征多选（勾选即筛「是」，多选 AND）：
-     * guarant / inright / yx / private / abs / cj / stdCredit（标准信用债）
+     * 是否特征多选（勾选即筛「是」，多选 AND）
+     *
+     * guarant=担保、inright=含权、yx=永续、private=私募、abs=ABS、cj=次级、stdCredit=标准信用债
      */
     private List<String> bondYesFlags;
 
     /**
-     * 来源池 ID 列表（必选至少一个；须在白名单内）。
-     * 白名单 pool_code：crmw_root / credit_bond_level_1~3 / convertible_bond_core / convertible_bond_focus
+     * 来源池 ID 列表（必选至少一个；须在白名单内）
+     * 白名单 pool_code：crmw_root、credit_bond_level_1~3、convertible_bond_core、convertible_bond_focus
      */
     private List<Long> sourcePoolIds;
 
@@ -61,7 +67,7 @@ public class StockSecurityBatchAdjustReq extends PageRequest {
     @JsonIgnore
     private Long crmwSourcePoolId;
 
-    /** 主体全称（沿用模糊匹配 issuer / issuer_code） */
+    /** 主体全称（沿用模糊匹配 issuer、issuer_code） */
     private String issuer;
 
 }

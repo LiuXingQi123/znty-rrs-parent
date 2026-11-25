@@ -6,7 +6,7 @@ import lombok.Data;
 import java.util.Date;
 
 /**
- * 自选权益人分页结果 DTO。
+ * 自选权益人分页结果 DTO
  */
 @Data
 public class SelfSelectedRightsHolderDto {

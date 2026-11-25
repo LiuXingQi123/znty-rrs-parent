@@ -5,7 +5,7 @@ import java.util.Date;
 import lombok.Data;
 
 /**
- * 债券定时提醒候选记录。
+ * 债券定时提醒候选记录
  */
 @Data
 public class BondReminderDto {

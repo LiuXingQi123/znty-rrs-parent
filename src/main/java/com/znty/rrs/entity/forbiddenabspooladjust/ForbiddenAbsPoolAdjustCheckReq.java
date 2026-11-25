@@ -32,7 +32,7 @@ public class ForbiddenAbsPoolAdjustCheckReq {
     /** 基金评分（基金证券调入校验用，前端传入；空则跳过基金评分校验） */
     private String fundRate;
 
-    /** 前端选中的担保人代码（多担保人时下拉二选一；用于简易流程第⑤条件担保人评级下调判断，空表示无担保人/未选中） */
+    /** 前端选中的担保人代码（多担保人时下拉二选一；用于简易流程第⑤条件担保人评级下调判断，空表示无担保人、未选中） */
     private String guarantorCode;
 
     /** 当前选中的权益人主体代码 */
@@ -62,7 +62,11 @@ public class ForbiddenAbsPoolAdjustCheckReq {
         /** 投资池类型 */
         private String poolType;
 
-        /** 调整方向：调入 / 调出 */
+        /**
+         * 调整方向
+         *
+         * 取值为调入、调出
+         */
         private String adjustMode;
     }
 }

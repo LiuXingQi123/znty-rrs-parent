@@ -14,50 +14,79 @@ public class TempSecurityCodeDto {
 
     /** 主键 ID */
     private Long id;
+
     /** 临时证券名称 */
     private String tempSecurityName;
+
     /** 临时证券代码 */
     private String tempSecurityCode;
+
     /** 临时证券市场 */
     private String tempSecurityMarket;
+
     /** 临时证券类型 */
     private String tempSecurityType;
+
     /** 临时证券类型名称 */
     private String tempSecurityTypeName;
+
     /** 临时缓释凭证代码 */
     private String tempMitigationCode;
+
     /** 临时关联主体代码 */
     private String tempCompanyCode;
+
     /** 临时关联主体名称快照 */
     private String tempCompanyNameSnapshot;
+
     /** 临时发行日期 */
     @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
     private Date tempIssueDate;
+
     /** 临时到期日期 */
     @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
     private Date tempMaturityDate;
+
     /** 正式证券名称 */
     private String securityName;
+
     /** 正式证券代码 */
     private String securityCode;
-    /** 正式证券市场 */
+
+    /**
+     * 证券市场
+     *
+     * 例如 SSE=上海证券交易所、SZSE=深圳证券交易所、NIB=银行间市场、BSE=北京证券交易所、OTHER=其他
+     */
     private String securityMarket;
+
     /** 正式证券类型 */
     private String securityType;
+
     /** 正式证券类型名称 */
     private String securityTypeName;
+
     /** 业务更新时间 */
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private Date updateTime;
+
     /** 状态 */
     private String status;
-    /** 操作来源：manual=人工 / job=定时任务 / other=其他 */
+
+    /**
+     * 操作来源
+     *
+     * manual=人工、job=定时任务、other=其他
+     */
     private String oprtSource;
+
     /** 备注 */
     private String memo;
+
     /** 创建时间 */
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private Date crteTime;
+
     /** 更新时间 */
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private Date updtTime;
@@ -70,22 +99,29 @@ public class TempSecurityCodeDto {
 
         /** 主体编码（s_info_compcode） */
         private String companyCode;
+
         /** 主体全称 */
         private String fullName;
+
         /** 主体简称 */
         private String shortName;
     }
 
-    /** 发行主体弹窗选项 */
+    /**
+     * 发行主体弹窗选项
+     */
     @Data
     public static class IssuerOption {
 
         /** 主体代码 */
         private String companyCode;
+
         /** 主体全称 */
         private String companyFullName;
+
         /** 主体简称 */
         private String companyShortName;
+
         /** 统一社会信用代码 */
         private String registerNumber;
     }
@@ -98,28 +134,39 @@ public class TempSecurityCodeDto {
 
         /** 证券类型编码 */
         private String securityType;
+
         /** 证券类型名称 */
         private String securityTypeName;
+
         /** 大类编码 */
         private String categoryType;
+
         /** 大类名称 */
         private String categoryTypeName;
     }
 
     /**
-     * 正式证券远程搜索选项（转正时选择，代码/名称可搜）
+     * 正式证券远程搜索选项（转正时选择，代码、名称可搜）
      */
     @Data
     public static class FormalSecurityOption {
 
         /** 证券代码（wind_code） */
         private String securityCode;
+
         /** 证券名称（优先简称） */
         private String securityName;
-        /** 证券市场（SSE/SZSE/NIB/BSE/OTHER 等） */
+
+        /**
+         * 证券市场
+         *
+         * 例如 SSE=上海证券交易所、SZSE=深圳证券交易所、NIB=银行间市场、BSE=北京证券交易所、OTHER=其他
+         */
         private String securityMarket;
+
         /** 证券类型编码 */
         private String securityType;
+
         /** 证券类型名称 */
         private String securityTypeName;
     }
@@ -132,6 +179,7 @@ public class TempSecurityCodeDto {
 
         /** 发行主体选项 */
         private List<CompanyOption> companies = new ArrayList<>();
+
         /** 证券类型选项 */
         private List<SecurityTypeOption> securityTypes = new ArrayList<>();
     }

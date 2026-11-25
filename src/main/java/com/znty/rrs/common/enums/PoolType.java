@@ -12,9 +12,7 @@ public enum PoolType {
 
     // ── 固收 / 债券 ──
 
-    /**
-     * 信用债大库，升降级流程、主体内评矩阵和互斥特殊审批排除等规则使用此编码
-     */
+    /** 信用债大库，升降级流程、主体内评矩阵和互斥特殊审批排除等规则使用此编码 */
     CREDIT_BOND("credit_bond"),
 
     /**
@@ -24,38 +22,26 @@ public enum PoolType {
      */
     OFFSHORE_BOND("offshore_bond"),
 
-    /**
-     * 转债库 / 转债产品库
-     */
+    /** 转债库 / 转债产品库 */
     CONVERTIBLE_BOND("convertible_bond"),
 
-    /**
-     * 债券产品库（产品维度名单，区别于信用债大库）
-     */
+    /** 债券产品库（产品维度名单，区别于信用债大库） */
     BOND_PRODUCT("bond_product"),
 
-    /**
-     * 专户债券 / 专户产品库
-     */
+    /** 专户债券 / 专户产品库 */
     SPECIAL_ACCOUNT("special_account"),
 
     // ── 权益 / 股票 ──
 
-    /**
-     * 公司股票库、公司港股库等研究/主体维度股票池
-     */
+    /** 公司股票库、公司港股库等研究/主体维度股票池 */
     STOCK("stock"),
 
-    /**
-     * 股票产品库（A股/H股等产品维度）
-     */
+    /** 股票产品库（A股/H股等产品维度） */
     STOCK_PRODUCT("stock_product"),
 
     // ── 基金 ──
 
-    /**
-     * 公司基金库、基金产品库
-     */
+    /** 公司基金库、基金产品库 */
     FUND("fund"),
 
     // ── 风险控制（禁投 / 名单） ──
@@ -67,14 +53,10 @@ public enum PoolType {
      */
     FORBIDDEN("forbidden"),
 
-    /**
-     * 观察池纳入禁投相关目标，调入分级库时不得高于标准矩阵允许的最好档
-     */
+    /** 观察池纳入禁投相关目标，调入分级库时不得高于标准矩阵允许的最好档 */
     OBSERVE("observe"),
 
-    /**
-     * 黑名单供风险池查询使用，全局调入禁止规则只适用于 {@link #FORBIDDEN}
-     */
+    /** 黑名单供风险池查询使用，全局调入禁止规则只适用于 {@link #FORBIDDEN} */
     BLACKLIST("blacklist"),
 
     /**
@@ -85,26 +67,18 @@ public enum PoolType {
      */
     RESTRICTED("restricted"),
 
-    /**
-     * 白名单库（流程/规则白名单池，预留）
-     */
+    /** 白名单库（流程/规则白名单池，预留） */
     WHITELIST("whitelist"),
 
     // ── 独立链路 / 兜底 ──
 
-    /**
-     * CRMW 库，使用独立的 CRMW 调库链路
-     */
+    /** CRMW 库，使用独立的 CRMW 调库链路 */
     CRMW("crmw"),
 
-    /**
-     * 其他 / 自定义根池（如临时命名根节点）
-     */
+    /** 其他 / 自定义根池（如临时命名根节点） */
     OTHER("other");
 
-    /**
-     * 投资池类型编码
-     */
+    /** 投资池类型编码 */
     private final String code;
 
     /**

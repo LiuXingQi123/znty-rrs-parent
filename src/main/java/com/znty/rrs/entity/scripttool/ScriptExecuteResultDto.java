@@ -7,7 +7,7 @@ import java.util.Date;
 import java.util.List;
 
 /**
- * 脚本任务执行结果。
+ * 脚本任务执行结果
  */
 @Data
 public class ScriptExecuteResultDto {
@@ -18,7 +18,11 @@ public class ScriptExecuteResultDto {
     /** 脚本任务名称 */
     private String taskName;
 
-    /** 执行状态：success=成功 / failed=失败 */
+    /**
+     * 执行状态
+     *
+     * success=成功、failed=失败
+     */
     private String status;
 
     /** 操作人 ID */

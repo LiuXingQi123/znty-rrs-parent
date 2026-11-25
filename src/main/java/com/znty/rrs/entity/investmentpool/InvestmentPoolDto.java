@@ -39,13 +39,18 @@ public class InvestmentPoolDto {
     private Integer poolLevel;
 
     /**
-     * 投资市场编码列表：
-     * SSE=上海证券交易所 / SZSE=深圳证券交易所 / NIB=银行间市场 / BSE=北京证券交易所 /
-     * COMPANY=主体 / OTC=场外市场 / QDII=其他QDII市场 / JWCW=JWCW市场 / UNKNOWN=未知 / OTHER=其他
+     * 投资市场编码列表
+     *
+     * SSE=上海证券交易所、SZSE=深圳证券交易所、NIB=银行间市场、BSE=北京证券交易所、COMPANY=主体、OTC=场外市场、
+     * HKEX=香港交易所、QDII=其他 QDII 市场、JWCW=JWCW 市场、UNKNOWN=未知、OTHER=其他
      */
     private List<String> marketCodes = new ArrayList<>();
 
-    /** 投资品种编码列表，元素为 dict_security_type.category_type（bond/stock/fund/company/index/warrant/trust/private_wealth/unknown） */
+    /**
+     * 投资品种编码列表（dict_security_type.category_type）
+     *
+     * bond=债券、stock=股票、fund=基金、company=公司主体、index=指数、warrant=权证、trust=信托、private_wealth=私募理财、unknown=未知
+     */
     private List<String> varietyCodes = new ArrayList<>();
 
     /** 恒生池名称 */
@@ -78,7 +83,11 @@ public class InvestmentPoolDto {
     /** 最大上限数量 */
     private Long maxCapacity;
 
-    /** 池锁定标志：0=未锁定 / 1=已锁定 */
+    /**
+     * 池锁定标志
+     *
+     * 0=未锁定、1=已锁定
+     */
     private Integer lockFlag;
 
     /** 调入冻结期天数：空或 0 表示不限制 */

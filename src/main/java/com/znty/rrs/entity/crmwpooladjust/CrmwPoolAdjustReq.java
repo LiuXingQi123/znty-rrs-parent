@@ -17,29 +17,45 @@ public class CrmwPoolAdjustReq extends PageRequest {
 
     /** 页面已选评级主体，直接复用名称及内外评 */
     private RatingCompanySelectionReq selectedRatingCompany;
+
     /** 证券代码（模糊搜索） */
     private String securityCode;
+
     /** 证券简称（模糊搜索） */
     private String securityShortName;
+
     /** 发行人（模糊搜索） */
     private String issuer;
+
     /**
-     * 是否特征多选（勾选即筛「是」，多选 AND；可绑定证券列表使用）：
-     * abs / guarant / yx / cj / private / inright / stdCredit（标准信用债）
+     * 是否特征多选（勾选即筛「是」，多选 AND；可绑定证券列表使用）
+     *
+     * abs=ABS、guarant=担保、yx=永续、cj=次级、private=私募、inright=含权、stdCredit=标准信用债
      */
     private List<String> bondYesFlags;
+
     /** CRMW 凭证代码 */
     private String crmwScode;
+
     /** CRMW 证券类型 */
     private String crmwStype;
-    /** 调库方向：in=可调入库 / out=可调出库 */
+
+    /**
+     * 调库方向
+     *
+     * in=可调入库、out=可调出库
+     */
     private String adjustDirection;
+
     /** 当前用户 ID，1 视为管理员 */
     private String currentUserId;
+
     /** 目标投资池 ID（从具体投资池入口查看时使用） */
     private Long targetPoolId;
+
     /** 调库记录 ID（查询流程步骤时使用） */
     private Long adjustLogId;
+
     /** 调库批次号（查询同批次共用流程步骤时使用） */
     private String adjustBatchNo;
 }

@@ -7,29 +7,19 @@ package com.znty.rrs.common.enums;
  */
 public enum AuditStatus {
 
-    /**
-     * 无效调整
-     */
+    /** 无效调整 */
     INVALID("-1"),
 
-    /**
-     * 流程中（别名：待审批 / 审批中）
-     */
+    /** 流程中（别名：待审批 / 审批中） */
     SUBMITTED("00"),
 
-    /**
-     * 驳回待修改
-     */
+    /** 驳回待修改 */
     REJECT_MODIFY("11"),
 
-    /**
-     * 审批通过
-     */
+    /** 审批通过 */
     APPROVED("20"),
 
-    /**
-     * 审批驳回
-     */
+    /** 审批驳回 */
     REJECTED("21"),
 
     /**
@@ -39,14 +29,10 @@ public enum AuditStatus {
      */
     O32("32"),
 
-    /**
-     * 发起人已撤回
-     */
+    /** 发起人已撤回 */
     REVOKED("99");
 
-    /**
-     * 审核状态编码
-     */
+    /** 审核状态编码 */
     private final String code;
 
     /**

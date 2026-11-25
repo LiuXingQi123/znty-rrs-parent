@@ -14,7 +14,11 @@ public class ReportReq extends PageRequest {
     /** 报告 ID，详情查询必填 */
     private Long reportId;
 
-    /** 报告来源：internal / external，详情查询必填 */
+    /**
+     * 报告来源（详情查询必填）
+     *
+     * internal=内部报告库、external=外部报告库
+     */
     private String source;
 
     /** 报告标题关键字 */

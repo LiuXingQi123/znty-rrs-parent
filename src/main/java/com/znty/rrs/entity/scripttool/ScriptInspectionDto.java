@@ -5,12 +5,16 @@ import lombok.Data;
 import java.util.List;
 
 /**
- * 脚本工具只读检查结果。
+ * 脚本工具只读检查结果
  */
 @Data
 public class ScriptInspectionDto {
 
-    /** 整体状态：success=正常 / warning=警告 / failed=失败 */
+    /**
+     * 整体状态
+     *
+     * success=正常、warning=警告、failed=失败
+     */
     private String status;
 
     /** 检查对象总数 */

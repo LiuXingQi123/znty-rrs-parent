@@ -12,20 +12,36 @@ import java.util.List;
 @Data
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class CanvasEdgeDto {
+
     /** 连线唯一标识 */
     private String id;
+
     /** 起始节点 ID */
     private String from;
+
     /** 目标节点 ID */
     private String to;
+
     /** 连线标签 */
     private String label;
-    /** 流转动作：approve=通过 / reject=驳回 / submit=提交 / resubmit=重新提交 / auto=自动 */
+
+    /**
+     * 流转动作
+     *
+     * approve=通过、reject=驳回、submit=提交、resubmit=重新提交、auto=自动
+     */
     private String routeAction;
+
     /** 连线备注 */
     private String remark;
-    /** 条件逻辑：and/or */
+
+    /**
+     * 条件逻辑
+     *
+     * and=全部满足、or=任意满足
+     */
     private String condLogic;
+
     /** 条件规则列表 */
     private List<CondRuleItemDto> condRules;
 }

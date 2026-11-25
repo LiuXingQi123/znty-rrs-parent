@@ -7,39 +7,25 @@ package com.znty.rrs.common.enums;
  */
 public enum ProcessAction {
 
-    /**
-     * 提交
-     */
+    /** 提交 */
     SUBMIT("submit"),
 
-    /**
-     * 重新提交
-     */
+    /** 重新提交 */
     RESUBMIT("resubmit"),
 
-    /**
-     * 通过
-     */
+    /** 通过 */
     APPROVE("approve"),
 
-    /**
-     * 驳回
-     */
+    /** 驳回 */
     REJECT("reject"),
 
-    /**
-     * 自动处理
-     */
+    /** 自动处理 */
     AUTO_PROCESS("auto_process"),
 
-    /**
-     * 被跳过
-     */
+    /** 被跳过 */
     SKIPPED("skipped");
 
-    /**
-     * 流程步骤处理动作编码
-     */
+    /** 流程步骤处理动作编码 */
     private final String code;
 
     /**

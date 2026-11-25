@@ -9,6 +9,7 @@ import java.util.List;
  */
 @Data
 public class CommonReq {
+
     /** 包含的投资池类型列表 */
     private List<String> includePoolTypes;
 

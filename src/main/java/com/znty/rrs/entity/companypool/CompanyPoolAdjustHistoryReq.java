@@ -42,7 +42,11 @@ public class CompanyPoolAdjustHistoryReq extends PageRequest {
     /** 调整人（模糊搜索） */
     private String adjusterName;
 
-    /** 调整方向：调入 / 调出 */
+    /**
+     * 调整方向
+     *
+     * 取值为调入、调出
+     */
     private String adjustMode;
 
     /** 调整状态 */

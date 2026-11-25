@@ -8,54 +8,34 @@ package com.znty.rrs.common.enums;
  */
 public enum CategoryType {
 
-    /**
-     * 债券
-     */
+    /** 债券 */
     BOND("bond"),
 
-    /**
-     * 股票
-     */
+    /** 股票 */
     STOCK("stock"),
 
-    /**
-     * 基金
-     */
+    /** 基金 */
     FUND("fund"),
 
-    /**
-     * 公司主体
-     */
+    /** 公司主体 */
     COMPANY("company"),
 
-    /**
-     * 指数
-     */
+    /** 指数 */
     INDEX("index"),
 
-    /**
-     * 权证
-     */
+    /** 权证 */
     WARRANT("warrant"),
 
-    /**
-     * 信托
-     */
+    /** 信托 */
     TRUST("trust"),
 
-    /**
-     * 私募理财
-     */
+    /** 私募理财 */
     PRIVATE_WEALTH("private_wealth"),
 
-    /**
-     * 未知
-     */
+    /** 未知 */
     UNKNOWN("unknown");
 
-    /**
-     * 证券大类编码
-     */
+    /** 证券大类编码 */
     private final String code;
 
     /**

@@ -8,19 +8,13 @@ package com.znty.rrs.common.enums;
  */
 public enum BondStatus {
 
-    /**
-     * 存续
-     */
+    /** 存续 */
     ACTIVE("active"),
 
-    /**
-     * 到期
-     */
+    /** 到期 */
     MATURED("matured");
 
-    /**
-     * 债券存续状态筛选编码
-     */
+    /** 债券存续状态筛选编码 */
     private final String code;
 
     /**

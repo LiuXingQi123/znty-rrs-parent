@@ -40,7 +40,7 @@ public class AdjustCheckDto {
         /** 证券类型 */
         private String securityType;
 
-        /** 触发扩批的主证券代码（关联项=主券；主/联动/互斥=自身） */
+        /** 触发扩批的主证券代码（关联项取主券，主项、联动项和互斥项取自身） */
         private String sourceSecurityCode;
 
         /** 目标投资池 ID */
@@ -52,13 +52,21 @@ public class AdjustCheckDto {
         /** 投资池类型 */
         private String poolType;
 
-        /** 调整方向：调入 / 调出 */
+        /**
+         * 调整方向
+         *
+         * 取值为调入、调出
+         */
         private String adjustMode;
 
-        /** 调整项来源：manual=用户主动选择, linkage=联动调整, mutex=互斥调整, related=多市场关联码 */
+        /**
+         * 调整项来源
+         *
+         * manual=用户主动选择、linkage=联动调整、mutex=互斥调整、related=多市场关联码
+         */
         private String itemTag;
 
-        /** 调库分组 Key：手工项及其触发的联动/互斥/关联项共用 */
+        /** 调库分组 Key：手工项及其触发的联动、互斥、关联项共用 */
         private String adjustGroupKey;
 
         /** 是否可调整 */
@@ -86,7 +94,12 @@ public class AdjustCheckDto {
         /** 快速候选的资格依据，实际材料豁免使用主项行级字段，与所选流程无关 */
         private String materialExemptionType;
 
-        /** 流程类型：whitelistInbound / simpleInbound / normalInbound / specialInbound / upgradeInbound / downgradeInbound / normalOutbound */
+        /**
+         * 流程类型
+         *
+         * whitelistInbound=白名单调入、simpleInbound=简易调入、normalInbound=默认调入、specialInbound=特殊审批、upgradeInbound=上调、
+         * downgradeInbound=下调、normalOutbound=默认调出
+         */
         private String flowType;
 
         /** 流程名称 */

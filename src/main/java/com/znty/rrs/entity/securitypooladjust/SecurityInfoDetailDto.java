@@ -20,7 +20,11 @@ public class SecurityInfoDetailDto extends SecurityInfoBo {
     /** 证券类型名称 */
     private String securityTypeName;
 
-    /** 证券品种大类（bond/fund/stock/company，由 dict_security_type 推导，前端按类型差异化展示） */
+    /**
+     * 证券品种大类（由 dict_security_type 推导），用于前端按类型展示
+     *
+     * bond=债券、fund=基金、stock=股票、company=公司主体
+     */
     private String categoryType;
 
     /** ABS 普通权益人名称（调库快照展示字段） */
@@ -28,8 +32,10 @@ public class SecurityInfoDetailDto extends SecurityInfoBo {
 
     /** ABS 自选权益人名称（调库快照展示字段） */
     private String companySelector;
-    /** 当前代码所属市场。 */
+
+    /** 当前代码所属市场 */
     private String marketCode;
-    /** 当前 Wind 同券关联代码，只读。 */
+
+    /** 当前 Wind 同券关联代码，只读 */
     private List<SecurityMarketDto> relatedMarketCodes;
 }

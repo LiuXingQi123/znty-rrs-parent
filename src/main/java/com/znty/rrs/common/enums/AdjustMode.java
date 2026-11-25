@@ -7,19 +7,13 @@ package com.znty.rrs.common.enums;
  */
 public enum AdjustMode {
 
-    /**
-     * 调入
-     */
+    /** 调入 */
     IN("调入"),
 
-    /**
-     * 调出
-     */
+    /** 调出 */
     OUT("调出");
 
-    /**
-     * 调库方向编码
-     */
+    /** 调库方向编码 */
     private final String code;
 
     /**

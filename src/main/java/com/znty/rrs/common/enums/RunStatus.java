@@ -7,24 +7,16 @@ package com.znty.rrs.common.enums;
  */
 public enum RunStatus {
 
-    /**
-     * 执行中
-     */
+    /** 执行中 */
     RUNNING("running"),
 
-    /**
-     * 通过
-     */
+    /** 通过 */
     PASS("pass"),
 
-    /**
-     * 失败
-     */
+    /** 失败 */
     FAIL("fail");
 
-    /**
-     * 规则执行状态编码
-     */
+    /** 规则执行状态编码 */
     private final String code;
 
     /**

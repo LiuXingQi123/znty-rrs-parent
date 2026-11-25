@@ -8,24 +8,16 @@ package com.znty.rrs.common.enums;
  */
 public enum EventType {
 
-    /**
-     * 新增
-     */
+    /** 新增 */
     INSERT("INSERT"),
 
-    /**
-     * 修改
-     */
+    /** 修改 */
     UPDATE("UPDATE"),
 
-    /**
-     * 删除
-     */
+    /** 删除 */
     DELETE("DELETE");
 
-    /**
-     * 审计事件操作类型编码
-     */
+    /** 审计事件操作类型编码 */
     private final String code;
 
     /**

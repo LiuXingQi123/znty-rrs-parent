@@ -3,7 +3,7 @@ package com.znty.rrs.entity.crmwpooladjustflow;
 import lombok.Data;
 
 /**
- * CRMW池调整审批处理结果 DTO，返回审批动作后的流程状态。
+ * CRMW池调整审批处理结果 DTO，返回审批动作后的流程状态
  */
 @Data
 public class CrmwPoolAdjustAuditDto {

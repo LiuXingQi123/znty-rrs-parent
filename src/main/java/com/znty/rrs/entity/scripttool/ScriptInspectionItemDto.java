@@ -3,7 +3,7 @@ package com.znty.rrs.entity.scripttool;
 import lombok.Data;
 
 /**
- * 脚本工具只读检查项。
+ * 脚本工具只读检查项
  */
 @Data
 public class ScriptInspectionItemDto {
@@ -20,7 +20,11 @@ public class ScriptInspectionItemDto {
     /** 检查项名称 */
     private String itemName;
 
-    /** 检查状态：success=正常 / warning=警告 / failed=失败 */
+    /**
+     * 检查状态
+     *
+     * success=正常、warning=警告、failed=失败
+     */
     private String status;
 
     /** 当前值 */

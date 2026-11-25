@@ -7,19 +7,13 @@ package com.znty.rrs.common.enums;
  */
 public enum ScheduleRunStatus {
 
-    /**
-     * 成功
-     */
+    /** 成功 */
     SUCCESS("success"),
 
-    /**
-     * 失败
-     */
+    /** 失败 */
     FAIL("fail");
 
-    /**
-     * 定时任务执行状态编码
-     */
+    /** 定时任务执行状态编码 */
     private final String code;
 
     /**

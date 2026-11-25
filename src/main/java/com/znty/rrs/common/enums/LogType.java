@@ -7,24 +7,16 @@ package com.znty.rrs.common.enums;
  */
 public enum LogType {
 
-    /**
-     * 信息
-     */
+    /** 信息 */
     INFO("info"),
 
-    /**
-     * 成功
-     */
+    /** 成功 */
     SUCCESS("success"),
 
-    /**
-     * 错误
-     */
+    /** 错误 */
     ERROR("error");
 
-    /**
-     * 规则执行日志类型编码
-     */
+    /** 规则执行日志类型编码 */
     private final String code;
 
     /**

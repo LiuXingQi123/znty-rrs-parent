@@ -4,7 +4,9 @@ import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
-/** 审批改判候选池，完整路径仅用于展示，保留原池名称用于落库 */
+/**
+ * 审批改判候选池，完整路径仅用于展示，保留原池名称用于落库
+ */
 @Data
 @EqualsAndHashCode(callSuper = true)
 public class RedirectPoolOptionDto extends InvestmentPoolBo {

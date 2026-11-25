@@ -14,69 +14,130 @@ public class SecurityPoolQueryDto {
 
     /** 主键 ID */
     private Long id;
+
     /** 证券简称 */
     private String securityShortName;
+
     /** 证券代码 */
     private String securityCode;
+
     /** 调整人 */
     private String adjusterName;
+
     /** 入池时间 */
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private Date entryTime;
+
     /** 投资池名称 */
     private String targetPoolName;
+
     /** 目标投资池 ID */
     private Long targetPoolId;
+
     /** 来源调库日志 ID */
     private Long adjustLogId;
+
     /** 调库批次号 */
     private String adjustBatchNo;
+
     /** 证券类型编码 */
     private String securityType;
 
     /** 证券类型名称（关联 dict_security_type 表） */
     private String securityTypeName;
-    /** 我的证券池记录ID（null=未收藏，非null=已收藏，用于前端爱心图标状态） */
+
+    /**
+     * 我的证券池记录ID
+     *
+     * null=未收藏，非null=已收藏，用于前端爱心图标状态
+     */
     private Long mySecurityPoolId;
+
     /** 票面年利率 */
     private String couponRate;
+
     /** 发行主体名称 */
     private String issuer;
 
     /** 主体编码 */
     private String issuerCode;
+
     /** 证券全称 */
     private String fullName;
+
     /** 发行日期 */
     private String issueDate;
+
     /** 起息日 */
     private String carryDate;
+
     /** 到期日，格式 yyyyMMdd */
     private String maturityDate;
+
     /** 剩余期限（天），对应 rrs_securityinfo.date_exists；业务校验仍用天数 */
     private BigDecimal dateExists;
+
     /** 证券期限（展示串），对应 rrs_securityinfo.date_exists_str */
     private String dateExistsStr;
-    /** 是否 ABS：1=是 / 0=否 */
+
+    /**
+     * 是否 ABS
+     *
+     * 1=是、0=否
+     */
     private Integer absFlag;
-    /** 是否担保：1=是 / 0=否 */
+
+    /**
+     * 是否担保
+     *
+     * 1=是、0=否
+     */
     private Integer guarantFlag;
-    /** 是否永续：1=是 / 0=否 */
+
+    /**
+     * 是否永续
+     *
+     * 1=是、0=否
+     */
     private Integer yxFlag;
-    /** 是否次级：1=是 / 0=否 */
+
+    /**
+     * 是否次级
+     *
+     * 1=是、0=否
+     */
     private Integer cjFlag;
+
     /** 发行方式 */
     private String issueType;
+
     /** 内部分类 */
     private String innerClass;
-    /** 是否含权：1=是 / 0=否 */
+
+    /**
+     * 是否含权
+     *
+     * 1=是、0=否
+     */
     private Integer inrightFlag;
-    /** 是否标准信用债：1=是 / 0=否 / null=未判定 */
+
+    /**
+     * 是否标准信用债
+     *
+     * 1=是、0=否、null=未判定
+     */
     private Integer stdCreditFlag;
-    /** 证券主档状态：L=上市中 / N=待上市 / D=到期 / U=未知 */
+
+    /**
+     * 证券主档状态
+     *
+     * L=上市中、N=待上市、D=到期、U=未知
+     */
     private String securityStatus;
+
     /** 摘牌日（业务到期日，格式 yyyyMMdd） */
     private String delistDate;
+
     /** 行权日期（回售） */
     private String repurchaseDate;
 }

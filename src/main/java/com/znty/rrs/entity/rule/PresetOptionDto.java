@@ -3,7 +3,7 @@ package com.znty.rrs.entity.rule;
 import lombok.Data;
 
 /**
- * 预设或参数选项：脚本取值用 value，页面展示用 label。
+ * 预设或参数选项：脚本取值用 value，页面展示用 label
  */
 @Data
 public class PresetOptionDto {

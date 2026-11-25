@@ -14,10 +14,10 @@ import java.util.Set;
 /**
  * 调库校验（checkAdjust）的共享数据载体
  *
- * <p>checkAdjust 每次调用需要加载多项证券/池的基础数据，这些数据在整个调用过程中保持不变。
+ * checkAdjust 每次调用需要加载多项证券、池的基础数据，这些数据在整个调用过程中保持不变
  * 将其封装为此类后，buildCheckContext、buildAutoResultItem 等辅助方法只需接收一个
  * shared 参数，既能保持方法签名简洁（≤4 个参数），也便于后续扩展新的校验参数——
- * 新增字段只需改动此类和 loadSharedData 的数据加载部分，辅助方法签名无需调整。
+ * 新增字段只需改动此类和 loadSharedData 的数据加载部分，辅助方法签名无需调整
  */
 @Data
 public class AdjustSharedData {

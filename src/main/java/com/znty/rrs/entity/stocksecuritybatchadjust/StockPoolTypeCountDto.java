@@ -3,8 +3,9 @@ package com.znty.rrs.entity.stocksecuritybatchadjust;
 import lombok.Data;
 
 /**
- * 投资池在池数量按证券类型分项（批量页「现有数量」展示）。
- * typeCode 为业务分类 code，中文名由前端字典展示。
+ * 投资池在池数量按证券类型分项（批量页「现有数量」展示）
+ *
+ * typeCode 为业务分类 code，中文名由前端字典展示
  */
 @Data
 public class StockPoolTypeCountDto {
@@ -13,8 +14,9 @@ public class StockPoolTypeCountDto {
     private Long poolId;
 
     /**
-     * 类型编码：company=主体 / crmw=CRMW 凭证 /
-     * 其余对齐 dict_security_type.category_type（bond/stock/fund 等）
+     * 类型编码，其他大类对齐 dict_security_type.category_type
+     *
+     * company=主体、crmw=CRMW 凭证、bond=债券、stock=股票、fund=基金
      */
     private String typeCode;
 

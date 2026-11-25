@@ -4,7 +4,9 @@ import com.znty.rrs.entity.bo.IpAdjustLogBo;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
-/** CRMW关联禁投出库候选，沿用组合身份并携带本次扫描的池状态主键 */
+/**
+ * CRMW关联禁投出库候选，沿用组合身份并携带本次扫描的池状态主键
+ */
 @Data
 @EqualsAndHashCode(callSuper = true)
 public class CrmwForbiddenOutCandidateDto extends IpAdjustLogBo {

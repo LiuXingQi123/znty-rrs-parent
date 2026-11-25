@@ -7,9 +7,7 @@ package com.znty.rrs.common.enums;
  */
 public enum WindCodeChangeResult {
 
-    /**
-     * 本次换码及关联业务转换已完成，计入换码成功条数
-     */
+    /** 本次换码及关联业务转换已完成，计入换码成功条数 */
     UPDATED,
 
     /**
@@ -19,13 +17,9 @@ public enum WindCodeChangeResult {
      */
     MISSING_MASTER,
 
-    /**
-     * 主档当前代码已经是最新代码，无需换码，不新增临时代码记录或调库记录
-     */
+    /** 主档当前代码已经是最新代码，无需换码，不新增临时代码记录或调库记录 */
     ALREADY_CURRENT,
 
-    /**
-     * 已有本事件的成功处理标记，按重复事件跳过，不再次换码或生成业务记录
-     */
+    /** 已有本事件的成功处理标记，按重复事件跳过，不再次换码或生成业务记录 */
     ALREADY_COMPLETED
 }

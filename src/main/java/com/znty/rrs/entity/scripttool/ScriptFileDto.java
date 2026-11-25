@@ -5,7 +5,7 @@ import lombok.Data;
 import java.util.List;
 
 /**
- * SQL 脚本文件信息。
+ * SQL 脚本文件信息
  */
 @Data
 public class ScriptFileDto {
@@ -13,7 +13,11 @@ public class ScriptFileDto {
     /** 脚本文件名 */
     private String fileName;
 
-    /** 脚本类型：schema=建表 / demo=演示数据 */
+    /**
+     * 脚本类型
+     *
+     * schema=建表、demo=演示数据
+     */
     private String scriptType;
 
     /** 所属模块编码 */

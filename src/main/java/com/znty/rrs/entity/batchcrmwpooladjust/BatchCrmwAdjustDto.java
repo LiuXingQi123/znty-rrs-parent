@@ -15,7 +15,7 @@ public class BatchCrmwAdjustDto {
     /** 调库校验结果列表 */
     private List<CheckResultItem> items = new ArrayList<>();
 
-    /** 提交成功的组合数量 */
+    /** 提交的主组合数量 */
     private Integer securityCount;
 
     /** 提交成功的调库项数量 */
@@ -57,16 +57,24 @@ public class BatchCrmwAdjustDto {
         /** 投资池类型 */
         private String poolType;
 
-        /** 调整方向 */
+        /**
+         * 调整方向
+         *
+         * 取值为调入、调出
+         */
         private String adjustMode;
 
-        /** 调整项来源 */
+        /**
+         * 调整项来源
+         *
+         * manual=手工、linkage=联动、mutex=互斥、related=多市场关联码
+         */
         private String itemTag;
 
         /** 调库分组 Key */
         private String adjustGroupKey;
 
-        /** 触发扩批的主组合键 */
+        /** 触发扩批的主组合键（crmwScode|securityCode） */
         private String sourceSecurityCode;
 
         /** 是否可调整 */
@@ -78,7 +86,11 @@ public class BatchCrmwAdjustDto {
         /** 警告原因列表 */
         private List<String> warnings = new ArrayList<>();
 
-        /** 当前行可选流程列表（与单笔 checkCrmwAdjust 一致） */
+        /**
+         * 当前行可选流程列表（与单笔 {@code checkCrmwAdjust} 一致）
+         *
+         * 配置了批量流程时追加并设为唯一推荐
+         */
         private List<AdjustCheckDto.FlowOption> flowOptions = new ArrayList<>();
     }
 }

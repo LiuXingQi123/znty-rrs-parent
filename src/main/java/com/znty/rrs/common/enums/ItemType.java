@@ -7,34 +7,22 @@ package com.znty.rrs.common.enums;
  */
 public enum ItemType {
 
-    /**
-     * 手工项
-     */
+    /** 手工项 */
     MANUAL("manual"),
 
-    /**
-     * 联动项
-     */
+    /** 联动项 */
     LINKAGE("linkage"),
 
-    /**
-     * 互斥项
-     */
+    /** 互斥项 */
     MUTEX("mutex"),
 
-    /**
-     * 多市场关联码项
-     */
+    /** 多市场关联码项 */
     RELATED("related"),
 
-    /**
-     * Excel 导入「首先清空目标池」产生的出库项
-     */
+    /** Excel 导入「首先清空目标池」产生的出库项 */
     CLEAR("clear");
 
-    /**
-     * 调库项标签编码
-     */
+    /** 调库项标签编码 */
     private final String code;
 
     /**

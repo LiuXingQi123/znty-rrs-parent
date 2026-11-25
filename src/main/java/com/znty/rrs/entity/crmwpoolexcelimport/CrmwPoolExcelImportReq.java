@@ -15,31 +15,51 @@ public class CrmwPoolExcelImportReq extends PageRequest {
 
     /** 导入批次号 */
     private String impId;
+
     /** 需要修改评级主体的导入明细 ID */
     private Long itemId;
+
     /** 关联担保人或权益人代码 */
     private String relatedCompanyCode;
 
     /** ABS 担保债独立选择的担保人代码 */
     private String guarantorCode;
+
     /** ABS 自选权益人代码 */
     private String selfSelectedRightsHolderCode;
+
     /** 目标 CRMW 池 ID */
     private Long targetPoolId;
-    /** 调整方向：in / out */
+
+    /**
+     * 调整方向
+     *
+     * in=调入、out=调出
+     */
     private String direction;
+
     /** 调整原因 */
     private String adjustReason;
+
     /** 调整意见 */
     private String adjustAdvice;
+
     /** 前端选定的可提交校验结果项（含流程选择） */
     private List<CrmwPoolExcelImportCheckItemDto> checkItems;
+
     /** 当前用户 ID */
     private String currentUserId;
+
     /** 当前用户名称 */
     private String currentUserName;
-    /** 校验结果筛选：0/1/2 */
+
+    /**
+     * 校验结果筛选
+     *
+     * 0=待校验、1=通过、2=失败
+     */
     private String chkRslt;
+
     /** CRMW 代码或证券代码关键字 */
     private String keyword;
 }

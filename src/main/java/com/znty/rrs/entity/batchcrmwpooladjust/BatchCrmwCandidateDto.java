@@ -26,16 +26,32 @@ public class BatchCrmwCandidateDto {
     /** 标的证券类型 */
     private String securityType;
 
-    /** 标的证券是否 ABS：1=是 / 0=否 */
+    /**
+     * 标的证券是否 ABS
+     *
+     * 1=是、0=否
+     */
     private Integer absFlag;
 
-    /** 标的证券是否担保：1=是 / 0=否 */
+    /**
+     * 标的证券是否担保
+     *
+     * 1=是、0=否
+     */
     private Integer guarantFlag;
 
-    /** 标的证券是否永续：1=是 / 0=否 */
+    /**
+     * 标的证券是否永续
+     *
+     * 1=是、0=否
+     */
     private Integer yxFlag;
 
-    /** 标的证券是否次级：1=是 / 0=否 */
+    /**
+     * 标的证券是否次级
+     *
+     * 1=是、0=否
+     */
     private Integer cjFlag;
 
     /** 标的证券发行方式 */
@@ -44,19 +60,30 @@ public class BatchCrmwCandidateDto {
     /** 标的证券内部分类 */
     private String innerClass;
 
-    /** 标的证券是否含权：1=是 / 0=否 */
+    /**
+     * 标的证券是否含权
+     *
+     * 1=是、0=否
+     */
     private Integer inrightFlag;
-    /** 是否标准信用债：1=是 / 0=否 / null=未判定 */
+
+    /**
+     * 是否标准信用债
+     * 接口保留原值，页面仅把 1 显示为是
+     *
+     * 1=是、0=否、null=未判定
+     */
     private Integer stdCreditFlag;
 
     /**
-     * 市场编码列表：
-     * SSE=上海证券交易所 / SZSE=深圳证券交易所 / NIB=银行间市场 / BSE=北京证券交易所 /
-     * COMPANY=主体 / OTC=场外市场 / QDII=其他QDII市场 / JWCW=JWCW市场 / UNKNOWN=未知 / OTHER=其他
+     * 标的当前代码的市场，仅返回一个市场编码
+     *
+     * SSE=上海证券交易所、SZSE=深圳证券交易所、NIB=银行间市场、BSE=北京证券交易所、COMPANY=主体、OTC=场外市场、
+     * HKEX=香港交易所、QDII=其他 QDII 市场、JWCW=JWCW 市场、UNKNOWN=未知、OTHER=其他
      */
     private List<String> marketCodes = new ArrayList<>();
 
-    /** SQL 查询返回的市场编码文本 */
+    /** 批量查询得到的当前市场编码 */
     @JsonIgnore
     private String marketCodeText;
 
@@ -66,7 +93,7 @@ public class BatchCrmwCandidateDto {
     /** CRMW 凭证代码 */
     private String crmwScode;
 
-    /** CRMW 证券类型 */
+    /** CRMW 证券类型，缺失时为 crmw */
     private String crmwStype;
 
     /** 发行人 */
@@ -93,9 +120,9 @@ public class BatchCrmwCandidateDto {
     /** 到期日期 */
     private String maturityDate;
 
-    /** 剩余期限（天），对应 rrs_securityinfo.date_exists；业务校验仍用天数 */
+    /** 剩余期限（天），对应 rrs_securityinfo.date_exists，供按天校验使用 */
     private BigDecimal dateExists;
 
-    /** 证券期限（展示串），对应 rrs_securityinfo.date_exists_str */
+    /** 证券期限（展示串），对应 rrs_securityinfo.date_exists_str，供年限规则解析 */
     private String dateExistsStr;
 }

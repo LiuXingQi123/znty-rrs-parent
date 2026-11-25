@@ -6,7 +6,7 @@ import lombok.Data;
 import java.util.Date;
 
 /**
- * 定时任务配置实体，对应 sys_scheduled_task。
+ * 定时任务配置实体，对应 sys_scheduled_task
  */
 @Data
 public class SysScheduledTaskBo {
@@ -26,15 +26,21 @@ public class SysScheduledTaskBo {
     /** cron 表达式 */
     private String cronExpression;
 
-    /** 是否启用定时调度：0=关闭 / 1=启用 */
+    /**
+     * 是否启用定时调度
+     *
+     * 0=关闭、1=启用
+     */
     private Integer scheduleEnabled;
 
-    /**
-     * 任务扩展参数（通用文本，推荐 JSON；格式由各任务实现自行解析，无则空）
-     */
+    /** 任务扩展参数（通用文本，推荐 JSON；格式由各任务实现自行解析，无则空） */
     private String paramJson;
 
-    /** 最近执行状态：success / fail */
+    /**
+     * 最近执行状态
+     *
+     * success=成功、fail=失败
+     */
     private String lastRunStatus;
 
     /** 最近执行结果说明 */
@@ -50,7 +56,11 @@ public class SysScheduledTaskBo {
     /** 最近执行耗时毫秒 */
     private Long lastDurationMs;
 
-    /** 最近触发方式：manual / cron */
+    /**
+     * 最近触发方式
+     *
+     * manual=手动触发、cron=定时触发
+     */
     private String lastTriggerType;
 
     /** 逻辑删除标志 */

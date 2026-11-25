@@ -7,64 +7,40 @@ package com.znty.rrs.common.enums;
  */
 public enum AdjustType {
 
-    /**
-     * 手工调整
-     */
+    /** 手工调整 */
     MANUAL("手工调整"),
 
-    /**
-     * 联动调整
-     */
+    /** 联动调整 */
     LINKAGE("联动调整"),
 
-    /**
-     * 互斥调整
-     */
+    /** 互斥调整 */
     MUTEX("互斥调整"),
 
-    /**
-     * 关联调整
-     */
+    /** 关联调整 */
     RELATED("关联调整"),
 
-    /**
-     * Excel 导入
-     */
+    /** Excel 导入 */
     EXCEL_IMPORT("Excel导入"),
 
-    /**
-     * Excel 清空
-     */
+    /** Excel 清空 */
     EXCEL_CLEAR("Excel清空"),
 
-    /**
-     * 清空目标池时生成的出库调整
-     */
+    /** 清空目标池时生成的出库调整 */
     CLEAR_POOL("清空目标池"),
 
-    /**
-     * 手动批量调整
-     */
+    /** 手动批量调整 */
     MANUAL_BATCH("手动批量调整"),
 
-    /**
-     * 自动调整
-     */
+    /** 自动调整 */
     AUTO("自动调整"),
 
-    /**
-     * 临时代码调出
-     */
+    /** 临时代码调出 */
     TEMP_CODE_OUT("临时代码调出"),
 
-    /**
-     * Wind 代码变更调出
-     */
+    /** Wind 代码变更调出 */
     WIND_CODE_CHANGE_OUT("Wind代码变更调出");
 
-    /**
-     * 调整类型编码
-     */
+    /** 调整类型编码 */
     private final String code;
 
     /**

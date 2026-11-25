@@ -3,10 +3,10 @@ package com.znty.rrs.entity.schedule;
 import lombok.Data;
 
 /**
- * ABS 债券主档候选，供「主体下ABS债券自动入库」一次装载并在内存中对账。
+ * ABS 债券主档候选，供「主体下ABS债券自动入库」一次装载并在内存中对账
  *
- * <p>只承载对账所需的只读字段，与 {@link ScheduledAdjustCandidateDto} 区分：
- * 后者继承调库日志对象，字段会被落库使用；本对象仅用于计算差集。
+ * 只承载对账所需的只读字段，与 {@link ScheduledAdjustCandidateDto} 区分
+ * 后者继承调库日志对象，字段会被落库使用；本对象仅用于计算差集
  */
 @Data
 public class AbsBondCandidateDto {
@@ -20,7 +20,7 @@ public class AbsBondCandidateDto {
     /** 证券类型编码 */
     private String securityType;
 
-    /** ABS 标志：1=是 */
+    /** ABS 标志（1=是） */
     private Integer absFlag;
 
     /** 主档发行主体代码；已确认身份时必有值 */

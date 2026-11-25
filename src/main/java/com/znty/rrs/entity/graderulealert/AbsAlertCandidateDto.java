@@ -2,7 +2,9 @@ package com.znty.rrs.entity.graderulealert;
 
 import lombok.Data;
 
-/** ABS 规则提醒中的主体候选。 */
+/**
+ * ABS 规则提醒中的主体候选
+ */
 @Data
 public class AbsAlertCandidateDto {
 

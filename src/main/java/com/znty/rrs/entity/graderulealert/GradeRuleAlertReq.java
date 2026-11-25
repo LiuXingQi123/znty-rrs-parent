@@ -5,7 +5,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 
 /**
- * 不符合分级规则提醒查询 / 处理入参
+ * 不符合分级规则提醒查询、处理入参
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
@@ -17,10 +17,18 @@ public class GradeRuleAlertReq extends PageRequest {
     /** 证券代码（模糊） */
     private String securityCode;
 
-    /** 待办状态：00=待处理 / 20=已处理 / 99=已失效 */
+    /**
+     * 待办状态
+     *
+     * 00=待处理、20=已处理、99=已失效
+     */
     private String alertStatus;
 
-    /** 规则类型：grade=分级规则 / absCompanySync=ABS主体联动 */
+    /**
+     * 规则类型
+     *
+     * grade=分级规则、absCompanySync=ABS主体联动
+     */
     private String ruleType;
 
     /** 处理人 ID */
@@ -29,7 +37,11 @@ public class GradeRuleAlertReq extends PageRequest {
     /** 处理人名称 */
     private String currentUserName;
 
-    /** ABS 处理动作：confirm=确认主体 / noNeed=无需入库或无需处理 */
+    /**
+     * ABS 处理动作
+     *
+     * confirm=确认主体、noNeed=无需入库或无需处理
+     */
     private String decision;
 
     /** ABS 确认主体代码 */

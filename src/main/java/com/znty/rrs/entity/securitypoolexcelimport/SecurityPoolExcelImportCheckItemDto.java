@@ -6,62 +6,98 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 证券/主体 Excel 导入 — 调库校验结果项（含手工 / 联动 / 互斥 + 流程候选）
+ * 证券、主体 Excel 导入 — 调库校验结果项（含手工、联动、互斥 + 流程候选）
  */
 @Data
 public class SecurityPoolExcelImportCheckItemDto {
 
     /** 来源导入明细 ID */
     private Long sourceItemId;
+
     /** 来源 Excel 行号 */
     private Integer sourceRowNo;
+
     /** 分组键（同组手工+联动+互斥） */
     private String adjustGroupKey;
-    /** 证券/主体代码 */
+
+    /** 证券、主体代码 */
     private String securityCode;
-    /** 证券/主体简称 */
+
+    /** 证券、主体简称 */
     private String securityShortName;
+
     /** 证券类型 */
     private String securityType;
-    /** 触发主代码（关联码项时=主券/主体代码） */
+
+    /** 触发主代码（关联码项取主券或主体代码） */
     private String sourceSecurityCode;
-    /** 来源导入行选择的权益人/担保人主体代码 */
+
+    /** 来源导入行选择的权益人、担保人主体代码 */
     private String ratingCompanyCode;
-    /** 来源导入行选择的权益人/担保人名称 */
+
+    /** 来源导入行选择的权益人、担保人名称 */
     private String ratingCompanyName;
+
     /** 目标池 ID */
     private Long targetPoolId;
+
     /** 目标池名称（前端列：投资池名称） */
     private String targetPoolName;
+
     /** 目标池类型 */
     private String poolType;
-    /** 调整模式：调入 / 调出 */
+
+    /**
+     * 调整模式
+     *
+     * 取值为调入、调出
+     */
     private String adjustMode;
-    /** 项标签：manual / linkage / mutex / related / clear */
+
+    /**
+     * 项标签
+     *
+     * manual=手工、linkage=联动、mutex=互斥、related=同券跨市场调整、clear=清空目标池
+     */
     private String itemTag;
+
     /** 调整类型中文 */
     private String adjustType;
+
     /** 是否可调整 */
     private boolean canAdjust;
+
     /** 失败原因列表 */
     private List<String> failReasons = new ArrayList<>();
+
     /** 调整说明（通过时） */
     private String adjustNote;
+
     /** 可选审批流程列表 */
     private List<FlowOptionDto> flowOptions = new ArrayList<>();
 
     /** 本组快速资格对应的材料豁免依据，与所选流程无关 */
     private String materialExemptionType;
+
     /** 前端选中的流程 optionKey */
     private String selectedFlowKey;
+
     /** 选中流程 ID */
     private Long flowId;
+
     /** 选中流程 Key */
     private String flowKey;
-    /** 选中流程类型 */
+
+    /**
+     * 流程类型
+     *
+     * batchInbound=批量调入、batchOutbound=批量调出、normalInbound=默认调入、normalOutbound=默认调出等
+     */
     private String flowType;
+
     /** 选中流程名称 */
     private String flowName;
+
     /** 是否直通（无需审批） */
     private boolean directFlow;
 
@@ -77,7 +113,11 @@ public class SecurityPoolExcelImportCheckItemDto {
         /** 前端选中用唯一键（flowType_flowId_flowKey） */
         private String optionKey;
 
-        /** 流程类型：batchInbound / batchOutbound / normalInbound / normalOutbound 等 */
+        /**
+         * 流程类型
+         *
+         * batchInbound=批量调入、batchOutbound=批量调出、normalInbound=默认调入、normalOutbound=默认调出等
+         */
         private String flowType;
 
         /** 流程名称（展示用） */

@@ -32,7 +32,11 @@ public class AdjustCheckContext {
     /** 目标池当前证券数量（用于容量校验） */
     private int poolCurrentCount;
 
-    /** 调整方向：调入 / 调出 */
+    /**
+     * 调整方向
+     *
+     * 取值为调入、调出
+     */
     private String adjustMode;
 
     /** 目标池的所有关系配置（relation_type → 关联池 ID 列表） */
@@ -62,7 +66,11 @@ public class AdjustCheckContext {
     /** 证券在目标池的入池时间（ip_pool_status_crmw.entry_time，audit_status=20），用于调出冻结期校验，调入时为 null */
     private Date targetPoolEntryTime;
 
-    /** 证券品种大类（dict_security_type.category_type：bond/stock/fund/company/index/warrant/trust/private_wealth/unknown），用于类型特有校验路由 */
+    /**
+     * 证券品种大类（dict_security_type.category_type），用于类型特有校验
+     *
+     * bond=债券、stock=股票、fund=基金、company=公司主体、index=指数、warrant=权证、trust=信托、private_wealth=私募理财、unknown=未知
+     */
     private String categoryType;
 
     /** 校验警告列表（弹性禁投池等柔性限制命中时填充，不阻断调库） */

@@ -16,10 +16,18 @@ public class PoolPermissionBo {
     /** 投资池 ID */
     private Long poolId;
 
-    /** 权限类型：viewable / adjustable / excel_importable */
+    /**
+     * 权限类型
+     *
+     * viewable=可查看、adjustable=可调整、excel_importable=可 Excel 导入
+     */
     private String permissionType;
 
-    /** 处理人类型：role / user */
+    /**
+     * 处理人类型
+     *
+     * role=角色、user=人员
+     */
     private String handlerType;
 
     /** 处理人 ID（角色 ID 或人员 ID） */

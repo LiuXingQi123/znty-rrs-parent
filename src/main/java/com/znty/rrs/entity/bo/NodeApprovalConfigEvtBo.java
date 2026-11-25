@@ -9,24 +9,38 @@ import java.util.Date;
  */
 @Data
 public class NodeApprovalConfigEvtBo {
+
     /** 事件主键（evt_id） */
     private Long evtId;
+
     /** 原始配置记录 ID */
     private Long id;
+
     /** 关联的流程节点 ID */
     private Long nodeId;
-    /** 审批策略（如：任意一人通过/全部通过） */
+
+    /** 审批策略（如：任意一人通过、全部通过） */
     private String approvalStrategy;
+
     /** 审批节点备注说明 */
     private String approvalRemark;
+
     /** 创建时间 */
     private Date crteTime;
+
     /** 更新时间 */
     private Date updtTime;
+
     /** 操作人 ID */
     private String opterId;
+
     /** 操作时间 */
     private Date optTime;
-    /** 操作类型（INSERT=新增/UPDATE=修改/DELETE=删除） */
+
+    /**
+     * 操作类型
+     *
+     * INSERT=新增、UPDATE=修改、DELETE=删除
+     */
     private String oprtType;
 }

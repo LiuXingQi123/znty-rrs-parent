@@ -6,7 +6,7 @@ import lombok.Data;
 import java.util.Date;
 
 /**
- * 定时任务执行历史 DTO。
+ * 定时任务执行历史 DTO
  */
 @Data
 public class ScheduledTaskRunLogDto {

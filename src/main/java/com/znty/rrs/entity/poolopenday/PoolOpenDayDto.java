@@ -23,8 +23,11 @@ public class PoolOpenDayDto {
     private String poolFullName;
 
     /**
-     * 开放日校验开关：1=启用 / 空或0=不限制
-     * <p>仅展示用，配置来自投资池主表 open_day_adjust
+     * 开放日校验开关
+     *
+     * 1=启用、空或0=不限制
+     *
+     * 仅展示用，配置来自投资池主表 open_day_adjust
      */
     private Integer openDayAdjust;
 

@@ -15,7 +15,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 流程运行时快照，聚合流程定义、版本、节点、连线和审批配置。
+ * 流程运行时快照，聚合流程定义、版本、节点、连线和审批配置
  */
 @Data
 @AllArgsConstructor

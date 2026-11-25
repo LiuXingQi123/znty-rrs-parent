@@ -7,13 +7,13 @@ import lombok.EqualsAndHashCode;
 import java.util.List;
 
 /**
- * 定时任务查询/触发/配置请求。
+ * 定时任务查询、触发、配置请求
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
 public class ScheduledTaskReq extends PageRequest {
 
-    /** 列表筛选关键字（任务名称 / 编码） */
+    /** 列表筛选关键字（任务名称、编码） */
     private String keyword;
 
     /** 单个任务编码 */
@@ -31,13 +31,17 @@ public class ScheduledTaskReq extends PageRequest {
     /** cron 表达式（保存配置） */
     private String cronExpression;
 
-    /** 是否启用定时调度（保存配置；列表筛选时传 true/false，不传则不过滤） */
+    /**
+     * 是否启用定时调度（保存配置，列表筛选未传时不过滤）
+     *
+     * true=启用、false=关闭
+     */
     private Boolean scheduleEnabled;
 
     /** 扩展参数（保存配置；通用文本，推荐 JSON，格式由各任务约定） */
     private String paramJson;
 
-    /** 操作人 ID（写审计/执行日志） */
+    /** 操作人 ID（写审计、执行日志） */
     private String operatorId;
 
     /** 操作人名称 */

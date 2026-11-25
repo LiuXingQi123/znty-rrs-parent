@@ -27,8 +27,10 @@ public class AdjustSharedData {
 
     /** 标的证券基础信息（来自 rrs_securityinfo） */
     private SecurityInfoBo securityInfo;
+
     /** CRMW 凭证代码 */
     private String crmwScode;
+
     /** CRMW 凭证的证券类型 */
     private String crmwStype;
 

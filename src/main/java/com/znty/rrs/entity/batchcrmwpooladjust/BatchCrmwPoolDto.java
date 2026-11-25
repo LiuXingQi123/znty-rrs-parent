@@ -23,9 +23,10 @@ public class BatchCrmwPoolDto {
     private String poolType;
 
     /**
-     * 投资市场编码 JSON：
-     * SSE=上海证券交易所 / SZSE=深圳证券交易所 / NIB=银行间市场 / BSE=北京证券交易所 /
-     * COMPANY=主体 / OTC=场外市场 / QDII=其他QDII市场 / JWCW=JWCW市场 / UNKNOWN=未知 / OTHER=其他
+     * 投资市场编码 JSON
+     *
+     * SSE=上海证券交易所、SZSE=深圳证券交易所、NIB=银行间市场、BSE=北京证券交易所、COMPANY=主体、OTC=场外市场、
+     * HKEX=香港交易所、QDII=其他 QDII 市场、JWCW=JWCW 市场、UNKNOWN=未知、OTHER=其他
      */
     private String marketCodes;
 
@@ -35,15 +36,16 @@ public class BatchCrmwPoolDto {
     /** 投资池描述 */
     private String description;
 
-    /** 上限数量 */
+    /** 在池组合数量上限 */
     private Long maxCapacity;
 
     /** 当前有效在池组合总数 */
     private Integer currentCount;
 
     /**
-     * 按类型分项的在池数量（仅 count 大于 0 的项）。
-     * typeCode：crmw
+     * 按类型分项的在池数量（仅返回数量大于 0 的项）
+     *
+     * 类型编码固定为 crmw
      */
     private List<BatchCrmwPoolTypeCountDto> countByType;
 

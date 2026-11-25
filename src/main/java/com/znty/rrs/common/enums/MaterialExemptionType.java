@@ -7,19 +7,13 @@ package com.znty.rrs.common.enums;
  */
 public enum MaterialExemptionType {
 
-    /**
-     * 信用债简易入库
-     */
+    /** 信用债简易入库 */
     CREDIT_BOND_SIMPLE("creditBondSimple"),
 
-    /**
-     * 产品库当前来源资格
-     */
+    /** 产品库当前来源资格 */
     PRODUCT_SOURCE("productSource");
 
-    /**
-     * 入库材料豁免依据编码
-     */
+    /** 入库材料豁免依据编码 */
     private final String code;
 
     /**

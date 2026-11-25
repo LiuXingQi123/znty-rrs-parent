@@ -10,8 +10,10 @@ import java.util.List;
  */
 @Data
 public class SecurityPoolStatusDto {
+
     /** 当前证券所在池列表 */
     private List<PoolStatusDto> securityCurrentPools;
+
     /** 当前证券主体所在池列表 */
     private List<PoolStatusDto> issuerCurrentPools;
 }

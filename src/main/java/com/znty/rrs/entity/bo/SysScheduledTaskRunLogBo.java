@@ -6,7 +6,7 @@ import lombok.Data;
 import java.util.Date;
 
 /**
- * 定时任务执行历史实体，对应 sys_scheduled_task_run_log。
+ * 定时任务执行历史实体，对应 sys_scheduled_task_run_log
  */
 @Data
 public class SysScheduledTaskRunLogBo {
@@ -20,10 +20,18 @@ public class SysScheduledTaskRunLogBo {
     /** 任务名称快照 */
     private String taskName;
 
-    /** 触发方式：manual / cron */
+    /**
+     * 触发方式
+     *
+     * manual=手动触发、cron=定时触发
+     */
     private String triggerType;
 
-    /** 执行状态：success / fail */
+    /**
+     * 执行状态
+     *
+     * success=成功、fail=失败
+     */
     private String runStatus;
 
     /** 执行结果说明 */

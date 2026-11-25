@@ -13,64 +13,40 @@ import java.util.List;
  */
 public enum MarketCode {
 
-    /**
-     * 上海证券交易所
-     */
+    /** 上海证券交易所 */
     SSE("SSE"),
 
-    /**
-     * 深圳证券交易所
-     */
+    /** 深圳证券交易所 */
     SZSE("SZSE"),
 
-    /**
-     * 银行间市场
-     */
+    /** 银行间市场 */
     NIB("NIB"),
 
-    /**
-     * 北京证券交易所
-     */
+    /** 北京证券交易所 */
     BSE("BSE"),
 
-    /**
-     * 主体
-     */
+    /** 主体 */
     COMPANY("COMPANY"),
 
-    /**
-     * 场外市场
-     */
+    /** 场外市场 */
     OTC("OTC"),
 
-    /**
-     * 香港交易所
-     */
+    /** 香港交易所 */
     HKEX("HKEX"),
 
-    /**
-     * 其他 QDII 市场
-     */
+    /** 其他 QDII 市场 */
     QDII("QDII"),
 
-    /**
-     * JWCW 市场（境外债等）
-     */
+    /** JWCW 市场（境外债等） */
     JWCW("JWCW"),
 
-    /**
-     * 未知
-     */
+    /** 未知 */
     UNKNOWN("UNKNOWN"),
 
-    /**
-     * 其他
-     */
+    /** 其他 */
     OTHER("OTHER");
 
-    /**
-     * 证券市场编码
-     */
+    /** 证券市场编码 */
     private final String code;
 
     /**

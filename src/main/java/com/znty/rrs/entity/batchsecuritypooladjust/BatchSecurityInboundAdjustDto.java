@@ -74,14 +74,14 @@ public class BatchSecurityInboundAdjustDto {
         private String materialExemptionType;
 
         /**
-         * 历史字段：曾表示目标池批量流程展示名。
-         * 现流程与单券一致，不再回填；保留字段兼容旧前端。
+         * 历史字段：曾表示目标池批量流程展示名
+         * 现流程与单券一致，不再回填；保留字段兼容旧前端
          */
         private String batchFlowName;
 
         /**
-         * 历史字段：曾表示批量流程未配置时的直通标识。
-         * 现直通由所选流程定义判断；保留字段兼容旧前端。
+         * 历史字段：曾表示批量流程未配置时的直通标识
+         * 现直通由所选流程定义判断；保留字段兼容旧前端
          */
         private boolean directFlow;
     }

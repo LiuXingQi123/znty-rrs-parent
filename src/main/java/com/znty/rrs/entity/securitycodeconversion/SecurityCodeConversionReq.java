@@ -3,7 +3,7 @@ package com.znty.rrs.entity.securitycodeconversion;
 import lombok.Data;
 
 /**
- * 证券临时代码转正式代码请求。
+ * 证券临时代码转正式代码请求
  */
 @Data
 public class SecurityCodeConversionReq {
@@ -11,7 +11,7 @@ public class SecurityCodeConversionReq {
     /** 待替换的临时证券代码 */
     private String tempSecurityCode;
 
-    /** 临时代码的明确登记市场。 */
+    /** 临时代码的明确登记市场 */
     private String tempSecurityMarket;
 
     /** 正式证券代码 */
@@ -32,11 +32,10 @@ public class SecurityCodeConversionReq {
     /** 正式证券类型 */
     private String securityType;
 
-
-
-
-
-
-    /** 操作来源：manual=人工 / job=定时任务 / other=其他 */
+    /**
+     * 操作来源
+     *
+     * manual=人工、job=定时任务、other=其他
+     */
     private String oprtSource;
 }

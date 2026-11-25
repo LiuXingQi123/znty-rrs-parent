@@ -65,7 +65,11 @@ public class AdjustCheckReq {
         /** 投资池类型 */
         private String poolType;
 
-        /** 调整方向：调入 / 调出 */
+        /**
+         * 调整方向
+         *
+         * 取值为调入、调出
+         */
         private String adjustMode;
     }
 }

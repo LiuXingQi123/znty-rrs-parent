@@ -5,12 +5,16 @@ import lombok.Data;
 import java.util.List;
 
 /**
- * 脚本工具环境健康检查结果。
+ * 脚本工具环境健康检查结果
  */
 @Data
 public class ScriptHealthCheckDto {
 
-    /** 整体状态：success=正常 / warning=警告 / failed=失败 */
+    /**
+     * 整体状态
+     *
+     * success=正常、warning=警告、failed=失败
+     */
     private String status;
 
     /** SQL 目录绝对路径 */

@@ -5,7 +5,7 @@ import lombok.Data;
 import java.util.List;
 
 /**
- * 脚本工具可清空表分组。
+ * 脚本工具可清空表分组
  */
 @Data
 public class ScriptTableGroupDto {

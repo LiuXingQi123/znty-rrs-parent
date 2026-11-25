@@ -7,24 +7,16 @@ package com.znty.rrs.common.enums;
  */
 public enum PermissionType {
 
-    /**
-     * 可查看
-     */
+    /** 可查看 */
     VIEWABLE("viewable"),
 
-    /**
-     * 可调整
-     */
+    /** 可调整 */
     ADJUSTABLE("adjustable"),
 
-    /**
-     * 可 Excel 导入
-     */
+    /** 可 Excel 导入 */
     EXCEL_IMPORTABLE("excel_importable");
 
-    /**
-     * 投资池权限类型编码
-     */
+    /** 投资池权限类型编码 */
     private final String code;
 
     /**

@@ -23,7 +23,11 @@ public class SysAttachmentDto {
     /** 来源报告 ID，与来源类型共同定位报告 */
     private Long sourceReportId;
 
-    /** 来源报告类型：internal / external */
+    /**
+     * 来源报告类型
+     *
+     * internal=内部报告库、external=外部报告库
+     */
     private String sourceReportSource;
 
     /** 来源报告标题 */

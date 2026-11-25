@@ -7,29 +7,19 @@ package com.znty.rrs.common.enums;
  */
 public enum TempStatus {
 
-    /**
-     * 临时
-     */
+    /** 临时 */
     TEMPORARY("temporary"),
 
-    /**
-     * 已更新
-     */
+    /** 已更新 */
     UPDATED("updated"),
 
-    /**
-     * 已取消
-     */
+    /** 已取消 */
     CANCELLED("cancelled"),
 
-    /**
-     * 已删除，仅用于临时基金
-     */
+    /** 已删除，仅用于临时基金 */
     DELETED("deleted");
 
-    /**
-     * 临时代码登记状态编码
-     */
+    /** 临时代码登记状态编码 */
     private final String code;
 
     /**

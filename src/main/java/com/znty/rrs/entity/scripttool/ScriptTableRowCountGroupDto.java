@@ -5,7 +5,7 @@ import lombok.Data;
 import java.util.List;
 
 /**
- * 单库表记录数统计结果。
+ * 单库表记录数统计结果
  */
 @Data
 public class ScriptTableRowCountGroupDto {

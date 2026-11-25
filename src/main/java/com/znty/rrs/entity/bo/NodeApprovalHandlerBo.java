@@ -16,7 +16,11 @@ public class NodeApprovalHandlerBo {
     /** 审批节点配置 ID */
     private Long approvalConfigId;
 
-    /** 处理人类型：role / user */
+    /**
+     * 处理人类型
+     *
+     * role=角色、user=人员
+     */
     private String handlerType;
 
     /** 处理人 ID */

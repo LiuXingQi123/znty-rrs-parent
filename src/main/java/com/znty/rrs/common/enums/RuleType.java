@@ -7,19 +7,13 @@ package com.znty.rrs.common.enums;
  */
 public enum RuleType {
 
-    /**
-     * 自动调入
-     */
+    /** 自动调入 */
     AUTO_IN("auto_in"),
 
-    /**
-     * 自动调出
-     */
+    /** 自动调出 */
     AUTO_OUT("auto_out");
 
-    /**
-     * 自动调库规则类型编码
-     */
+    /** 自动调库规则类型编码 */
     private final String code;
 
     /**

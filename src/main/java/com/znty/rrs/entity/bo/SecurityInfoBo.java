@@ -9,176 +9,274 @@ import java.util.Date;
  */
 @Data
 public class SecurityInfoBo {
+
     /** 关联代码 */
     private String windCode;
+
     /** 证券全称 */
     private String fullName;
+
     /** 公告日期 */
     private String issueAnnouncement;
+
     /** 证券简称 */
     private String shortName;
+
     /** 证券类型编码 */
     private String securityType;
+
     /** 证券期限(年) */
     private BigDecimal termYear;
+
     /** 证券期限(天) */
     private BigDecimal termDay;
+
     /** 含权期限说明 */
     private String maturityembeddedDesc;
+
     /** 证券形式 */
     private String formDesc;
+
     /** 品种类别 */
     private String secTypename;
+
     /** 发行人类型 */
     private String compType;
+
     /** 发行人 */
     private String issuer;
+
     /** 发行人代码 */
     private String issuerCode;
+
     /** 币种 */
     private String crncyCode;
+
     /** 发行规模(亿元) */
     private BigDecimal issueAmountplan;
+
     /** 上市日期 */
     private String listDate;
+
     /** 发行日期 */
     private String firstissueDate;
+
     /** 到期日期，格式 yyyyMMdd */
     private String maturityDate;
+
     /** 起息日期 */
     private String carryDate;
+
     /** 止息日期 */
     private String endDate;
+
     /** 利率类型 */
     private String interestType;
+
     /** 付息方式 */
     private String interestFrequency;
+
     /** 每年付息次数 */
     private Integer interestYearcount;
+
     /** 票面利率(%) */
     private String couponRate;
+
     /** 基本利差(%) */
     private String spread;
+
     /** 是否可赎回 */
     private Integer redemptionFlag;
+
     /** 赎回日期 */
     private String redemptionDate;
+
     /** 赎回价格 */
     private BigDecimal redemptionPrice;
+
     /** 赎回行权日 */
     private String callbkorputbkDate;
+
     /** 赎回条款 */
     private String redemptionContent;
+
     /** 可回售性 */
     private Integer repurchaseFlag;
+
     /** 回售日期 */
     private String repurchaseDate;
+
     /** 回售价格 */
     private BigDecimal repurchasePrice;
+
     /** 回售条款 */
     private String repurchaseContent;
+
     /** 兑付起始日 */
     private String paymentDate;
+
     /** 摘牌日（业务到期日，格式 yyyyMMdd） */
     private String delistDate;
+
     /** 短期融资券,如果F4_1090等于DQ时-1,否则为0 */
     private Integer securitiesTypesDq;
+
     /** 利率说明 */
     private String couponDesc;
+
     /** 发行方式 */
     private String issueType;
+
     /** 创建时间 */
     private Date createTime;
+
     /** 更新时间 */
     private Date ts;
+
     /** 是否公司债 */
     private Integer corporateBondFlag;
+
     /** 是否可提前兑付 */
     private Integer payadvancedFlag;
+
     /** 是否有选择权 */
     private Integer chooserightFlag;
+
     /** 是否增发证券 */
     private Integer incbondsFlag;
+
     /** 一级板块 */
     private String industryName;
+
     /** 二级板块 */
     private String industryName2;
+
     /** 内部分类 */
     private String innerClass;
+
     /** 是否次级 */
     private Integer cjFlag;
+
     /** 是否永续 */
     private Integer yxFlag;
+
     /** 是否递延 */
     private Integer dyFlag;
+
     /** 赎回行权剩余期限-最新（年） */
     private BigDecimal dateCallExists;
+
     /** 剩余期限-最新（天），对应 rrs_securityinfo.date_exists */
     private BigDecimal dateExists;
+
     /** 证券期限（展示串，如：3年6天），对应 rrs_securityinfo.date_exists_str */
     private String dateExistsStr;
+
     /** 含权债剩余期限-最新（年） */
     private BigDecimal dateInrightExists;
+
     /** 证券评级 */
     private String ratingBond;
+
     /** 主体评级 */
     private String ratingBondissuer;
+
     /** 展望评级 */
     private String ratingOutlook;
+
     /** 证券评级机构 */
     private String ratingBondAgency;
+
     /** 主体评级机构 */
     private String ratingBondissuerAgency;
+
     /** 中债隐含评级 */
     private String ratingCnbd;
+
     /** 是否含权证券 */
     private Integer inrightFlag;
+
     /** 含权证券下一个行权日 */
     private String dateInrightNext;
+
     /** 发行总额-亿 */
     private BigDecimal issueAmountact;
+
     /** 担保人 */
     private String guarantor;
+
     /** 担保人ID */
     private String guarantorId;
+
     /** 主承销商 */
     private String agencyName;
+
     /** 主承销商Id */
     private String agencyNameid;
-    /** 证券状态：L=上市中 / N=待上市 / D=退市 / U=未知（债券 D 即到期） */
+
+    /**
+     * 证券状态
+     *
+     * L=上市中、N=待上市、D=退市、U=未知（债券 D 即到期）
+     */
     private String securityStatus;
+
     /** 证券来源 */
     private String securitySource;
+
     /** 下一个行权日 */
     private String dateNext;
+
     /** 资金募集用途 */
     private String fundUse;
+
     /** 面值 */
     private BigDecimal par;
+
     /** 质押比率(%) */
     private BigDecimal infoPledgeRatio;
+
     /** 主体内评分 */
     private String innerIssuerRating;
+
     /** 担保人主体内评分 */
     private String innerGuarantorRating;
+
     /** 观察事项 */
     private String promptReason;
+
     /** 证券分析 */
     private String analysis;
+
     /** 回购剩余期限-最新（年） */
     private BigDecimal dateRepurchaseExists;
+
     /** 是否担保 */
     private Integer guarantFlag;
+
     /** 担保类型 */
     private String guarantType;
+
     /** 是否 ABS */
     private Integer absFlag;
-    /** 标准条款判定：1=条款合格 / 0=条款不合格 / null=未判定 */
+
+    /**
+     * 标准条款判定
+     *
+     * 1=条款合格、0=条款不合格、null=未判定
+     */
     private Integer stdClauseFlag;
-    /** 标准信用债标识：1=标准信用债 / 0=非标准信用债 / null=未判定 */
+
+    /**
+     * 标准信用债标识
+     *
+     * 1=标准信用债、0=非标准信用债、null=未判定
+     */
     private Integer stdCreditFlag;
-    /** 外部独立证券 ID。 */
+
+    /** 外部独立证券 ID */
     private String secId;
-    /** 交易市场代码，与 Wind EXCHMARKET 一致。 */
+
+    /** 交易市场代码，与 Wind EXCHMARKET 一致 */
     private String market;
 }

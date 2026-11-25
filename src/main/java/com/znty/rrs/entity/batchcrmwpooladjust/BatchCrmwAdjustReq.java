@@ -6,7 +6,7 @@ import lombok.Data;
 import java.util.List;
 
 /**
- * CRMW 池批量调库校验 / 提交请求对象
+ * CRMW 池批量调库校验和提交请求
  */
 @Data
 public class BatchCrmwAdjustReq {
@@ -23,7 +23,11 @@ public class BatchCrmwAdjustReq {
     /** 目标投资池 ID */
     private Long poolId;
 
-    /** 调整方向：in=调入 / out=调出 */
+    /**
+     * 调整方向
+     *
+     * in=调入、out=调出
+     */
     private String direction;
 
     /** 目标投资池名称 */
@@ -38,7 +42,12 @@ public class BatchCrmwAdjustReq {
     /** 调整建议 */
     private String adjustAdvice;
 
-    /** 是否放开主体债入库矩阵规则：yes=放开 / no=不放开 */
+    /**
+     * 是否放开主体债入库矩阵规则
+     * CRMW 选择放开时仅在提交的调整意见和说明中追加文案
+     *
+     * yes=放开、no=不放开
+     */
     private String releaseRules;
 
     /** 整批信评报告附件在 multipart 文件数组中的下标 */
@@ -135,10 +144,18 @@ public class BatchCrmwAdjustReq {
         /** 投资池类型 */
         private String poolType;
 
-        /** 调整方向：调入 / 调出 */
+        /**
+         * 调整方向
+         *
+         * 取值为调入、调出
+         */
         private String adjustMode;
 
-        /** 调整项来源：manual=手工 / linkage=联动 / mutex=互斥 / related=多市场关联码 */
+        /**
+         * 调整项来源
+         *
+         * manual=手工、linkage=联动、mutex=互斥、related=多市场关联码
+         */
         private String itemTag;
 
         /** 调库分组 Key */

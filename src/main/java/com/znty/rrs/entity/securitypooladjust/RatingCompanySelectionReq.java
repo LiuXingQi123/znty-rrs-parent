@@ -2,7 +2,9 @@ package com.znty.rrs.entity.securitypooladjust;
 
 import lombok.Data;
 
-/** 页面已查询并选中的评级主体，后续请求直接传递，不重复查询候选 */
+/**
+ * 页面已查询并选中的评级主体，后续请求直接传递，不重复查询候选
+ */
 @Data
 public class RatingCompanySelectionReq {
 

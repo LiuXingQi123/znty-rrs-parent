@@ -7,34 +7,22 @@ package com.znty.rrs.common.enums;
  */
 public enum StockRating {
 
-    /**
-     * 买入
-     */
+    /** 买入 */
     BUY("buy"),
 
-    /**
-     * 增持
-     */
+    /** 增持 */
     OVERWEIGHT("overweight"),
 
-    /**
-     * 中性
-     */
+    /** 中性 */
     NEUTRAL("neutral"),
 
-    /**
-     * 减持
-     */
+    /** 减持 */
     UNDERWEIGHT("underweight"),
 
-    /**
-     * 卖出
-     */
+    /** 卖出 */
     SELL("sell");
 
-    /**
-     * 股票评级编码
-     */
+    /** 股票评级编码 */
     private final String code;
 
     /**

@@ -7,13 +7,17 @@ import lombok.EqualsAndHashCode;
 import java.util.List;
 
 /**
- * 我的事宜分页查询请求对象。
+ * 我的事宜分页查询请求对象
  */
 @Data
 @EqualsAndHashCode(callSuper = false)
 public class MyMattersReq extends PageRequest {
 
-    /** 必传业务编码：bond / fund；stock 预留 */
+    /**
+     * 业务编码（必传）
+     *
+     * bond=债券、fund=基金、stock=股票（预留）
+     */
     private String businessDomain;
 
     /** 流程 ID 列表，多选筛选 */
@@ -37,7 +41,11 @@ public class MyMattersReq extends PageRequest {
     /** 审核状态 */
     private String auditStatus;
 
-    /** 步骤状态：pending=待处理 / completed=已完成（仅 queryMyMattersPage 使用） */
+    /**
+     * 步骤状态
+     *
+     * pending=待处理、completed=已完成（仅 queryMyMattersPage 使用）
+     */
     private String stepStatus;
 
     /** 发起人姓名关键词 */

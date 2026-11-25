@@ -7,24 +7,16 @@ package com.znty.rrs.common.enums;
  */
 public enum TempOprtSource {
 
-    /**
-     * 人工
-     */
+    /** 人工 */
     MANUAL("manual"),
 
-    /**
-     * 定时任务
-     */
+    /** 定时任务 */
     JOB("job"),
 
-    /**
-     * 其他
-     */
+    /** 其他 */
     OTHER("other");
 
-    /**
-     * 临时代码操作来源编码
-     */
+    /** 临时代码操作来源编码 */
     private final String code;
 
     /**

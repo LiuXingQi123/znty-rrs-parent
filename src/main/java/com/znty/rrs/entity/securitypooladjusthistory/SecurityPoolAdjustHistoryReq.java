@@ -31,7 +31,11 @@ public class SecurityPoolAdjustHistoryReq extends PageRequest {
     /** 证券类型（精确） */
     private String securityType;
 
-    /** 证券状态：存续 / 到期 */
+    /**
+     * 证券状态
+     *
+     * 取值为存续、到期
+     */
     private String securityStatus;
 
     /** 调整日期起（yyyy-MM-dd） */
@@ -47,15 +51,24 @@ public class SecurityPoolAdjustHistoryReq extends PageRequest {
     private String issuer;
 
     /**
-     * 是否特征多选（勾选即筛「是」，多选 AND）：
-     * guarant / inright / yx / private / abs / cj / stdCredit（标准信用债）
+     * 是否特征多选（勾选即筛「是」，多选 AND）
+     *
+     * guarant=担保、inright=含权、yx=永续、private=私募、abs=ABS、cj=次级、stdCredit=标准信用债
      */
     private List<String> bondYesFlags;
 
-    /** 调整方向：调入 / 调出 */
+    /**
+     * 调整方向
+     *
+     * 取值为调入、调出
+     */
     private String adjustMode;
 
-    /** 审核状态：-1/00/11/20/21/32/99 */
+    /**
+     * 审核状态
+     *
+     * -1=无效、00=流程中、11=驳回待修改、20=审批通过、21=审批驳回、32=O32 自动审批预留、99=发起人已撤回
+     */
     private String auditStatus;
 
     /** 仅查当前用户的调整记录 */

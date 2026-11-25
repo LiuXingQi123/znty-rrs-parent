@@ -6,7 +6,7 @@ import lombok.Data;
 import java.util.Date;
 
 /**
- * 证券池调库记录表实体，记录证券每次调入/调出投资池的操作详情及审核状态
+ * 证券池调库记录表实体，记录证券每次调入、调出投资池的操作详情及审核状态
  */
 @Data
 public class IpAdjustLogBo {
@@ -38,7 +38,11 @@ public class IpAdjustLogBo {
     /** 调整类型 */
     private String adjustType;
 
-    /** 调整模式：调入/调出 */
+    /**
+     * 调整模式
+     *
+     * 取值为调入、调出
+     */
     private String adjustMode;
 
     /** 调库批次号，同一次提交产生的多条记录共用 */

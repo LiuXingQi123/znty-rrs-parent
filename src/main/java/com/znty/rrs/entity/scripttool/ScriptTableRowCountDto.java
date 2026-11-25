@@ -3,7 +3,7 @@ package com.znty.rrs.entity.scripttool;
 import lombok.Data;
 
 /**
- * 表记录数统计项。
+ * 表记录数统计项
  */
 @Data
 public class ScriptTableRowCountDto {

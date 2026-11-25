@@ -11,34 +11,54 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 规则执行结果 / 执行历史 DTO，同时承载临时执行结果和持久化执行历史。
- * <p>临时执行时 id/ruleId/caseId/errorMessage/startTime/finishTime 为 null。</p>
+ * 规则执行结果和执行历史 DTO，同时承载临时执行结果和持久化执行历史
+ *
+ * 临时执行时 id、ruleId、caseId、errorMessage、startTime、finishTime 为 null
  */
 @Data
 public class RuleRunResultDto {
+
     /** 执行记录 ID（历史查询时有值，临时执行时为 null） */
     private Long id;
+
     /** 规则 ID（历史查询时有值） */
     private Long ruleId;
+
     /** 用例 ID（关联测试用例执行时有值） */
     private Long caseId;
-    /** 执行状态：pass-通过，fail-失败 */
+
+    /**
+     * 执行状态
+     *
+     * pass=通过、fail=失败
+     */
     private String status;
+
     /** 执行输出（脚本返回值或异常信息） */
     private String output;
+
     /** 错误信息（执行失败时填充） */
     private String errorMessage;
+
     /** 开始时间（yyyy-MM-dd HH:mm:ss 格式，历史查询时有值） */
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private Date startTime;
+
     /** 结束时间（yyyy-MM-dd HH:mm:ss 格式，历史查询时有值） */
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private Date finishTime;
-    /** 步骤日志列表，每项含 time/type/msg 键 */
+
+    /** 步骤日志列表，每项含 time、type、msg 键 */
     private List<Map<String, Object>> logs = new ArrayList<>();
 
     /**
-     * 从执行记录实体和日志列表构建 DTO，对时间字段做格式化。
+     * 把规则执行记录和日志转换为执行结果
+     *
+     * 开始和结束时间保留原值，返回时使用字段上的日期时间格式
+     *
+     * @param run 规则执行记录
+     * @param logs 本次执行的步骤日志
+     * @return 含执行记录字段和步骤日志的结果
      */
     public static RuleRunResultDto from(RuleTestRunBo run, List<Map<String, Object>> logs) {
         RuleRunResultDto dto = new RuleRunResultDto();

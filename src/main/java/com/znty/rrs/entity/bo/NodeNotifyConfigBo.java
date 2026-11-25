@@ -10,24 +10,33 @@ import java.util.Date;
  */
 @Data
 public class NodeNotifyConfigBo {
+
     /** 主键 */
     private Long id;
+
     /** 节点 ID */
     private Long nodeId;
+
     /** 通知渠道 JSON */
     private String notifyChannels;
+
     /** 通知目标 */
     private String notifyTarget;
+
     /** 通知人 JSON */
     private String notifyPersons;
+
     /** 通知模板 */
     private String notifyTpl;
+
     /** 通知备注 */
     private String notifyRemark;
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
+
     /** 创建时间 */
-    private Date crteTime;
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
+    private Date crteTime;
+
     /** 更新时间 */
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private Date updtTime;
 }

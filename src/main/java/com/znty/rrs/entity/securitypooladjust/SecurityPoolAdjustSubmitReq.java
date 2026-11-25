@@ -93,13 +93,21 @@ public class SecurityPoolAdjustSubmitReq {
         /** 投资池类型 */
         private String poolType;
 
-        /** 调整模式：调入/调出 */
+        /**
+         * 调整模式
+         *
+         * 取值为调入、调出
+         */
         private String adjustMode;
 
-        /** 调整项来源：manual=手工 / linkage=联动 / mutex=互斥 / related=多市场关联码 */
+        /**
+         * 调整项来源
+         *
+         * manual=手工、linkage=联动、mutex=互斥、related=多市场关联码
+         */
         private String itemTag;
 
-        /** 调库分组 Key：手工项及其触发的联动/互斥/关联项共用 */
+        /** 调库分组 Key：手工项及其触发的联动、互斥、关联项共用 */
         private String adjustGroupKey;
 
         /** 本次选择的流程 ID */

@@ -7,19 +7,13 @@ package com.znty.rrs.common.enums;
  */
 public enum ApprovalStrategy {
 
-    /**
-     * 抢占审批
-     */
+    /** 抢占审批 */
     PREEMPT("preempt"),
 
-    /**
-     * 全部处理（会签）
-     */
+    /** 全部处理（会签） */
     ALL("all"),
 
-    /**
-     * 流程发起人处理
-     */
+    /** 流程发起人处理 */
     INITIATOR("initiator"),
 
     /**
@@ -29,14 +23,10 @@ public enum ApprovalStrategy {
      */
     O32("o32"),
 
-    /**
-     * 系统自动审批通过，临时代码同样适用
-     */
+    /** 系统自动审批通过，临时代码同样适用 */
     AUTO("auto");
 
-    /**
-     * 审批策略编码
-     */
+    /** 审批策略编码 */
     private final String code;
 
     /**

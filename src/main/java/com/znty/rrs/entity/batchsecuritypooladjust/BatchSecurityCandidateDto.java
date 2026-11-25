@@ -27,9 +27,10 @@ public class BatchSecurityCandidateDto {
     private String securityType;
 
     /**
-     * 市场编码列表：
-     * SSE=上海证券交易所 / SZSE=深圳证券交易所 / NIB=银行间市场 / BSE=北京证券交易所 /
-     * COMPANY=主体 / OTC=场外市场 / QDII=其他QDII市场 / JWCW=JWCW市场 / UNKNOWN=未知 / OTHER=其他
+     * 市场编码列表
+     *
+     * SSE=上海证券交易所、SZSE=深圳证券交易所、NIB=银行间市场、BSE=北京证券交易所、COMPANY=主体、OTC=场外市场、
+     * HKEX=香港交易所、QDII=其他 QDII 市场、JWCW=JWCW 市场、UNKNOWN=未知、OTHER=其他
      */
     private List<String> marketCodes = new ArrayList<>();
 
@@ -55,16 +56,32 @@ public class BatchSecurityCandidateDto {
     /** 主体内评分 */
     private String innerIssuerRating;
 
-    /** 是否 ABS：1=是 / 0=否 */
+    /**
+     * 是否 ABS
+     *
+     * 1=是、0=否
+     */
     private String absFlag;
 
-    /** 是否担保：1=是 / 0=否 */
+    /**
+     * 是否担保
+     *
+     * 1=是、0=否
+     */
     private Integer guarantFlag;
 
-    /** 是否永续：1=是 / 0=否 */
+    /**
+     * 是否永续
+     *
+     * 1=是、0=否
+     */
     private Integer yxFlag;
 
-    /** 是否次级：1=是 / 0=否 */
+    /**
+     * 是否次级
+     *
+     * 1=是、0=否
+     */
     private Integer cjFlag;
 
     /** 发行方式 */
@@ -73,9 +90,18 @@ public class BatchSecurityCandidateDto {
     /** 内部分类 */
     private String innerClass;
 
-    /** 是否含权：1=是 / 0=否 */
+    /**
+     * 是否含权
+     *
+     * 1=是、0=否
+     */
     private Integer inrightFlag;
-    /** 是否标准信用债：1=是 / 0=否 / null=未判定 */
+
+    /**
+     * 是否标准信用债
+     *
+     * 1=是、0=否、null=未判定
+     */
     private Integer stdCreditFlag;
 
     /** 担保人（名称，多担保人逗号分隔） */
@@ -92,6 +118,7 @@ public class BatchSecurityCandidateDto {
 
     /** 剩余期限（天），对应 rrs_securityinfo.date_exists；业务校验仍用天数 */
     private BigDecimal dateExists;
+
     /** 证券期限（展示串），对应 rrs_securityinfo.date_exists_str */
     private String dateExistsStr;
 }

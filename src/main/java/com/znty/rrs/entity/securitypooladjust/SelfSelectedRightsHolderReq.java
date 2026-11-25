@@ -5,7 +5,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 
 /**
- * 自选权益人分页查询请求。
+ * 自选权益人分页查询请求
  */
 @Data
 @EqualsAndHashCode(callSuper = true)

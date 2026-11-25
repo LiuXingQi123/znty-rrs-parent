@@ -6,98 +6,128 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 禁投池主体调整返回对象，承载主体、所在池和旗下债券数据。
+ * 禁投池主体调整返回对象，承载主体、所在池和旗下债券数据
  */
 @Data
 public class ForbiddenPoolAdjustDto {
 
     /** 主键 ID */
     private Long id;
+
     /** 主体代码 */
     private String companyCode;
+
     /** 主体简称 */
     private String companyShortName;
+
     /** 主体全称 */
     private String companyFullName;
+
     /** 统一社会信用代码 */
     private String registerNumber;
+
     /** 企业性质 */
     private String compProperty;
+
     /** 省份 */
     private String province;
+
     /** 城市 */
     private String city;
+
     /** 成立日期，yyyyMMdd */
     private String foundDate;
+
     /** 主体类型 */
     private String compType;
+
     /** 注册地址 */
     private String regAddress;
+
     /** 旗下债券数量 */
     private Integer companyBondCount;
 
     /**
-     * 主体债券数量汇总。
+     * 主体债券数量汇总
      */
     @Data
     public static class CompanyBondCount {
+
         /** 主体代码 */
         private String companyCode;
+
         /** 债券数量 */
         private Integer bondCount;
     }
 
     /**
-     * 当前所在池记录。
+     * 当前所在池记录
      */
     @Data
     public static class PoolStatus {
+
         /** 投资池 ID */
         private Long targetPoolId;
+
         /** 投资池名称 */
         private String poolName;
+
         /** 投资池类型 */
         private String poolType;
+
         /** 调库批次号 */
         private String adjustBatchNo;
+
         /** 调库记录 ID */
         private Long adjustLogId;
+
         /** 入池日期 */
         private String entryDate;
+
         /** 债券数量 */
         private Integer bondCount;
     }
 
     /**
-     * 主体旗下债券记录。
+     * 主体旗下债券记录
      */
     @Data
     public static class CompanyBond {
+
         /** 证券代码 */
         private String windCode;
+
         /** 证券简称 */
         private String shortName;
+
         /** 证券全称 */
         private String fullName;
+
         /** 证券类型编码 */
         private String securityType;
+
         /** 证券类型名称 */
         private String securityTypeName;
+
         /** 投资池 ID */
         private Long targetPoolId;
+
         /** 投资池名称 */
         private String poolName;
+
         /** 入池日期 */
         private String entryDate;
     }
 
     /**
-     * 当前池数据聚合对象。
+     * 当前池数据聚合对象
      */
     @Data
     public static class PoolStatusBundle {
+
         /** 当前主体所在池 */
         private List<PoolStatus> companyCurrentPools = new ArrayList<>();
+
         /** 当前主体旗下债券所在池 */
         private List<PoolStatus> companyBondCurrentPools = new ArrayList<>();
     }

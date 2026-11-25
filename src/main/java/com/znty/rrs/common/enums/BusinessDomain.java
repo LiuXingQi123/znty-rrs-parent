@@ -7,24 +7,16 @@ package com.znty.rrs.common.enums;
  */
 public enum BusinessDomain {
 
-    /**
-     * bond 权限或业务编码
-     */
+    /** bond 权限或业务编码 */
     BOND("bond"),
 
-    /**
-     * fund 权限或业务编码
-     */
+    /** fund 权限或业务编码 */
     FUND("fund"),
 
-    /**
-     * stock 权限或业务编码
-     */
+    /** stock 权限或业务编码 */
     STOCK("stock");
 
-    /**
-     * 业务领域编码
-     */
+    /** 业务领域编码 */
     private final String code;
 
     /**

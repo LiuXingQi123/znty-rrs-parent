@@ -8,7 +8,7 @@ import java.util.Map;
 import lombok.Data;
 
 /**
- * 投资池新增/编辑请求对象，携带投资池配置、关联流程、自动规则及权限信息
+ * 投资池新增、编辑请求对象，携带投资池配置、关联流程、自动规则及权限信息
  */
 @Data
 public class InvestmentPoolReq {
@@ -23,8 +23,8 @@ public class InvestmentPoolReq {
     private String poolName;
 
     /**
-     * 投资池编码（系统内部识别，如 credit_bond_root、credit_bond_level_1）。
-     * 新增顶级/子池时必填；编辑基础配置时可修改。
+     * 投资池编码（系统内部识别，如 credit_bond_root、credit_bond_level_1）
+     * 新增顶级、子池时必填；编辑基础配置时可修改
      */
     private String poolCode;
 
@@ -32,14 +32,19 @@ public class InvestmentPoolReq {
     private String poolType;
 
     /**
-     * 投资市场编码列表：
-     * SSE=上海证券交易所 / SZSE=深圳证券交易所 / NIB=银行间市场 / BSE=北京证券交易所 /
-     * COMPANY=主体 / OTC=场外市场 / HKEX=香港交易所 / QDII=其他QDII市场 / JWCW=JWCW市场 / UNKNOWN=未知 / OTHER=其他。
-     * 保存时逐项按 MarketCode 校验；未传或空列表保存为 []。
+     * 投资市场编码列表
+     *
+     * SSE=上海证券交易所、SZSE=深圳证券交易所、NIB=银行间市场、BSE=北京证券交易所、COMPANY=主体、OTC=场外市场、
+     * HKEX=香港交易所、QDII=其他 QDII 市场、JWCW=JWCW 市场、UNKNOWN=未知、OTHER=其他
+     * 保存时逐项按 MarketCode 校验；未传或空列表保存为 []
      */
     private List<String> marketCodes;
 
-    /** 投资品种编码列表，元素为 dict_security_type.category_type（bond/stock/fund/company/index/warrant/trust/private_wealth/unknown） */
+    /**
+     * 投资品种编码列表（dict_security_type.category_type）
+     *
+     * bond=债券、stock=股票、fund=基金、company=公司主体、index=指数、warrant=权证、trust=信托、private_wealth=私募理财、unknown=未知
+     */
     private List<String> varietyCodes;
 
     /** 恒生池名称 */
@@ -72,7 +77,11 @@ public class InvestmentPoolReq {
     /** 最大上限数量 */
     private Long maxCapacity;
 
-    /** 池锁定标志：0=未锁定 / 1=已锁定 */
+    /**
+     * 池锁定标志
+     *
+     * 0=未锁定、1=已锁定
+     */
     private Integer lockFlag;
 
     /** 调入冻结期天数：空或 0 表示不限制 */

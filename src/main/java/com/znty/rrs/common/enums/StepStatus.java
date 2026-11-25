@@ -7,39 +7,25 @@ package com.znty.rrs.common.enums;
  */
 public enum StepStatus {
 
-    /**
-     * 待处理
-     */
+    /** 待处理 */
     PENDING("pending"),
 
-    /**
-     * 通过
-     */
+    /** 通过 */
     APPROVE("approve"),
 
-    /**
-     * 驳回
-     */
+    /** 驳回 */
     REJECT("reject"),
 
-    /**
-     * 提交
-     */
+    /** 提交 */
     SUBMIT("submit"),
 
-    /**
-     * 自动处理
-     */
+    /** 自动处理 */
     AUTO_PROCESS("auto_process"),
 
-    /**
-     * 已撤回
-     */
+    /** 已撤回 */
     CANCELED("canceled");
 
-    /**
-     * 流程步骤状态编码
-     */
+    /** 流程步骤状态编码 */
     private final String code;
 
     /**

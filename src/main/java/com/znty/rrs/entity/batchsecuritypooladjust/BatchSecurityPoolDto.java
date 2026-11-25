@@ -23,9 +23,10 @@ public class BatchSecurityPoolDto {
     private String poolType;
 
     /**
-     * 投资市场编码 JSON：
-     * SSE=上海证券交易所 / SZSE=深圳证券交易所 / NIB=银行间市场 / BSE=北京证券交易所 /
-     * COMPANY=主体 / OTC=场外市场 / QDII=其他QDII市场 / JWCW=JWCW市场 / UNKNOWN=未知 / OTHER=其他
+     * 投资市场编码 JSON
+     *
+     * SSE=上海证券交易所、SZSE=深圳证券交易所、NIB=银行间市场、BSE=北京证券交易所、COMPANY=主体、OTC=场外市场、
+     * HKEX=香港交易所、QDII=其他 QDII 市场、JWCW=JWCW 市场、UNKNOWN=未知、OTHER=其他
      */
     private String marketCodes;
 
@@ -38,14 +39,14 @@ public class BatchSecurityPoolDto {
     /** 上限数量 */
     private Long maxCapacity;
 
-    /**
-     * 当前有效在池总数（各类型合计，含主体 / CRMW 等）。
-     */
+    /** 当前有效在池总数（各类型合计，含主体、CRMW 等） */
     private Integer currentCount;
 
     /**
-     * 按类型分项的在池数量（仅 count 大于 0 的项）。
-     * typeCode：company / crmw / bond / stock / fund 等，中文由前端展示。
+     * 按类型分项的在池数量（仅 count 大于 0 的项）
+     * typeCode 的中文名称由前端展示
+     *
+     * company=主体、crmw=CRMW、bond=债券、stock=股票、fund=基金等
      */
     private List<BatchPoolTypeCountDto> countByType;
 

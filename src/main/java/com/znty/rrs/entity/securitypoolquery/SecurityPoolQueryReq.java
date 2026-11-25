@@ -12,10 +12,13 @@ import java.util.List;
 @Data
 @EqualsAndHashCode(callSuper = true)
 public class SecurityPoolQueryReq extends PageRequest {
+
     /** 证券池树选中节点ID列表 */
     private List<Long> poolIds;
+
     /** 证券代码（模糊搜索） */
     private String securityCode;
+
     /** 证券简称（模糊搜索） */
     private String securityShortName;
 
@@ -24,25 +27,39 @@ public class SecurityPoolQueryReq extends PageRequest {
 
     /** 主体编码（模糊搜索） */
     private String issuerCode;
+
     /** 证券类型（精确匹配） */
     private String securityType;
-    /** 证券状态：active=未到期 / matured=到期 / unknown=状态为 U 或未关联主档 */
+
+    /**
+     * 证券状态
+     *
+     * active=未到期、matured=到期、unknown=状态为 U 或未关联主档
+     */
     private String securityStatus;
+
     /** 入池时间起 */
     private String entryTimeStart;
+
     /** 入池时间止 */
     private String entryTimeEnd;
+
     /** 调整人（模糊搜索） */
     private String adjusterName;
+
     /** 发行主体名称（模糊搜索） */
     private String issuer;
+
     /**
-     * 是否特征多选（勾选即筛「是」，多选 AND）：
-     * guarant / inright / yx / private / abs / cj / stdCredit（标准信用债）
+     * 是否特征多选（勾选即筛「是」，多选 AND）
+     *
+     * guarant=担保、inright=含权、yx=永续、private=私募、abs=ABS、cj=次级、stdCredit=标准信用债
      */
     private List<String> bondYesFlags;
+
     /** 我的证券 */
     private Boolean mySecurities;
+
     /** 当前用户ID（我的证券勾选时使用） */
     private String currentUserId;
 }

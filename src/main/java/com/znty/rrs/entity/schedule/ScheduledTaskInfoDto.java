@@ -7,9 +7,9 @@ import java.util.Date;
 import java.util.Map;
 
 /**
- * 定时任务管理页列表/详情 DTO（代码注册信息 + 库表配置 + 最近执行）。
+ * 定时任务管理页列表、详情 DTO（代码注册信息 + 库表配置 + 最近执行）
  *
- * <p>状态类字段仅返回 code，中文由前端字典映射。
+ * 状态类字段仅返回 code，中文由前端字典映射
  */
 @Data
 public class ScheduledTaskInfoDto {
@@ -34,16 +34,13 @@ public class ScheduledTaskInfoDto {
 
     /**
      * 扩展参数原文（库表 param_json）
-     * <p>
-     * 通用字段：各任务自行约定格式，推荐 JSON；无参数任务可为空。
-     * 具体填写方式见 {@link #paramHelp}（由已注册实现提供）。
-     * </p>
+     *
+     * 通用字段：各任务自行约定格式，推荐 JSON；无参数任务可为空
+     * 具体填写方式见 {@link #paramHelp}（由已注册实现提供）
      */
     private String paramJson;
 
-    /**
-     * 扩展参数填写说明（由已注册的 RrsScheduledTask#getParamHelp 提供；未注册实现时为空）
-     */
+    /** 扩展参数填写说明（由已注册的 RrsScheduledTask#getParamHelp 提供；未注册实现时为空） */
     private String paramHelp;
 
     /** 由任务实现提供的扩展参数预填值 */

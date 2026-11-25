@@ -10,13 +10,18 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/** 单次主体批量校验的公共数据，只在当前调用中传递，不跨请求缓存。 */
+/**
+ * 单次主体批量校验的公共数据，只在当前调用中传递，不跨请求缓存
+ */
 @Getter
 public class CompanyAdjustCheckContext {
+
     /** 本次从公司简介查询的主体资料 */
     private final Map<String, ForbiddenPoolAdjustDto> companyMap;
+
     /** 本次读取的投资池配置 */
     private final List<InvestmentPoolBo> pools;
+
     /** 本次读取的投资池关系 */
     private final List<PoolRelationBo> relations;
 

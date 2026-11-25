@@ -3,8 +3,9 @@ package com.znty.rrs.entity.stocksecuritybatchadjust;
 import lombok.Data;
 
 /**
- * 存量证券批量调整「来源池」下拉项。
- * 中文展示名由前端根据 poolCode 映射，后端只返 code / id / 名称字段。
+ * 存量证券批量调整「来源池」下拉项
+ *
+ * 中文展示名由前端根据 poolCode 映射，后端只返 code、id、名称字段
  */
 @Data
 public class StockSourcePoolDto {

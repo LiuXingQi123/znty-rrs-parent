@@ -4,7 +4,9 @@ import com.znty.rrs.entity.bo.IpGradeRuleAlertBo;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
-/** 分级规则扫描记录，携带当前在池状态对应的入库日志 */
+/**
+ * 分级规则扫描记录，携带当前在池状态对应的入库日志
+ */
 @Data
 @EqualsAndHashCode(callSuper = true)
 public class GradeRuleAlertScanDto extends IpGradeRuleAlertBo {

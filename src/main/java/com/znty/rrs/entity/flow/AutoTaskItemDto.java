@@ -7,8 +7,10 @@ import lombok.Data;
  */
 @Data
 public class AutoTaskItemDto {
+
     /** 任务序号 */
     private Integer id;
+
     /** 任务编码 */
     private String task;
 }

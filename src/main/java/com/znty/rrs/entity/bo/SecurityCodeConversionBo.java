@@ -4,8 +4,9 @@ import java.util.Date;
 import lombok.Data;
 
 /**
- * 证券代码转换业务对象。
- * <p>仅供独立证券代码转换流程读取主档、迁移运行态引用和写入转换日志。</p>
+ * 证券代码转换业务对象
+ *
+ * 仅供独立证券代码转换流程读取主档、迁移运行态引用和写入转换日志
  */
 @Data
 public class SecurityCodeConversionBo {
@@ -60,11 +61,6 @@ public class SecurityCodeConversionBo {
 
     /** 主档证券简称 */
     private String shortName;
-
-
-
-
-
 
     /** 池状态证券简称 */
     private String securityShortName;

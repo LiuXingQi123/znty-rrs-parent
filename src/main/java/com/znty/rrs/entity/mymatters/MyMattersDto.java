@@ -6,7 +6,7 @@ import lombok.Data;
 import java.util.Date;
 
 /**
- * 我的事宜列表返回对象。
+ * 我的事宜列表返回对象
  */
 @Data
 public class MyMattersDto {
@@ -68,7 +68,11 @@ public class MyMattersDto {
     /** 流程描述 */
     private String processDescription;
 
-    /** 业务场景：crmwAdjust=CRMW池调整 / forbiddenCompanyAdjust=禁投池主体调整 / securityAdjust=证券池调整 / fundAdjust=基金池调整 / stockAdjust=股票池调整 */
+    /**
+     * 业务场景
+     *
+     * crmwAdjust=CRMW池调整、forbiddenCompanyAdjust=禁投池主体调整、securityAdjust=证券池调整、fundAdjust=基金池调整、stockAdjust=股票池调整
+     */
     private String businessScene;
 
     /** 审核状态 */

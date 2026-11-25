@@ -7,19 +7,13 @@ package com.znty.rrs.common.enums;
  */
 public enum AttachmentPurpose {
 
-    /**
-     * 信评报告
-     */
+    /** 信评报告 */
     CREDIT_REPORT("credit_report"),
 
-    /**
-     * 其他材料
-     */
+    /** 其他材料 */
     MATERIAL("material");
 
-    /**
-     * 附件用途编码
-     */
+    /** 附件用途编码 */
     private final String code;
 
     /**

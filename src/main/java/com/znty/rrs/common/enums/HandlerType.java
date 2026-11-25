@@ -7,19 +7,13 @@ package com.znty.rrs.common.enums;
  */
 public enum HandlerType {
 
-    /**
-     * 角色
-     */
+    /** 角色 */
     ROLE("role"),
 
-    /**
-     * 人员
-     */
+    /** 人员 */
     USER("user");
 
-    /**
-     * 处理人类型编码
-     */
+    /** 处理人类型编码 */
     private final String code;
 
     /**

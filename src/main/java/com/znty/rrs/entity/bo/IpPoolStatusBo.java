@@ -38,7 +38,11 @@ public class IpPoolStatusBo {
     /** 调整类型 */
     private String adjustType;
 
-    /** 调整模式：调入/调出 */
+    /**
+     * 调整模式
+     *
+     * 取值为调入、调出
+     */
     private String adjustMode;
 
     /** 调库批次号 */

@@ -38,16 +38,32 @@ public class SecurityPoolAdjustHistoryDto {
     /** 证券全称 */
     private String fullName;
 
-    /** 是否 ABS：1=是 / 0=否 */
+    /**
+     * 是否 ABS
+     *
+     * 1=是、0=否
+     */
     private Integer absFlag;
 
-    /** 是否担保：1=是 / 0=否 */
+    /**
+     * 是否担保
+     *
+     * 1=是、0=否
+     */
     private Integer guarantFlag;
 
-    /** 是否永续：1=是 / 0=否 */
+    /**
+     * 是否永续
+     *
+     * 1=是、0=否
+     */
     private Integer yxFlag;
 
-    /** 是否次级：1=是 / 0=否 */
+    /**
+     * 是否次级
+     *
+     * 1=是、0=否
+     */
     private Integer cjFlag;
 
     /** 发行方式 */
@@ -56,15 +72,28 @@ public class SecurityPoolAdjustHistoryDto {
     /** 内部分类 */
     private String innerClass;
 
-    /** 是否含权：1=是 / 0=否 */
+    /**
+     * 是否含权
+     *
+     * 1=是、0=否
+     */
     private Integer inrightFlag;
-    /** 是否标准信用债：1=是 / 0=否 / null=未判定 */
+
+    /**
+     * 是否标准信用债
+     *
+     * 1=是、0=否、null=未判定
+     */
     private Integer stdCreditFlag;
 
-    /** 调整类型（手工调整/联动调整/...） */
+    /** 调整类型（手工调整、联动调整等） */
     private String adjustType;
 
-    /** 调整方向（调入/调出） */
+    /**
+     * 调整方向
+     *
+     * 取值为调入、调出
+     */
     private String adjustMode;
 
     /** 投资池路径名称（父级/子级 格式，如"信用债大库/一级库"） */
@@ -79,7 +108,11 @@ public class SecurityPoolAdjustHistoryDto {
     /** 投资池类型 */
     private String poolType;
 
-    /** 审核状态码（-1/00/11/20/21/32/99） */
+    /**
+     * 审核状态码
+     *
+     * -1=无效、00=流程中、11=驳回待修改、20=审批通过、21=审批驳回、32=O32 自动审批预留、99=发起人已撤回
+     */
     private String auditStatus;
 
     /** 调整人名称 */

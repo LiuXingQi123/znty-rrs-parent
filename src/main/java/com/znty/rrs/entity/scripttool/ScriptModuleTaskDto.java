@@ -5,7 +5,7 @@ import lombok.Data;
 import java.util.List;
 
 /**
- * 模块级重置任务配置。
+ * 模块级重置任务配置
  */
 @Data
 public class ScriptModuleTaskDto {

@@ -7,39 +7,25 @@ package com.znty.rrs.common.enums;
  */
 public enum NodeType {
 
-    /**
-     * 开始节点
-     */
+    /** 开始节点 */
     START("start"),
 
-    /**
-     * 结束节点
-     */
+    /** 结束节点 */
     END("end"),
 
-    /**
-     * 审批节点
-     */
+    /** 审批节点 */
     APPROVAL("approval"),
 
-    /**
-     * 条件判断节点
-     */
+    /** 条件判断节点 */
     CONDITION("condition"),
 
-    /**
-     * 自动执行节点
-     */
+    /** 自动执行节点 */
     AUTO("auto"),
 
-    /**
-     * 消息通知节点
-     */
+    /** 消息通知节点 */
     NOTIFY("notify");
 
-    /**
-     * 流程节点类型编码
-     */
+    /** 流程节点类型编码 */
     private final String code;
 
     /**

@@ -3,7 +3,7 @@ package com.znty.rrs.entity.securitypooladjustflow;
 import lombok.Data;
 
 /**
- * 证券池调库审批处理结果 DTO，返回审批动作后的流程状态。
+ * 证券池调库审批处理结果 DTO，返回审批动作后的流程状态
  */
 @Data
 public class SecurityPoolAdjustAuditDto {

@@ -23,12 +23,13 @@ public class InvestmentPoolBo {
     private String poolName;
 
     /**
-     * 投资池类型（业务域，可扩展）：
-     * 固收：credit_bond / offshore_bond / convertible_bond / bond_product / special_account；
-     * 权益：stock / stock_product；基金：fund；
-     * 风险：forbidden / observe / blacklist / restricted / whitelist；
-     * 独立/兜底：crmw / other。
-     * 硬逻辑类型见枚举 PoolType 注释。
+     * 投资池类型（业务域，可扩展）
+     * 按固收、权益、基金、风险及独立和兜底类型分类，专用校验规则见 {@code PoolType}
+     *
+     * credit_bond=信用债大库、offshore_bond=境外债库、convertible_bond=转债库、bond_product=债券产品库、special_account=专户债券及专户产品库、
+     * stock=股票库、stock_product=股票产品库、fund=基金库、
+     * forbidden=禁止库、observe=观察池、blacklist=黑名单、restricted=限制名单、whitelist=白名单库、
+     * crmw=CRMW 库、other=其他或自定义根池
      */
     private String poolType;
 
@@ -36,13 +37,18 @@ public class InvestmentPoolBo {
     private Integer poolLevel;
 
     /**
-     * 投资市场编码 JSON：
-     * SSE=上海证券交易所 / SZSE=深圳证券交易所 / NIB=银行间市场 / BSE=北京证券交易所 /
-     * COMPANY=主体 / OTC=场外市场 / HKEX=香港交易所 / QDII=其他QDII市场 / JWCW=JWCW市场 / UNKNOWN=未知 / OTHER=其他
+     * 投资市场编码 JSON
+     *
+     * SSE=上海证券交易所、SZSE=深圳证券交易所、NIB=银行间市场、BSE=北京证券交易所、COMPANY=主体、OTC=场外市场、
+     * HKEX=香港交易所、QDII=其他 QDII 市场、JWCW=JWCW 市场、UNKNOWN=未知、OTHER=其他
      */
     private String marketCodes;
 
-    /** 投资品种编码 JSON 数组，元素为 dict_security_type.category_type（bond/stock/fund/company/index/warrant/trust/private_wealth/unknown） */
+    /**
+     * 投资品种编码 JSON 数组（dict_security_type.category_type）
+     *
+     * bond=债券、stock=股票、fund=基金、company=公司主体、index=指数、warrant=权证、trust=信托、private_wealth=私募理财、unknown=未知
+     */
     private String varietyCodes;
 
     /** 恒生池名称 */
@@ -111,7 +117,11 @@ public class InvestmentPoolBo {
     /** 最大上限数量 */
     private Long maxCapacity;
 
-    /** 池锁定标志：0=未锁定 / 1=已锁定（锁定后不可调入/调出），空视为未锁定 */
+    /**
+     * 池锁定标志
+     *
+     * 0=未锁定、1=已锁定（锁定后不可调入、调出）、空=未锁定
+     */
     private Integer lockFlag;
 
     /** 调入冻结期天数：入池后N天内不可调出，空表示不限制 */
@@ -129,7 +139,11 @@ public class InvestmentPoolBo {
     /** 基金评分限制表达式（如 3<=#rate<=8），#rate 占位基金评分；调入校验基金评分须满足，空表示不限制 */
     private String fundRateLimit;
 
-    /** 开放日校验开关：1=启用（调库日期须在 ip_pool_open_day 开放区间内），空/0=不限制 */
+    /**
+     * 开放日校验开关
+     *
+     * 1=启用（调库日期须在 ip_pool_open_day 开放区间内）、空或0=不限制
+     */
     private Integer openDayAdjust;
 
     /** 投资池外部排序 */

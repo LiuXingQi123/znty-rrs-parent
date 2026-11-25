@@ -6,7 +6,7 @@ import lombok.Data;
 import java.util.Date;
 
 /**
- * 脚本工具写操作审计记录。
+ * 脚本工具写操作审计记录
  */
 @Data
 public class ScriptToolRunLogDto {
@@ -14,7 +14,11 @@ public class ScriptToolRunLogDto {
     /** 主键 ID */
     private Long id;
 
-    /** 动作类型：task / clear / reset / module / scene */
+    /**
+     * 动作类型
+     *
+     * task=执行任务、clear=清空数据、reset=重置数据、module=模块操作、scene=装载演示场景
+     */
     private String actionType;
 
     /** 动作编码 */
@@ -23,7 +27,11 @@ public class ScriptToolRunLogDto {
     /** 动作名称 */
     private String actionName;
 
-    /** 执行状态：success / failed */
+    /**
+     * 执行状态
+     *
+     * success=成功、failed=失败
+     */
     private String runStatus;
 
     /** 失败原因摘要 */

@@ -10,20 +10,31 @@ import java.util.Date;
  */
 @Data
 public class RoleDictBo {
+
     /** 主键 */
     private Long id;
+
     /** 角色编码 */
     private String roleCode;
+
     /** 角色名称 */
     private String roleName;
+
     /** 排序 */
     private Integer sortOrder;
-    /** 启用标记：0-禁用 1-启用 */
+
+    /**
+     * 启用标记
+     *
+     * 0=禁用、1=启用
+     */
     private Integer isActive;
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
+
     /** 创建时间 */
-    private Date crteTime;
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
+    private Date crteTime;
+
     /** 更新时间 */
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private Date updtTime;
 }

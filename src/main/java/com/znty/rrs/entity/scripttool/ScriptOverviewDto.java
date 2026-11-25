@@ -5,7 +5,7 @@ import lombok.Data;
 import java.util.List;
 
 /**
- * 脚本清单与依赖总览。
+ * 脚本清单与依赖总览
  */
 @Data
 public class ScriptOverviewDto {

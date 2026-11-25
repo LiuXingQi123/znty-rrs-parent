@@ -7,29 +7,19 @@ package com.znty.rrs.common.enums;
  */
 public enum ParamType {
 
-    /**
-     * 字符串
-     */
+    /** 字符串 */
     STRING("string"),
 
-    /**
-     * 数值
-     */
+    /** 数值 */
     NUMBER("number"),
 
-    /**
-     * 单选
-     */
+    /** 单选 */
     SELECT("select"),
 
-    /**
-     * 多选
-     */
+    /** 多选 */
     MULTISELECT("multiselect");
 
-    /**
-     * 规则参数类型编码
-     */
+    /** 规则参数类型编码 */
     private final String code;
 
     /**

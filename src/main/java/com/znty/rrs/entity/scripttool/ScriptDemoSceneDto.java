@@ -5,7 +5,7 @@ import lombok.Data;
 import java.util.List;
 
 /**
- * Demo 场景生成配置。
+ * Demo 场景生成配置
  */
 @Data
 public class ScriptDemoSceneDto {
@@ -19,7 +19,11 @@ public class ScriptDemoSceneDto {
     /** 场景说明 */
     private String description;
 
-    /** 场景分类：security / forbidden / crmw / alert */
+    /**
+     * 场景分类
+     *
+     * security=证券池调整、forbidden=禁投池调整、crmw=CRMW 池调整、alert=规则提醒
+     */
     private String sceneCategory;
 
     /** 风险等级 */

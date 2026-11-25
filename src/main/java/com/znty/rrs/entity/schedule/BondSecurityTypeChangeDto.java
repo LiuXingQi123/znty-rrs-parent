@@ -3,7 +3,7 @@ package com.znty.rrs.entity.schedule;
 import lombok.Data;
 
 /**
- * 债券类型变更待处理记录。
+ * 债券类型变更待处理记录
  */
 @Data
 public class BondSecurityTypeChangeDto {
