@@ -748,7 +748,7 @@ public class SecurityPoolExcelImportService {
      *
      * 执行顺序：
      * 1. 确定调入/调出方向，并初始化本次校验结果和父子池名称查询缓存
-     * 2. 逐行检查证券代码、父池和子池名称，解析启用叶子池并检查导入权限；前置失败时回写原因
+     * 2. 按 Excel 行序检查必填项和重复行，解析启用叶子池并检查导入权限；前置失败时回写原因
      * 3. 使用本行已保存的权益人/担保人或 ABS 自选权益人构建单券校验请求，复核主体资格后执行完整调库校验；业务校验异常按当前行失败处理
      * 4. 根据联动互斥选项保留完整展开结果或仅保留手工项，再映射来源明细、主体信息和流程候选
      * 5. 以手工主项判断本行是否通过，通过时回写通过状态；失败时汇总原因，同时禁止该行的联动、互斥和关联项单独提交
@@ -770,6 +770,7 @@ public class SecurityPoolExcelImportService {
         List<SecurityPoolExcelImportCheckItemDto> checkItems = new ArrayList<>();
         Map<String, InvestmentPoolBo> poolNameCache = new HashMap<>();
         Map<Long, String> permissionErrors = new HashMap<>();
+        Set<String> seenKeys = new HashSet<>();
         String adjustMode = inbound ? AdjustMode.IN.getCode() : AdjustMode.OUT.getCode();
         String direction = inbound ? "in" : "out";
 
@@ -790,6 +791,11 @@ public class SecurityPoolExcelImportService {
             }
             if (childName.isEmpty()) {
                 preReasons.add("子池名称为空");
+            }
+            boolean duplicate = !code.isEmpty() && !childName.isEmpty()
+                    && !seenKeys.add(code.toUpperCase(Locale.ROOT) + "|" + childName);
+            if (duplicate) {
+                preReasons.add("Excel 内相同证券代码与子池重复");
             }
 
             InvestmentPoolBo pool = null;
@@ -821,7 +827,6 @@ public class SecurityPoolExcelImportService {
                     // 构建证券导入或清空出库的一券一池校验项，再空白串转为 null
                     ? buildExcelSecurityCheck(code, trimToNull(item.getFld002()), pool, adjustMode)
                     : new AdjustCheckReq();
-            // 入口失败的行也参与同一 ABS 的主体一致性检查
             request.setSecurityCode(code);
             // 空白串转为 null，再判断字符串是否为 null 或空白
             request.setGuarantorCode(trimToNull(isBlank(item.getFld020()) ? item.getFld011() : item.getFld020()));
@@ -829,7 +834,10 @@ public class SecurityPoolExcelImportService {
             request.setRightsHolderCode(trimToNull(item.getFld011()));
             // 空白串转为 null
             request.setSelfSelectedRightsHolderCode(trimToNull(item.getFld013()));
-            selections.add(request);
+            // 从去重后的导入行收集 ABS 主体选择
+            if (!duplicate) {
+                selections.add(request);
+            }
             if (preReasons.isEmpty()) {
                 requests.add(request);
             }

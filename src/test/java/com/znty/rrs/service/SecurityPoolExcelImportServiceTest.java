@@ -1075,19 +1075,23 @@ public class SecurityPoolExcelImportServiceTest {
         second.setCompanyCode("B");
         BatchSecurityCheckData data = new BatchSecurityCheckData();
         data.securities.put("ABS1", abs);
+        data.excelSecurityCodes.put("ABS1", "ABS1");
         data.ratingCompanies.put("ABS1", Arrays.asList(first, second));
         when(batchSecurityCheckService.loadExcelCheckData(anyList(), eq(false))).thenReturn(data);
         when(batchSecurityCheckService.findConflictingAbsCodes(anyList(), eq(data))).thenCallRealMethod();
         InvestmentPoolBo pool = new InvestmentPoolBo();
         pool.setId(101L);
         when(importMapper.queryEnabledLeafPoolByParentAndChildName("父池", "子池", true)).thenReturn(pool);
+        InvestmentPoolBo otherPool = new InvestmentPoolBo();
+        otherPool.setId(102L);
+        when(importMapper.queryEnabledLeafPoolByParentAndChildName("父池", "另一子池", true)).thenReturn(otherPool);
         List<SysImpTmpDetlBo> rows = new ArrayList<>();
         for (int index = 0; index < 3; index++) {
             SysImpTmpDetlBo row = new SysImpTmpDetlBo();
             row.setId((long) index + 1);
             row.setFld001(index == 2 ? "OTHER" : "ABS1");
             row.setFld003("父池");
-            row.setFld004("子池");
+            row.setFld004(index == 1 ? "另一子池" : "子池");
             if (index < 2) row.setFld011(index == 0 ? "A" : "B");
             rows.add(row);
         }
@@ -1121,6 +1125,21 @@ public class SecurityPoolExcelImportServiceTest {
         assertTrue(result.get(0).getFailReasons().get(0).contains("同批申请中选择了不同主体"));
         assertTrue(result.get(1).getFailReasons().contains("子池名称为空"));
         assertTrue(result.get(2).isCanAdjust());
+
+        // 只有后出现的同码同子池行失败，大小写与外围空格不影响去重
+        rows.get(1).setFld001(" abs1 ");
+        rows.get(1).setFld004(" 子池 ");
+        checked = ReflectionTestUtils.invokeMethod(service,
+                "checkSecurityImport", rows, true, false, "1", new Date());
+        result = checked.items;
+        assertEquals(3, result.size());
+        assertTrue(result.get(0).isCanAdjust());
+        assertFalse(result.get(1).isCanAdjust());
+        assertEquals(Collections.singletonList("Excel 内相同证券代码与子池重复"), result.get(1).getFailReasons());
+        assertTrue(result.get(2).isCanAdjust());
+        assertEquals("1", rows.get(0).getChkRslt());
+        assertEquals("2", rows.get(1).getChkRslt());
+        assertEquals("Excel 内相同证券代码与子池重复", rows.get(1).getChkDscr());
     }
 
     /** 使用真实导入编排验证来源明细、校验快照和提交参数保持一致 */
