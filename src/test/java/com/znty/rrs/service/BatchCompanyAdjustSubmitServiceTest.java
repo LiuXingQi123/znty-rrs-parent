@@ -46,7 +46,7 @@ import static org.mockito.Mockito.when;
 
 public class BatchCompanyAdjustSubmitServiceTest {
 
-    /** 十个主体的手工项和联动项共用流程，步骤与池状态分别关联实际生成的日志 */
+    /** 十个主体提交普通池手工项及联动项，步骤和池状态关联实际生成的日志 */
     @Test
     public void submitShouldBatchDirectLogsStepsAndPoolStates() throws Exception {
         try (SqlSession session = openSession("direct"); Statement sql = session.getConnection().createStatement()) {
@@ -61,7 +61,7 @@ public class BatchCompanyAdjustSubmitServiceTest {
             for (int i = 1; i <= 10; i++) {
                 String code = "C" + i;
                 sql.executeUpdate("INSERT INTO ais_inv_ods.wind_compintroduction VALUES ('" + code + "', '全称', '简称')");
-                requests.add(request(code, "Excel导入", item(23L, "调入", "manual", "G"),
+                requests.add(request(code, "Excel导入", item(42L, "调入", "manual", "G"),
                         item(17L, "调入", "linkage", "G")));
             }
 
@@ -72,7 +72,7 @@ public class BatchCompanyAdjustSubmitServiceTest {
             assertEquals(20, count(sql, "SELECT COUNT(*) FROM ip_adjust_log WHERE audit_status = '20'"));
             assertEquals(30, count(sql, "SELECT COUNT(*) FROM ip_adjust_step s JOIN ip_adjust_log l"
                     + " ON s.adjust_log_id = l.id AND s.adjust_batch_no = l.adjust_batch_no"
-                    + " WHERE l.target_pool_id = 23 AND l.adjust_type = 'Excel导入'"));
+                    + " WHERE l.target_pool_id = 42 AND l.adjust_type = 'Excel导入'"));
             assertEquals(20, count(sql, "SELECT COUNT(*) FROM ip_pool_status p JOIN ip_adjust_log l"
                     + " ON p.adjust_log_id = l.id AND p.target_pool_id = l.target_pool_id"
                     + " AND p.security_code = l.security_code WHERE p.is_deleted = 0"));
@@ -83,7 +83,7 @@ public class BatchCompanyAdjustSubmitServiceTest {
                     assertTrue(logs.next());
                     assertEquals(ids.get(i).longValue(), logs.getLong("id"));
                     assertEquals("C" + (i / 2 + 1), logs.getString("security_code"));
-                    assertEquals(i % 2 == 0 ? 23L : 17L, logs.getLong("target_pool_id"));
+                    assertEquals(i % 2 == 0 ? 42L : 17L, logs.getLong("target_pool_id"));
                 }
             }
             verify(mapper).queryCompanyList(anyList());
@@ -198,7 +198,7 @@ public class BatchCompanyAdjustSubmitServiceTest {
         }
 
         InvestmentPoolMapper pools = mock(InvestmentPoolMapper.class);
-        when(pools.queryPoolList()).thenReturn(Arrays.asList(17L, 23L).stream().map(id -> {
+        when(pools.queryPoolList()).thenReturn(Arrays.asList(17L, 23L, 42L).stream().map(id -> {
             InvestmentPoolBo pool = new InvestmentPoolBo();
             pool.setId(id);
             return pool;

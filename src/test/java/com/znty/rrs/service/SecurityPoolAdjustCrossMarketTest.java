@@ -198,10 +198,26 @@ public class SecurityPoolAdjustCrossMarketTest {
         verify(markets, never()).queryRelatedMarketCodes(anyString());
     }
 
-    /** 完整同池调入请求可通过完整性检查。 */
+    /** 四池之外的目标池也进入证券主档检查 */
+    @Test
+    public void checkShouldReachSecurityLookupForPoolOutsideAbsQueryRange() {
+        Object req = abs ? new ForbiddenAbsPoolAdjustCheckReq() : new AdjustCheckReq();
+        Object item = abs ? new ForbiddenAbsPoolAdjustCheckReq.CheckItem() : new AdjustCheckReq.CheckItem();
+        ReflectionTestUtils.setField(req, "securityCode", "A.IB");
+        ReflectionTestUtils.setField(req, "items", Collections.singletonList(item));
+        ReflectionTestUtils.setField(item, "targetPoolId", pool.getId());
+        ReflectionTestUtils.setField(item, "adjustMode", "调入");
+
+        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(service, "checkAdjust", req))
+                .isInstanceOf(BizException.class).hasMessageContaining("证券不存在");
+    }
+
+    /** 完整同池调入请求可通过入参及关联券完整性校验 */
     @Test
     public void submitShouldAcceptCompleteRelatedMarkets() {
-        ReflectionTestUtils.invokeMethod(service, "validateRelatedInboundItemsOnSubmit", submitRequest("A.IB", "A.SH", "A.SZ"));
+        Object req = submitRequest("A.IB", "A.SH", "A.SZ");
+        ReflectionTestUtils.invokeMethod(service, "validateSubmitReq", req);
+        ReflectionTestUtils.invokeMethod(service, "validateRelatedInboundItemsOnSubmit", req);
     }
 
     /** 其他池的同券代码不能冒充本次目标池缺失的关联项。 */

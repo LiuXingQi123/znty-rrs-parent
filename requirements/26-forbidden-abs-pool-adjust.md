@@ -127,7 +127,7 @@ ABS 同主体证券统一按 `rrs_securityinfo.issuer_code` 关联，涵盖主�
 ## 4. 核心业务规则
 
 1. **ABS 识别**：`COALESCE(abs_flag,0)=1`；详情/校验/提交均 `validateAbsSecurity`，否则「非 ABS 债不允许在此调整」。  
-2. **目标池**：手工项 `targetPoolId ∈ {15,16,17,23}`（债券禁止库、观察池、黑名单质押库、重点观察名单），否则「ABS禁投池调整手工目标池仅允许债券禁止库(15)、观察池(16)、黑名单质押库(17)、重点观察名单(23)」。  
+2. **目标池**：选池查询按权限返回 15、16、17、23。校验和提交要求填写 `targetPoolId`，并按实际目标池执行原有规则。
 3. **落表**：`ip_adjust_log` / `ip_adjust_step` / `ip_pool_status`（`audit_status` 状态机与同构链路一致）；批次号前缀 `BOND`。  
 4. **禁止**：调用 `syncCompanyBonds*`；调用 `SecurityPoolAdjustService` / `ForbiddenPoolAdjustService` 调库业务入口；内部报告生成复用 `ReportService.addInternalReportsOnFinish` 公共方法。
 5. **直通**：即时写/软删池状态，落池成功后按正常审批口径将手工信评附件生成内部报告；**非直通**：`00` 进审批。每条有 `credit_report_hand` 的调库记录生成一份 `rrs_report_in`（`data_source=uploaded`），全部手工信评附件绑定为 `report_in`；其他材料和库引用附件不生成新报告，与落池同事务，失败整体回滚。
@@ -151,7 +151,7 @@ ABS 同主体证券统一按 `rrs_securityinfo.issuer_code` 关联，涵盖主�
 - [ ] 列表 Tab「主体」「ABS债」；主体行为与改前一致  
 - [ ] ABS 列表仅 `abs_flag=1`  
 - [ ] ABS 主列表在操作列前展示是否担保/含权/永续/私募/ABS/次级/标准信用债（是/否 Tag，口径对齐证券池调库）
-- [ ] 仅能选/提交债券禁止库(15)/观察池(16)/黑名单质押库(17)/重点观察名单(23)  
+- [ ] 页面选池仅提供债券禁止库(15)/观察池(16)/黑名单质押库(17)/重点观察名单(23)，按权限过滤
 - [ ] 非 ABS 详情/校验失败  
 - [ ] 直通只动该 ABS 的 `ip_pool_status`，不同步同主体其他债  
 - [ ] ABS 独立调入17须主体命中三条件之一，独立调出17须三个条件全部不满足

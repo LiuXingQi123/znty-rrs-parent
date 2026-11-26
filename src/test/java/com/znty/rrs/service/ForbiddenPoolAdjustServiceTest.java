@@ -485,22 +485,30 @@ public class ForbiddenPoolAdjustServiceTest {
         verify(mapper, never()).queryCompanySecurityBoByCode("B002");
     }
 
-    /** 验证手工调库目标池超出 15、16、17、23 时直接拒绝。 */
-    @Test(expected = BizException.class)
-    public void checkCompanyAdjustShouldRejectPoolOutsideAllowedRange() {
+    /** 主体手工与 Excel 校验可以使用候选范围外的目标池，目标池 ID 仍必填 */
+    @Test
+    public void checkCompanyAdjustShouldAcceptPoolOutsideQueryRange() {
         ForbiddenPoolAdjustMapper mapper = mock(ForbiddenPoolAdjustMapper.class);
         ForbiddenPoolAdjustService service = buildService(mapper);
-        when(mapper.queryCompanyDetail("C10001")).thenReturn(buildCompany("C10001"));
-        when(mapper.queryCompanyBondCountList(Collections.singletonList("C10001")))
-                .thenReturn(Collections.<ForbiddenPoolAdjustDto.CompanyBondCount>emptyList());
+        InvestmentPoolMapper poolMapper = mock(InvestmentPoolMapper.class);
+        ReflectionTestUtils.setField(service, "investmentPoolMapper", poolMapper);
+        when(poolMapper.queryPoolList()).thenReturn(Collections.singletonList(buildPool(42L, "产品库", "bond_product")));
+        when(mapper.queryCategoryTypeBySecurityType("company")).thenReturn("company");
+        CompanyAdjustCheckContext context = service.createCompanyCheckContext(
+                Collections.singletonMap("C10001", buildCompany("C10001")));
         ForbiddenPoolAdjustCheckReq.CheckItem item = new ForbiddenPoolAdjustCheckReq.CheckItem();
-        item.setTargetPoolId(2L);
+        item.setTargetPoolId(42L);
+        item.setPoolType("bond_product");
         item.setAdjustMode("调入");
         ForbiddenPoolAdjustCheckReq req = new ForbiddenPoolAdjustCheckReq();
         req.setCompanyCode("C10001");
         req.setItems(Collections.singletonList(item));
 
-        service.checkCompanyAdjust(req);
+        assertThat(service.checkCompanyAdjust(req, context).getItems().get(0).isCanAdjust()).isTrue();
+        assertThat(service.checkCompanyExcelAdjust(req, context, true).getItems().get(0).isCanAdjust()).isTrue();
+        item.setTargetPoolId(null);
+        assertThatThrownBy(() -> service.checkCompanyAdjust(req, context))
+                .isInstanceOf(BizException.class).hasMessageContaining("目标投资池 ID 不能为空");
     }
 
     /** 验证可调投资池仅返回禁投池、观察池、黑名单质押库和重点观察名单，并回填上限与现有数量。 */

@@ -764,10 +764,11 @@ public class ForbiddenPoolAdjustService {
     }
 
     /**
-     * 校验手工选择池范围
+     * 检查调库项和目标池 ID 是否填写
      *
      * 执行顺序：
      * 1. 检查调库项不能为空
+     * 2. 检查目标池 ID 不能为空
      *
      * @param items 明细列表
      */
@@ -776,9 +777,8 @@ public class ForbiddenPoolAdjustService {
             throw new BizException("调库项不能为空");
         }
         for (ForbiddenPoolAdjustCheckReq.CheckItem item : items) {
-            if (item.getTargetPoolId() == null || !ALLOWED_MANUAL_POOL_IDS.contains(item.getTargetPoolId())) {
-                throw new BizException("禁投池调整手工目标池仅允许 15、16、17、23，targetPoolId="
-                        + item.getTargetPoolId());
+            if (item.getTargetPoolId() == null) {
+                throw new BizException("调库项的目标投资池 ID 不能为空");
             }
         }
     }
@@ -800,13 +800,6 @@ public class ForbiddenPoolAdjustService {
             if ((StringUtils.hasText(item.getSecurityCode()) && !company.getCompanyCode().equals(item.getSecurityCode()))
                     || (StringUtils.hasText(item.getSecurityType()) && !COMPANY_SECURITY_TYPE.equals(item.getSecurityType()))) {
                 throw new BizException("主体调库只接受主体调整项，请重新校验后提交");
-            }
-            boolean manual = item.getItemTag() == null || item.getItemTag().isEmpty()
-                    || ItemType.MANUAL.getCode().equals(item.getItemTag());
-            if (manual && (item.getTargetPoolId() == null
-                    || !ALLOWED_MANUAL_POOL_IDS.contains(item.getTargetPoolId()))) {
-                throw new BizException("禁投池调整手工目标池仅允许 15、16、17、23，targetPoolId="
-                        + item.getTargetPoolId());
             }
         }
     }

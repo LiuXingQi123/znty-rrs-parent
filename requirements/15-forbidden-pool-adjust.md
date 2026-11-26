@@ -105,7 +105,7 @@
 ### 3.3 后端 checkCompanyAdjust → checkAdjust 完整逻辑
 
 1. `validateCompanyCode` + `queryCompanyDetail`（null 抛 404「公司主体不存在」）。
-2. `validateManualCheckPoolIds`：每个手工项 `targetPoolId` 必须 ∈ `{15,16,17,23}`（债券禁止库、观察池、黑名单质押库、重点观察名单），否则抛「禁投池调整手工目标池仅允许债券禁止库(15)、观察池(16)、黑名单质押库(17)、重点观察名单(23)」。主体调库类型由后端固定为 `company`，不依赖前端传入。手工可选池范围与权限沿用原规则。
+2. `validateManualCheckPoolIds` 校验调库项及 `targetPoolId` 已填写。主体调库类型由后端固定为 `company`。固定四池范围用于禁投池选池查询。
 3. 将 `ForbiddenPoolAdjustCheckReq` 转为 `AdjustCheckReq`（`securityCode=companyCode`），调本类内部 `checkAdjust(checkReq)`。
 
 `checkAdjust` 五阶段（与证券池调库同源，操作 `forbiddenPoolAdjustMapper`）：主体基础信息读 `wind_compintroduction` ，映射为调库所需最小字段；主体不执行到期、品种、市场校验，保留进行中、重复入/未入池、容量、来源池、限制池、互斥、弹性禁投池等可用规则。
@@ -134,7 +134,7 @@
 入口 `addCompanyAdjustLog(req, files)`，`@Transactional(rollbackFor=Exception.class)`，五阶段：
 
 1. `validateCompanyCode` + `queryCompanyDetail`（404 校验）。
-2. `validateSubmitCompany`：`items` 非空；`securityType` 与 DB 一致；手工项 `targetPoolId` ∈ {15,16,17,23}（债券禁止库、观察池、黑名单质押库、重点观察名单）。
+2. `validateSubmitCompany` 校验 `items` 非空及调整项主体身份一致。目标池 ID 由通用提交校验检查是否填写。
 3. `convertCompanySubmitReq`：把 `ForbiddenPoolAdjustSubmitReq` 转为 `SecurityPoolAdjustSubmitReq`（`securityCode=companyCode`、`securityShortName=COMP_NAME`，保留接口字段名，值使用主体全称）。**不设置 `securityInfo`**（主体信息只读，`postSubmitProcess` 跳过 `editSecurityInfoForAdjust`）。
 4. 调本类 `addAdjustLog(submitReq, files)`：
 
@@ -265,7 +265,7 @@
 - 提交成功后主记录、从属记录、批次号和初始步骤一致。
 - 直通和最终审批通过后即时更新主体池状态，旗下债券由独立任务处理。
 - 校验确认页展示主体手工项及主体在关系池的配套调整。旗下债券由独立定时任务按生效后的主体池状态处理。
-- 手工项目标池必须为债券禁止库(15)/观察池(16)/黑名单质押库(17)/重点观察名单(23)，否则校验拦截。
+- 禁投池页面选池查询按权限提供债券禁止库(15)/观察池(16)/黑名单质押库(17)/重点观察名单(23)。主体校验和提交按实际目标池执行。
 - 仅 `audit_status='20'` 落地 `ip_pool_status`。
 - `ForbiddenPoolAdjustApiTest` 覆盖查询、校验、提交和债券同步业务线。
 

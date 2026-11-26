@@ -113,7 +113,7 @@ public class ForbiddenAbsPoolAdjustService {
     /** 管理员用户 ID */
     private static final String ADMIN_USER_ID = "1";
 
-    /** 禁投池 / 观察池 / 黑名单质押库 / 重点观察名单（ABS 债手工可调范围，与主体禁投一致） */
+    /** ABS 债选池查询范围：禁投池 / 观察池 / 黑名单质押库 / 重点观察名单 */
     private static final Set<Long> ALLOWED_MANUAL_POOL_IDS = new HashSet<>();
 
     static {
@@ -882,7 +882,7 @@ public class ForbiddenAbsPoolAdjustService {
     // ═══════════════════════════════════════════════════════════
 
     /**
-     * 校验 ABS 禁投池调库申请的必填项和手工目标池
+     * 校验 ABS 禁投池调库申请的必填项
      *
      * 对请求入参进行合法性检查，均为内存操作，不涉及任何 DB 查询
      * 任意一项不通过则直接抛出异常，终止后续流程
@@ -890,7 +890,7 @@ public class ForbiddenAbsPoolAdjustService {
      * 执行顺序：
      * 1. 检查证券代码不能为空
      * 2. 检查调库项不能为空
-     * 3. 逐项校验手工目标池仅允许 15/16/17
+     * 3. 逐项检查调整方向和目标池 ID
      *
      * @param req 调库提交请求
      */
@@ -907,11 +907,6 @@ public class ForbiddenAbsPoolAdjustService {
             }
             if (item.getTargetPoolId() == null) {
                 throw new BizException("调库项的目标投资池 ID 不能为空");
-            }
-            // 手工项限制目标池 15/16/17
-            if (isManualSubmitItem(item)) {
-                // 校验手工目标池仅允许 15/16/17
-                validateAllowedManualPoolId(item.getTargetPoolId());
             }
         }
     }
@@ -1942,7 +1937,7 @@ public class ForbiddenAbsPoolAdjustService {
      * 校验 ABS 禁投池调库可行性
      *
      * 执行顺序：
-     * 1. 校验 ABS 证券和允许手工调整的目标池
+     * 1. 检查调库校验请求的必填项
      * 2. 读取证券、投资池和关系等共用数据
      * 3. 按目标池和方向登记手工项，避免生成重复自动项
      * 4. 校验调入项并补充联动和互斥项
@@ -1956,13 +1951,8 @@ public class ForbiddenAbsPoolAdjustService {
      */
     public AdjustCheckDto checkAdjust(ForbiddenAbsPoolAdjustCheckReq req) {
 
-        // 1. 校验 ABS 证券和允许手工调整的目标池
+        // 1. 检查调库校验请求的必填项
         validateCheckAdjustReq(req);
-
-        for (ForbiddenAbsPoolAdjustCheckReq.CheckItem item : req.getItems()) {
-            // 校验手工目标池仅允许 15/16/17
-            validateAllowedManualPoolId(item.getTargetPoolId());
-        }
 
         // 2. 读取证券、投资池和关系等共用数据
         AdjustSharedData shared = loadSharedData(req);
@@ -2019,6 +2009,7 @@ public class ForbiddenAbsPoolAdjustService {
      * 执行顺序：
      * 1. 检查证券代码不能为空
      * 2. 检查调库项不能为空
+     * 3. 逐项检查目标池 ID
      *
      * @param req 调库校验请求
      */
@@ -2028,6 +2019,11 @@ public class ForbiddenAbsPoolAdjustService {
         }
         if (req.getItems() == null || req.getItems().isEmpty()) {
             throw new BizException("调库项不能为空");
+        }
+        for (ForbiddenAbsPoolAdjustCheckReq.CheckItem item : req.getItems()) {
+            if (item.getTargetPoolId() == null) {
+                throw new BizException("调库项的目标投资池 ID 不能为空");
+            }
         }
     }
 
@@ -6118,20 +6114,6 @@ public class ForbiddenAbsPoolAdjustService {
     private void validateAbsSecurity(SecurityInfoBo security) {
         if (!Integer.valueOf(1).equals(security.getAbsFlag())) {
             throw new BizException("非 ABS 债不允许在此调整");
-        }
-    }
-
-    /**
-     * 校验手工目标池仅允许 15/16/17
-     *
-     * 执行顺序：
-     * 1. ABS禁投池调整手工目标池仅允许 15、16、17、23时终止处理
-     *
-     * @param targetPoolId 目标池 ID
-     */
-    private void validateAllowedManualPoolId(Long targetPoolId) {
-        if (targetPoolId == null || !ALLOWED_MANUAL_POOL_IDS.contains(targetPoolId)) {
-            throw new BizException("ABS禁投池调整手工目标池仅允许 15、16、17、23");
         }
     }
 
