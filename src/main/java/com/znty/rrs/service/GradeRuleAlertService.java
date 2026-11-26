@@ -36,12 +36,14 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * 不符合主体债入池规则提醒（含ABS债，担保债取快照担保人内评）（仅债券）
  *
  * 执行顺序：
- * 1. 扫描已在信用债分级库且当前生效的债券
+ * 1. 扫描已在信用债分级库且当前生效的债券，排除受 Excel 入池保护的记录
  * 2. 按当前主体债入池规则复核普通债、ABS 和担保债，其中 ABS 使用主档发行人内评，担保债按本池入库快照确定当时选定的担保人，再查询该担保人最新内评
  * 3. 新增或刷新不符合规则的待办，沿用已处理结论
  * 4. 关闭本轮不再命中的旧待办
@@ -72,6 +74,7 @@ public class GradeRuleAlertService implements RrsScheduledTask {
     private static final String PARAM_HELP =
             "参数说明：本任务无需扩展参数，请将 param_json 留空\n"
                     + "处理范围：扫描已在信用债 1～5 级且生效的债券，含 ABS 债，不含境外债\n"
+                    + "排除范围：Excel 导入生效的当前在池记录（含同批关联和联动调入），以及 Excel 主体跟随入池的债券\n"
                     + "复核规则：按当前主体债入池规则复核，包括特殊债、担保债、观察池和重点观察名单\n"
                     + "评级来源：ABS 的评级主体在确认权益人时已固定到主档发行人字段，直接取主档发行人内评，不查询入库快照；"
                     + "担保债可能对应多个担保人，按当前在池记录的入库快照取当时选定的担保人，再查该担保人最新内评，"
@@ -85,6 +88,10 @@ public class GradeRuleAlertService implements RrsScheduledTask {
     /** 待办 Mapper */
     @Resource
     private GradeRuleAlertMapper gradeRuleAlertMapper;
+
+    /** 识别受 Excel 入池保护的当前在池记录 */
+    @Resource
+    private ExcelPoolExclusionService excelPoolExclusionService;
 
     /** 证券池调库（复用入库规则评估） */
     @Resource
@@ -140,7 +147,7 @@ public class GradeRuleAlertService implements RrsScheduledTask {
      * 执行不符合主体债入池规则提醒（含ABS债，担保债取快照担保人内评）
      *
      * 执行顺序：
-     * 1. 记录扫描条件并查询在池分级债券
+     * 1. 记录扫描条件并查询在池分级债券，识别受 Excel 入池保护的记录
      * 2. 逐条复核主体债入池规则并生成或刷新待办
      * 3. 关闭本轮未再命中的旧待办
      * 4. 统计仍待处理数量并返回任务结果
@@ -158,13 +165,16 @@ public class GradeRuleAlertService implements RrsScheduledTask {
                 + "ip_investment_pool.is_deleted=0、pool_type=credit_bond、inner_sort BETWEEN 1 AND 5、"
                 + "pool_level为空或=2");
 
-        // 1. 查询在池分级债券样本
+        // 1. 查询在池分级债券样本，并读取本轮涉及池的 Excel 入池保护记录
         List<GradeRuleAlertScanDto> inPoolList = gradeRuleAlertMapper.queryGradedBondInPoolList();
         if (inPoolList == null) {
             inPoolList = new ArrayList<GradeRuleAlertScanDto>();
         }
+        Set<Long> poolIds = inPoolList.stream().map(GradeRuleAlertScanDto::getCurrentPoolId).collect(Collectors.toSet());
+        Set<Long> protectedStatusIds = excelPoolExclusionService.loadProtectedStatusIds(poolIds, true);
         detailLog.line("扫描样本（在池分级库记录）" + inPoolList.size() + " 条");
 
+        int excelExcludedCount = 0;
         int hitCount = 0;
         int skippedCount = 0;
         Date scanTime = new Date();
@@ -173,6 +183,11 @@ public class GradeRuleAlertService implements RrsScheduledTask {
         // 3. 逐条复核规则并生成或刷新待办
         for (GradeRuleAlertScanDto row : inPoolList) {
             if (row.getSecurityCode() == null || row.getCurrentPoolId() == null) {
+                continue;
+            }
+            // 按当前在池记录排除 Excel 来源，同券其他入池记录继续复核
+            if (protectedStatusIds.contains(row.getPoolStatusId())) {
+                excelExcludedCount++;
                 continue;
             }
             // ABS 用主档发行人内评，担保债按本池快照取担保人再查最新内评
@@ -188,6 +203,7 @@ public class GradeRuleAlertService implements RrsScheduledTask {
                 skippedCount++;
             }
         }
+        detailLog.line("排除 Excel 入池保护记录 " + excelExcludedCount + " 条");
         detailLog.line("本轮命中（新增/刷新待办）" + hitCount + " 条");
         detailLog.line("沿用已处理结论（同一依据不再提醒）" + skippedCount + " 条");
 

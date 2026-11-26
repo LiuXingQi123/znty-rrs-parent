@@ -52,8 +52,8 @@ public class GradeRuleAlertMapperTest {
         }
         session = new SqlSessionFactoryBuilder().build(configuration).openSession(true);
         try (Statement statement = session.getConnection().createStatement()) {
-            statement.execute("CREATE TABLE ip_pool_status (security_code VARCHAR(40), security_short_name VARCHAR(100),"
-                    + " target_pool_id BIGINT, target_pool_name VARCHAR(100), adjust_log_id BIGINT,"
+            statement.execute("CREATE TABLE ip_pool_status (id BIGINT, security_code VARCHAR(40),"
+                    + " security_short_name VARCHAR(100), target_pool_id BIGINT, target_pool_name VARCHAR(100), adjust_log_id BIGINT,"
                     + " is_deleted INT, audit_status VARCHAR(2))");
             statement.execute("CREATE TABLE ip_investment_pool (id BIGINT, inner_sort INT, pool_type VARCHAR(40),"
                     + " is_deleted INT, pool_level INT)");
@@ -67,11 +67,11 @@ public class GradeRuleAlertMapperTest {
                     + " (9, 1, 'overseas_bond', 0, 2)");
             statement.execute("INSERT INTO rrs_securityinfo VALUES ('ABS.SH', 'ISSUER', '发行主体')");
             statement.execute("INSERT INTO ip_pool_status VALUES"
-                    + " ('ABS.SH', '测试ABS', 2, '一级库', 101, 0, '20'),"
-                    + " ('ABS.SH', '测试ABS', 3, '二级库', 102, 0, '20'),"
-                    + " ('ABS.SH', '旧记录', 2, '一级库', 99, 1, '20'),"
-                    + " ('ABS.SH', '审批中', 2, '一级库', 103, 0, '00'),"
-                    + " ('ABS.SH', '境外债', 9, '境外库', 104, 0, '20')");
+                    + " (11, 'ABS.SH', '测试ABS', 2, '一级库', 101, 0, '20'),"
+                    + " (12, 'ABS.SH', '测试ABS', 3, '二级库', 102, 0, '20'),"
+                    + " (13, 'ABS.SH', '旧记录', 2, '一级库', 99, 1, '20'),"
+                    + " (14, 'ABS.SH', '审批中', 2, '一级库', 103, 0, '00'),"
+                    + " (15, 'ABS.SH', '境外债', 9, '境外库', 104, 0, '20')");
             statement.execute("INSERT INTO ais_inv_analysis.v_inv_grade_result VALUES"
                     + " ('A', '权益人A旧名', '1', TIMESTAMP '2026-01-01 00:00:00'),"
                     + " ('A', '权益人A', '2', TIMESTAMP '2026-10-25 00:00:00'),"
@@ -81,13 +81,13 @@ public class GradeRuleAlertMapperTest {
         }
     }
 
-    /** 同券不同池保留各自来源日志，扫描范围与原来保持一致 */
+    /** 同券不同池保留各自的池状态 ID 和来源日志 */
     @Test
     public void shouldMapExactEntryLogOfEachGradedPool() {
         List<GradeRuleAlertScanDto> rows = session.getMapper(GradeRuleAlertMapper.class).queryGradedBondInPoolList();
-        assertThat(rows).extracting(GradeRuleAlertScanDto::getSecurityCode,
-                GradeRuleAlertScanDto::getCurrentPoolId, GradeRuleAlertScanDto::getAdjustLogId)
-                .containsExactlyInAnyOrder(tuple("ABS.SH", 2L, 101L), tuple("ABS.SH", 3L, 102L));
+        assertThat(rows).extracting(GradeRuleAlertScanDto::getSecurityCode, GradeRuleAlertScanDto::getCurrentPoolId,
+                GradeRuleAlertScanDto::getPoolStatusId, GradeRuleAlertScanDto::getAdjustLogId)
+                .containsExactlyInAnyOrder(tuple("ABS.SH", 2L, 11L, 101L), tuple("ABS.SH", 3L, 12L, 102L));
         assertThat(rows).extracting(GradeRuleAlertScanDto::getIssuerCode).containsOnly("ISSUER");
     }
 

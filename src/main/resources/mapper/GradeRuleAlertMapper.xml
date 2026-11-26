@@ -10,7 +10,8 @@
 
     <!-- 查询已在信用债 1～5 级叶子且生效的债券（对齐老 polidEnum，不含境外债） -->
     <select id="queryGradedBondInPoolList" resultType="com.znty.rrs.entity.graderulealert.GradeRuleAlertScanDto">
-        SELECT ips.security_code
+        SELECT ips.id pool_status_id
+              , ips.security_code
               , ips.adjust_log_id
               , ips.security_short_name
               , si.issuer_code

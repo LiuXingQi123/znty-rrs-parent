@@ -29,6 +29,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -52,6 +53,8 @@ public class GradeRuleAlertServiceTest {
     private CreditBondGradeRuleMapper gradeMapper;
     /** 提醒读写组件 */
     private GradeRuleAlertMapper alertMapper;
+    /** Excel 入池保护查询 */
+    private ExcelPoolExclusionService excelPoolExclusionService;
     /** ABS 主体提醒与状态组件 */
     private AbsIdentityMapper absIdentityMapper;
     /** 投资池查询组件 */
@@ -73,6 +76,7 @@ public class GradeRuleAlertServiceTest {
         securityMapper = mock(SecurityPoolAdjustMapper.class);
         gradeMapper = mock(CreditBondGradeRuleMapper.class);
         alertMapper = mock(GradeRuleAlertMapper.class);
+        excelPoolExclusionService = mock(ExcelPoolExclusionService.class);
         absIdentityMapper = mock(AbsIdentityMapper.class);
         poolMapper = mock(InvestmentPoolMapper.class);
         absCompanySyncService = mock(AbsCompanySyncService.class);
@@ -82,6 +86,7 @@ public class GradeRuleAlertServiceTest {
         ReflectionTestUtils.setField(securityService, "investmentPoolMapper", poolMapper);
         alertService = new GradeRuleAlertService();
         ReflectionTestUtils.setField(alertService, "gradeRuleAlertMapper", alertMapper);
+        ReflectionTestUtils.setField(alertService, "excelPoolExclusionService", excelPoolExclusionService);
         ReflectionTestUtils.setField(alertService, "securityPoolAdjustService", securityService);
         ReflectionTestUtils.setField(alertService, "securityPoolAdjustMapper", securityMapper);
         ReflectionTestUtils.setField(alertService, "absIdentityMapper", absIdentityMapper);
@@ -320,6 +325,34 @@ public class GradeRuleAlertServiceTest {
         assertThat(result.getMessage()).contains("本轮命中 0 条", "本轮失效 1 条");
         verify(gradeMapper).queryAllowedPoolIdsByGradeAndBucket("1", "LE_1");
         verify(alertMapper, never()).addAlert(any(IpGradeRuleAlertBo.class));
+        verify(alertMapper).editStaleOpenAlertInvalid(anyString());
+    }
+
+    /** Excel 入池和主体跟随记录跳过复核，同券其他池仍复核，旧待办继续走失效处理 */
+    @Test
+    public void taskShouldSkipExcelProtectedPoolRecords() {
+        master.setAbsFlag(0);
+        master.setGuarantFlag(1);
+        GradeRuleAlertScanDto excelEntry = scan(2L, null);
+        excelEntry.setPoolStatusId(11L);
+        GradeRuleAlertScanDto excelFollow = scan(2L, null);
+        excelFollow.setPoolStatusId(12L);
+        GradeRuleAlertScanDto manualEntry = scan(3L, 101L);
+        manualEntry.setPoolStatusId(13L);
+        when(alertMapper.queryGradedBondInPoolList()).thenReturn(Arrays.asList(excelEntry, excelFollow, manualEntry));
+        when(excelPoolExclusionService.loadProtectedStatusIds(new HashSet<>(Arrays.asList(2L, 3L)), true))
+                .thenReturn(new HashSet<>(Arrays.asList(11L, 12L)));
+        when(gradeMapper.queryAllowedPoolIdsByGradeAndBucket("1", "LE_1")).thenReturn(Collections.emptyList());
+        when(alertMapper.editStaleOpenAlertInvalid(anyString())).thenReturn(1);
+
+        ScheduledTaskResult result = alertService.execute();
+
+        assertThat(result.getMessage()).contains("本轮命中 1 条", "本轮失效 1 条");
+        assertThat(result.getDetailLog()).contains("排除 Excel 入池保护记录 2 条");
+        verify(securityMapper).querySecuritySnapshotDetailByAdjustLogId(101L, "TEST_ABS.SH");
+        ArgumentCaptor<IpGradeRuleAlertBo> captor = ArgumentCaptor.forClass(IpGradeRuleAlertBo.class);
+        verify(alertMapper).addAlert(captor.capture());
+        assertThat(captor.getValue().getCurrentPoolId()).isEqualTo(3L);
         verify(alertMapper).editStaleOpenAlertInvalid(anyString());
     }
 
