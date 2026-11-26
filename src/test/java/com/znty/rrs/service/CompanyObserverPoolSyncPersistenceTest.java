@@ -270,10 +270,12 @@ public class CompanyObserverPoolSyncPersistenceTest {
         when(poolMapper.queryPoolList()).thenReturn(Arrays.asList(pool(16L, "observe"), pool(23L, "restricted"),
                 pool(17L, "blacklist"), pool(99L, "other")));
         assertThat(service.execute().getAffectedCount()).isEqualTo(1);
-        jdbc.update("INSERT INTO ip_pool_status (security_code,security_short_name,security_type,target_pool_id,audit_status,is_deleted)"
-                + " SELECT security_code,security_short_name,security_type,99,'20',0 FROM ip_pool_status WHERE target_pool_id=16 AND is_deleted=0");
-        jdbc.update("INSERT INTO ip_pool_status (security_code,security_short_name,security_type,target_pool_id,audit_status,is_deleted)"
-                + " SELECT security_code,security_short_name,security_type,97,'20',0 FROM ip_pool_status WHERE target_pool_id=16 AND is_deleted=0");
+        jdbc.update("INSERT INTO ip_pool_status (security_code,security_short_name,security_type,target_pool_id,audit_status,is_deleted,adjust_type)"
+                + " SELECT security_code,security_short_name,security_type,99,'20',0,'手工调整'"
+                + " FROM ip_pool_status WHERE target_pool_id=16 AND is_deleted=0");
+        jdbc.update("INSERT INTO ip_pool_status (security_code,security_short_name,security_type,target_pool_id,audit_status,is_deleted,adjust_type)"
+                + " SELECT security_code,security_short_name,security_type,97,'20',0,'手工调整'"
+                + " FROM ip_pool_status WHERE target_pool_id=16 AND is_deleted=0");
         jdbc.update("INSERT INTO ip_pool_relation VALUES (23,'source',16,0), (23,'in_restrict',15,0), (23,'out_restrict',15,0),"
                 + " (23,'in_linked',17,0), (23,'out_linked',17,0), (23,'in_mutex',99,0), (23,'out_mutex',98,0),"
                 + " (23,'in_soft_restrict',97,0), (23,'out_soft_restrict',97,0), (99,'out_soft_restrict',97,0)");
@@ -322,8 +324,8 @@ public class CompanyObserverPoolSyncPersistenceTest {
         jdbc.update("UPDATE ais_inv_analysis.company_observer_view SET observer_type='3'");
         jdbc.update("INSERT INTO ip_pool_relation VALUES (23,'in_linked',17,0), (23,'out_linked',17,0)");
         assertThat(service.execute().getAffectedCount()).isEqualTo(2);
-        jdbc.update("INSERT INTO ip_pool_status (security_code,security_short_name,security_type,target_pool_id,audit_status,is_deleted)"
-                + " VALUES ('C1','主体一','company',98,'20',0)");
+        jdbc.update("INSERT INTO ip_pool_status (security_code,security_short_name,security_type,target_pool_id,audit_status,is_deleted,adjust_type)"
+                + " VALUES ('C1','主体一','company',98,'20',0,'手工调整')");
         jdbc.update("INSERT INTO ip_pool_relation VALUES (23,'out_mutex',98,0)");
         jdbc.update("UPDATE ais_inv_analysis.company_observer_view SET observer_type='1'");
         ScheduledTaskResult failed = service.execute();

@@ -34,6 +34,50 @@
           )
     </select>
 
+    <!-- 按来源批次查找 CRMW 导入主项及同批配套调入的生效组合 -->
+    <select id="queryExcelProtectedCrmwStatusIds" resultType="java.lang.Long">
+        SELECT ps.id
+        FROM ip_pool_status_crmw ps
+        WHERE ps.audit_status = '20'
+          AND ps.is_deleted = 0
+        <if test="poolIds != null">
+          AND ps.target_pool_id IN
+          <foreach collection="poolIds" item="poolId" open="(" separator="," close=")">
+              #{poolId}
+          </foreach>
+        </if>
+          AND (EXISTS (
+              SELECT 1
+              FROM ip_adjust_log src
+              WHERE src.adjust_batch_no = ps.adjust_batch_no
+                AND src.adjust_type = 'Excel导入'
+                AND src.adjust_mode = '调入'
+                AND src.audit_status = '20'
+                AND src.is_deleted = 0
+          ))
+    </select>
+
+    <!-- 只识别候选中由 Excel 导入或主体跟随决定产生的调库流水 -->
+    <select id="queryExcelOriginAdjustLogIds" resultType="java.lang.Long">
+        SELECT al.id
+        FROM ip_adjust_log al
+        WHERE al.id IN
+        <foreach collection="adjustLogIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+          AND (al.adjust_type = 'Excel导入'
+               OR al.adjust_reason LIKE '【任务名称：%】【主体跟随】（%【Excel主体跟随】%'
+               OR al.adjust_reason LIKE '%依据：主体Excel调出（%'
+               OR EXISTS (
+                   SELECT 1
+                   FROM ip_adjust_log src
+                   WHERE src.adjust_batch_no = al.adjust_batch_no
+                     AND src.adjust_type = 'Excel导入'
+                     AND src.audit_status = '20'
+                     AND src.is_deleted = 0
+               ))
+    </select>
+
     <!-- 读取已生效的 Excel 主体调整流水，含同批联动和互斥记录 -->
     <select id="queryExcelCompanyActions" resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
         SELECT al.id

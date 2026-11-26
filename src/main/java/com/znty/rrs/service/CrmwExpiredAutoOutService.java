@@ -27,6 +27,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * CRMW到期自动出池
@@ -60,7 +61,7 @@ public class CrmwExpiredAutoOutService implements RrsScheduledTask {
     private static final String PARAM_HELP =
             "参数格式：JSON 对象，例如 <code>{\"poolIds\":[18],\"maturityOffsetDays\":1}</code>；也可不填 poolIds，仅扫描投资池关系配置中绑定了本任务的池\n"
                     + PARAM_HELP_TOOLTIP_PREFIX + "数组写法（单池）：<code>{\"poolIds\":[18]}</code>\n"
-                    + PARAM_HELP_TOOLTIP_PREFIX + "配置含义：扫描 18（CRMW库）内已生效的 CRMW 组合，凭证状态为 D 或摘牌日早于截止日时进入候选\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "配置含义：扫描 18（CRMW库）内已生效的 CRMW 组合，凭证状态为 D 或摘牌日早于截止日时进入候选，排除 Excel 导入及同批配套调入\n"
                     + PARAM_HELP_TOOLTIP_PREFIX + "poolIds（CRMW 出池扫描池）：可选；与投资池「关系配置 → 自动调出规则」中绑定本任务的池取并集后扫描\n"
                     + "maturityOffsetDays（到期日期偏移天数）：可选，省略默认 1；须为 int 范围内的整数，允许 0 和负数\n"
                     + "天数含义：按数据库当前日期减去该天数比较凭证摘牌日（不含截止当天）。1=早于昨天，0=早于今天，3=早于三天前，-1=早于明天\n"
@@ -73,6 +74,10 @@ public class CrmwExpiredAutoOutService implements RrsScheduledTask {
     /** 扫描到期的 CRMW 组合并查询调出限制 */
     @Resource
     private AutoAdjustMapper autoAdjustMapper;
+
+    /** Excel 组合入池来源 */
+    @Resource
+    private ExcelPoolExclusionService excelPoolExclusionService;
 
     /** 更新 CRMW 组合池状态并写入业务调库日志 */
     @Resource
@@ -197,6 +202,7 @@ public class CrmwExpiredAutoOutService implements RrsScheduledTask {
         Date submitTime = batchNoContext.getSubmitTime();
         // 3. 读取全量池关系，供调出限制池校验
         List<PoolRelationBo> allRelations = crmwPoolAdjustMapper.queryAllPoolRelationList();
+        Set<Long> protectedIds = excelPoolExclusionService.loadProtectedCrmwStatusIds(poolIds);
         AutoOutSummary summary = new AutoOutSummary();
         // 4. 逐池扫描到期组合，同时标记调出限制命中结果
         for (Long poolId : poolIds) {
@@ -211,6 +217,10 @@ public class CrmwExpiredAutoOutService implements RrsScheduledTask {
                     poolId, RelationType.OUT_RESTRICT.getCode(), allRelations);
             List<ScheduledAdjustCandidateDto> expiredList = autoAdjustMapper.queryCrmwPoolByExpired(
                     poolId, maturityOffsetDays, outRestrictPoolIds);
+            if (expiredList != null) {
+                // 只排除实际由 Excel 入池的状态，同组合其他入池记录继续复核
+                expiredList = ExcelPoolExclusionService.excludeProtectedRows(expiredList, protectedIds);
+            }
             if (expiredList == null || expiredList.isEmpty()) {
                 // 写 INFO 级过程日志并同步任务明细
                 infoDetail(detail, "池[" + pool.getPoolName() + "](" + poolId + ") 无到期 CRMW");
@@ -228,9 +238,8 @@ public class CrmwExpiredAutoOutService implements RrsScheduledTask {
                     warnDetail(detail, "CRMW[" + item.getCrmwScode() + "]当前在调出限制池中，跳过");
                     continue;
                 }
-                // 6. 软删仍在目标池的组合，实际删到才写出池日志
-                int deleted = crmwPoolAdjustMapper.deletePoolStatusSoft(
-                        item.getSecurityCode(), item.getCrmwScode(), item.getCrmwStype(), poolId);
+                // 6. 软删本轮选中的状态，成功后写出池流水
+                int deleted = autoAdjustMapper.deleteExpiredCrmwStatus(item.getPoolStatusId());
                 if (deleted == 0) {
                     // 写 WARN 级过程日志并同步任务明细
                     warnDetail(detail, "CRMW[" + item.getCrmwScode() + "/" + item.getSecurityCode()

@@ -15,7 +15,8 @@
     -->
     <!-- 1. 仅扫描有效CRMW在池组合，不关联证券主档，不对任务候选排序 -->
     <select id="queryCrmwInPoolList" resultType="com.znty.rrs.entity.schedule.CrmwRuleAlertScanDto">
-        SELECT ps.crmw_scode
+        SELECT ps.id AS pool_status_id
+               , ps.crmw_scode
                , ps.crmw_name
                , ps.security_code
                , ps.security_short_name

@@ -226,7 +226,7 @@ Demo 的「任务说明」保存在 `sys_scheduled_task.description`，最多 50
 
 1. `rrs_securityinfo.security_type` 为权威最新类型。
 2. 扫描 `audit_status='20'` 且未删除的 `ip_pool_status`、`ip_pool_status_crmw` 标的证券字段，处理新旧类型均属于有效债券大类的差异。
-3. 条件更新池状态的 `security_type`，并同步该池状态 `adjust_log_id` 指向的当前 `ip_adjust_log.security_type`。
+3. 条件更新池状态的 `security_type`，并同步该池状态 `adjust_log_id` 指向的当前 `ip_adjust_log.security_type`。Excel 来源也参与同步。
 4. 再按 `ip_adjust_log.security_code` 匹配主档 `wind_code`，同步已审批通过且未删除的调入和调出流水。主档最新类型须属于有效债券大类且与流水类型不同。池状态已一致或证券已出池时仍可同步。执行摘要单列本步骤补齐的流水条数，影响条数仍按池状态更新量统计。
 5. 原有 CRMW 凭证类型 `crmw_stype` 及 `ip_adjust_security_snapshot`、`ip_adjust_security_snapshot_crmw` 中提交时保存的证券信息继续保留。
 6. 排在 18:40 临时代码替换之后、22:40 替换之前。22:40 新转正式记录在替换时直接使用正式主数据类型。任务仍早于到期和主体调库，避免后序任务读取旧类型。
@@ -256,15 +256,22 @@ Demo 的「任务说明」保存在 `sys_scheduled_task.description`，最多 50
 1. 扫描 `ip_pool_status_crmw` 中已生效且未删除的凭证与标的组合，包含 ABS 债券作为标的的组合。`ip_pool_status` 中的 CRMW 券由 `security_expired_auto_out` 扫描。
 2. 按凭证 `crmw_scode` 关联证券主档。凭证状态为 D 或凭证摘牌日有值且严格早于截止日时纳入到期候选。`maturityOffsetDays` 规则同 7.0 节，两条任务独立保存参数。
 3. CRMW 组合按凭证状态和摘牌日判断。标的债券单独到期时，组合不会出池。
-4. 扫描候选时按标的证券代码、凭证代码和凭证类型匹配调出限制池。命中则跳过，仅软删成功才写日志。
+4. 按在池状态 ID 排除 Excel 导入及同批配套调入的组合。扫描候选按标的证券代码、凭证代码和凭证类型匹配调出限制池，命中限制则跳过。按本轮选中的状态 ID 软删，成功后写出池流水并计数。
 5. 不走审批。
 6. 最近执行结果展示实际出池总数，并按 CRMW 目标池列出出池数量。
 
 ### Excel 导入的在池保护
 
-证券池 Excel 调入生效后，任务按当前在池记录的调库批次识别导入主项和同批配套项。由 Excel 主体调入派生的普通债跟随记录也受在池保护，遇到主体依据失效时由普通债跟随出池任务处理。到期等自动出池及涉及移除受保护记录的自动换码跳过该记录，自动调入需要互斥调出受保护成员时跳过该组。
+证券池 Excel 调入生效后，任务按当前在池记录的调库批次号匹配已生效的 Excel 调入流水，识别导入主项和同批配套项。由 Excel 主体调入派生的普通债跟随记录也受在池保护，遇到主体依据失效时由普通债跟随出池任务处理。到期等自动出池跳过受保护记录，自动调入需要互斥调出受保护成员时跳过该组。债券临时代码替换和 Wind 代码变更同步也处理 Excel 来源的在池记录。
 
 定时出池、ABS 对账和观察名单同步通过同一 Mapper 查询批量读取受保护的在池记录 ID。候选查询读取任务自身的数据，服务按在池记录 ID 排除或标记。普通债跟随出池仅排除债券独立 Excel 入池记录。
+
+| 任务 | Excel 排除口径 |
+|---|---|
+| CRMW到期自动出池、CRMW关联禁投自动出库、CRMW规则提醒 | 按当前组合状态 ID 跳过 Excel 导入或同批配套调入生效的组合。到期任务软删选中状态成功后写出池流水。关联禁投任务在同组合最后一条生效状态退出时写出池流水。规则提醒原有待办不再命中时失效 |
+| 主体库内债券主体不在池债邮件提醒 | 按当前在池记录 ID 跳过普通池 Excel 入池保护项，包含「Excel主体跟随」 |
+| 质押黑名单库每日增量提醒 | 按原增量水位读取候选，在任务中按流水 ID 排除 Excel 主项、同批配套及 Excel 主体跟随产生的调入和调出 |
+| 外评AA-及以下主体自动入池 | 目标池最近一笔生效的 Excel 主体决定为调出时不补回 |
 
 ### 7.2 主体外评任务
 
@@ -340,7 +347,7 @@ Demo 的「任务说明」保存在 `sys_scheduled_task.description`，最多 50
 
 1. `poolIds` 指定质押黑名单扫描池，默认 `[17]`；当前按目标池精确匹配，不自动展开子池。
 2. 时间窗口为左闭右开 `[windowStart, currentStart)`：后续执行用本任务最近一次成功执行的 `start_time` 作下界，首次执行从当天 `00:00:00` 开始。
-3. 扫描 `ip_adjust_log.audit_status='20'`、未删除且 `audit_time` 位于窗口内的债券/主体调入调出流水。债券须关联证券主档、状态不为 D，且摘牌日为 NULL 或晚于当天。
+3. 扫描 `ip_adjust_log.audit_status='20'`、未删除且 `audit_time` 位于窗口内的债券/主体调入调出流水。债券须关联证券主档、状态不为 D，且摘牌日为 NULL 或晚于当天。查询候选后，由 `ExcelPoolExclusionService` 批量识别来源，任务在 Java 按流水 ID 排除 Excel 导入、同批配套及 Excel 主体跟随流水。
 4. 候选包含证券/主体名称、代码、发行主体、目标池、调整方向和审核时间，写入任务过程日志。
 5. 无增量时仍构造“当日无增量调整”消息，保持老系统每日提醒语义。
 6. 当前 `ScheduledReminderDeliveryService` 明确返回 `delivered=false`，不执行外部发送；接入邮件/站内信时只替换该投递服务。
@@ -351,7 +358,7 @@ Demo 的「任务说明」保存在 `sys_scheduled_task.description`，最多 50
 
 1. `poolIds` 表示债券池与主体池相同；`mappings` 支持 `{bondPoolId, companyPoolId}` 跨池映射；两者去重合并。未配置参数时默认同池 `[15]`。
 2. 扫描 `ip_pool_status` 中债券池内 `audit_status='20'` 的债券，若其 `rrs_securityinfo.issuer_code` 未在对应主体池以 company 大类生效，则进入提醒。
-3. 对齐老系统 `sdc.stype != 38`：排除 `security_type='crmw'`；普通债和 ABS 参与。
+3. 对齐老系统 `sdc.stype != 38`：排除 `security_type='crmw'`；普通债和 ABS 参与，受 Excel 入池保护的当前在池记录跳过。
 4. 发行主体主数据缺失时也进入提醒候选，主体代码/名称留空，便于暴露主数据问题。
 5. 候选包含债券、发行主体、债券所在池，写入任务过程日志。
 6. 当前 `ScheduledReminderDeliveryService` 明确返回 `delivered=false`，不执行外部发送；后续通知实现可直接消费已经组装的 `ScheduledReminderMessageDto.items`。
@@ -510,7 +517,7 @@ TempSecurityCodeService.editWindCodeChangeByJob(change)
 ### CRMW关联禁投自动出库的依赖评估
 
 1. 扫描和出库都在 `CrmwForbiddenAutoOutService`：`execute()` → 私有 `doAutoOutForbidden()` → 通过ObjectProvider取得任务代理后调用本类公开方法 `editCrmwForbiddenOutByJob()`；后者使用 `@Transactional(rollbackFor = Exception.class)` 管理单组合事务，任务入口不加整体事务、不使用TransactionTemplate，也不依赖CrmwPoolAdjustService。人工或导入入口不改，CRMW调入及最终审批校验另行完善
-2. Cron为 `0 7/10 * * * ?`、Demo默认关闭；依赖当前已生效禁止库状态，允许从任意手工、导入、主体联动或自动任务产生的记录统一清退
+2. Cron为 `0 7/10 * * * ?`、Demo默认关闭；依赖当前已生效禁止库状态。清退前按组合状态 ID 排除 Excel 导入及同批配套调入生效的组合
 3. 组合通常一千多条、最多不到一万条，一次读取全部候选，不分页不排序；主档单表批查、禁止库两表批查，不使用全量池映射或多大表复合关联
 4. 每个命中组合独立事务，该条主档异常或状态、日志写入失败时只记录该条错误并继续；正常组合照常提交。结果汇总实际出库和失败数量，不新增禁止库记录；只有公共查询异常才返回任务级失败
 5. 23:07在到期出池之后，23:27在补债／ABS对账之后；01:07早于01:10全量导出，09:07早于09:13提醒；不同taskCode仍无编排，错开不保证前序完成，按实际耗时留间隔

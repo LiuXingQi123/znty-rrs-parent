@@ -11,6 +11,9 @@ import lombok.EqualsAndHashCode;
 @EqualsAndHashCode(callSuper = true)
 public class CrmwRuleAlertScanDto extends IpCrmwRuleAlertBo {
 
+    /** 本条组合的在池状态 ID，用于排除 Excel 入池来源 */
+    private Long poolStatusId;
+
     /** 凭证主档证券类型，用于发现缺失或错误的凭证数据 */
     private String crmwSecurityType;
 

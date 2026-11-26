@@ -283,17 +283,21 @@ public class BatchSecurityAdjustSubmitServiceTest {
         try (SqlSession session = openSession("excel_protection"); Statement sql = session.getConnection().createStatement()) {
             createTables(sql);
             sql.executeUpdate("INSERT INTO ip_adjust_log (adjust_batch_no, adjust_type, adjust_mode, audit_status, is_deleted)"
-                    + " VALUES ('E1', 'Excel导入', '调入', '20', 0), ('E2', 'Excel导入', '调入', '00', 0)");
+                    + " VALUES ('E1', 'Excel导入', '调入', '20', 0), ('E2', 'Excel导入', '调入', '00', 0),"
+                    + " ('E3', 'Excel导入', '调入', '20', 0)");
             sql.executeUpdate("INSERT INTO ip_pool_status (security_code, target_pool_id, adjust_batch_no, adjust_type,"
                     + " audit_status, is_deleted) VALUES ('AAA', 17, 'E1', 'Excel导入', '20', 0),"
-                    + " ('BOND.SH', 17, 'E1', '关联调整', '20', 0), ('BOND.SH', 16, 'E2', '手工调整', '20', 0)");
+                    + " ('BOND.SH', 17, 'E1', '关联调整', '20', 0), ('BOND.SH', 16, 'E2', '手工调整', '20', 0),"
+                    + " ('DIRECT.SH', 17, 'E3', 'Excel导入', '20', 0)");
             SecurityPoolAdjustMapper mapper = session.getMapper(SecurityPoolAdjustMapper.class);
 
             assertThat(mapper.queryExcelProtectedPoolIds("AAA")).containsExactly(17L);
             assertThat(mapper.queryExcelProtectedPoolIds("BOND.SH")).containsExactly(17L);
+            assertThat(mapper.queryExcelProtectedPoolIds("DIRECT.SH")).containsExactly(17L);
             assertEquals(0, mapper.deleteUnprotectedPoolStatusSoft("AAA", 17L));
             assertEquals(0, mapper.deleteUnprotectedPoolStatusSoft("BOND.SH", 17L));
             assertEquals(1, mapper.deleteUnprotectedPoolStatusSoft("BOND.SH", 16L));
+            assertEquals(0, mapper.deleteUnprotectedPoolStatusSoft("DIRECT.SH", 17L));
             assertEquals(1, mapper.deletePoolStatusSoft("AAA", 17L));
             assertThat(mapper.queryExcelProtectedPoolIds("AAA")).isEmpty();
         }

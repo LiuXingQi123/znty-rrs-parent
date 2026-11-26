@@ -167,6 +167,14 @@ public interface AutoAdjustMapper {
                                                            @Param("outRestrictPoolIds") List<Long> outRestrictPoolIds);
 
     /**
+     * 按本轮命中的状态 ID 软删除已到期的 CRMW 组合
+     *
+     * @param poolStatusId 当前生效的组合状态 ID
+     * @return 实际调出的状态条数
+     */
+    int deleteExpiredCrmwStatus(@Param("poolStatusId") Long poolStatusId);
+
+    /**
      * 查询曾有主体生效的池
      *
      * 包含后来已被软删的生效记录，用于覆盖最后一个主体退出后的债券清理

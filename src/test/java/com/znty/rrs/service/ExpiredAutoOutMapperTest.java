@@ -93,9 +93,9 @@ public class ExpiredAutoOutMapperTest {
              Statement jdbc = conn.createStatement()) {
             jdbc.execute("CREATE TABLE ip_pool_status (id BIGINT PRIMARY KEY, target_pool_id BIGINT, security_code VARCHAR(16),"
                     + "security_short_name VARCHAR(16), security_type VARCHAR(16), audit_status VARCHAR(2), is_deleted INT,"
-                    + "adjust_batch_no VARCHAR(24), adjust_reason VARCHAR(100))");
+                    + "adjust_batch_no VARCHAR(24), adjust_reason VARCHAR(100), adjust_type VARCHAR(20) DEFAULT '手工调整', adjust_log_id BIGINT)");
             jdbc.execute("CREATE TABLE ip_adjust_log (adjust_batch_no VARCHAR(24), adjust_type VARCHAR(16),"
-                    + "adjust_mode VARCHAR(8), audit_status VARCHAR(2), is_deleted INT)");
+                    + "adjust_mode VARCHAR(8), audit_status VARCHAR(2), is_deleted INT, id BIGINT)");
             jdbc.execute("CREATE TABLE rrs_securityinfo (wind_code VARCHAR(16), delist_date VARCHAR(8), security_status VARCHAR(1))");
             jdbc.execute("CREATE TABLE dict_security_type (security_type VARCHAR(16), category_type VARCHAR(16), is_deleted INT)");
             jdbc.execute("INSERT INTO dict_security_type VALUES ('mtn','bond',0),('abs','bond',0),"
@@ -106,9 +106,10 @@ public class ExpiredAutoOutMapperTest {
                     + "('CUTOFF',FORMATDATETIME(DATEADD('DAY', -1, CURRENT_DATE),'yyyyMMdd'),'D'),"
                     + "('FUTURE_D','20991231','D'),('FUTURE_L','20991231','L'),('NO_DATE_L',NULL,'L'),"
                     + "('CUTOFF_L',FORMATDATETIME(DATEADD('DAY', -1, CURRENT_DATE),'yyyyMMdd'),'L')");
-            jdbc.execute("INSERT INTO ip_adjust_log VALUES ('BOND_EXCEL','Excel导入','调入','20',0),"
-                    + "('BOND_PENDING','Excel导入','调入','00',0)");
-            jdbc.execute("INSERT INTO ip_pool_status VALUES"
+            jdbc.execute("INSERT INTO ip_adjust_log VALUES ('BOND_EXCEL','Excel导入','调入','20',0,21),"
+                    + "('BOND_PENDING','Excel导入','调入','00',0,22),('BOND_DIRECT_EXCEL','Excel导入','调入','20',0,23)");
+            jdbc.execute("INSERT INTO ip_pool_status (id,target_pool_id,security_code,security_short_name,security_type,"
+                    + "audit_status,is_deleted,adjust_batch_no,adjust_reason) VALUES"
                     + " (1,17,'DIRECT','债券一','mtn','20',0,'BOND_EXCEL',NULL),"
                     + " (2,17,'FOLLOW','债券二','mtn','20',0,'BOND_JOB','【任务名称：补债】【主体跟随】（【Excel主体跟随】）'),"
                     + " (3,23,'DIRECT','债券一','mtn','20',0,'BOND_MANUAL',NULL),"
@@ -126,6 +127,7 @@ public class ExpiredAutoOutMapperTest {
                     + " (15,17,'CUTOFF_L','存续且摘牌日等于截止日','mtn','20',0,'BOND_MANUAL',NULL),"
                     + " (16,17,'NO_DATE','未生效退市债券','mtn','00',0,'BOND_MANUAL',NULL),"
                     + " (17,17,'NO_DATE','已删除退市债券','mtn','20',1,'BOND_MANUAL',NULL)");
+            jdbc.execute("UPDATE ip_pool_status SET adjust_batch_no='BOND_DIRECT_EXCEL',adjust_type='Excel导入' WHERE id=7");
 
             Set<Long> protectedIds = new HashSet<>();
             MappedStatement protection = configuration.getMappedStatement(
@@ -182,7 +184,7 @@ public class ExpiredAutoOutMapperTest {
         BoundSql bound = mapped.getBoundSql(params);
         try (Connection conn = DriverManager.getConnection("jdbc:h2:mem:;MODE=MySQL");
              Statement jdbc = conn.createStatement()) {
-            jdbc.execute("CREATE TABLE ip_pool_status_crmw (target_pool_id BIGINT, security_code VARCHAR(16),"
+            jdbc.execute("CREATE TABLE ip_pool_status_crmw (id BIGINT, target_pool_id BIGINT, security_code VARCHAR(16),"
                     + "security_short_name VARCHAR(16), security_type VARCHAR(16), crmw_name VARCHAR(16),"
                     + "crmw_scode VARCHAR(16), crmw_mktcode VARCHAR(16), crmw_stype VARCHAR(16),"
                     + "audit_status VARCHAR(2), is_deleted INT, pool_type VARCHAR(16))");
@@ -192,18 +194,21 @@ public class ExpiredAutoOutMapperTest {
                     + "('DELISTED_BOND','mtn','20000101','D'),('D_CERT','crmw',NULL,'D'),('L_CERT','crmw','20000101','L'),"
                     + "('D_FUTURE_CERT','crmw','20991231','D'),('L_FUTURE_CERT','crmw','20991231','L')");
             jdbc.execute("INSERT INTO ip_pool_status_crmw VALUES"
-                    + " (18,'ACTIVE_BOND','债券A','mtn','凭证L','L_CERT','NIB','crmw','20',0,'crmw'),"
-                    + " (18,'ACTIVE_BOND','债券A','mtn','凭证D','D_CERT','NIB','crmw','20',0,'crmw'),"
-                    + " (18,'ACTIVE_BOND','债券A','mtn','凭证D未来摘牌','D_FUTURE_CERT','NIB','crmw','20',0,'crmw'),"
-                    + " (18,'DELISTED_BOND','债券B','mtn','凭证L未来摘牌','L_FUTURE_CERT','NIB','crmw','20',0,'crmw')");
+                    + " (1,18,'ACTIVE_BOND','债券A','mtn','凭证L','L_CERT','NIB','crmw','20',0,'crmw'),"
+                    + " (2,18,'ACTIVE_BOND','债券A','mtn','凭证D','D_CERT','NIB','crmw','20',0,'crmw'),"
+                    + " (3,18,'ACTIVE_BOND','债券A','mtn','凭证D未来摘牌','D_FUTURE_CERT','NIB','crmw','20',0,'crmw'),"
+                    + " (4,18,'DELISTED_BOND','债券B','mtn','凭证L未来摘牌','L_FUTURE_CERT','NIB','crmw','20',0,'crmw')");
             try (PreparedStatement prepared = conn.prepareStatement(bound.getSql().replace(MYSQL_CUTOFF, H2_CUTOFF))) {
                 new DefaultParameterHandler(mapped, params, bound).setParameters(prepared);
                 try (ResultSet rows = prepared.executeQuery()) {
                     List<String> certificates = new ArrayList<>();
+                    List<Long> stateIds = new ArrayList<>();
                     while (rows.next()) {
                         certificates.add(rows.getString("crmw_scode"));
+                        stateIds.add(rows.getLong("pool_status_id"));
                     }
                     assertThat(certificates).containsExactly("D_CERT", "D_FUTURE_CERT", "L_CERT");
+                    assertThat(stateIds).containsExactly(2L, 3L, 1L);
                 }
             }
         }

@@ -63,7 +63,7 @@ public class BondSecurityTypeChangeServiceTest {
         verify(mapper).editAdjustLogSecurityType(eq(22L), eq("new_b"), any(Date.class));
     }
 
-    /** 池状态已经一致或已出池时，仍同步已审批通过的调入和调出流水。 */
+    /** 池状态已经一致或已出池时，仍同步已审批通过的调入和调出流水，覆盖 Excel 来源 */
     @Test
     public void executeShouldUpdateApprovedHistoryWithoutPoolCandidates() throws Exception {
         Configuration configuration = new Configuration(new Environment("test", new JdbcTransactionFactory(),
@@ -83,17 +83,23 @@ public class BondSecurityTypeChangeServiceTest {
             sql.execute("CREATE TABLE ip_pool_status_crmw AS SELECT * FROM ip_pool_status WHERE 1=0");
             sql.execute("CREATE TABLE ip_adjust_log (id BIGINT PRIMARY KEY, security_code VARCHAR(32), "
                     + "security_type VARCHAR(32), crmw_stype VARCHAR(32), adjust_mode VARCHAR(8), "
-                    + "audit_status VARCHAR(2), is_deleted INT, updt_time TIMESTAMP)");
+                    + "audit_status VARCHAR(2), is_deleted INT, updt_time TIMESTAMP,"
+                    + "adjust_type VARCHAR(32), adjust_batch_no VARCHAR(64), adjust_reason VARCHAR(256))");
             sql.execute("INSERT INTO dict_security_type VALUES ('abs','bond',0), ('cp','bond',0), "
                     + "('fund','fund',0), ('retired','bond',1)");
             sql.execute("INSERT INTO rrs_securityinfo VALUES ('IN','cp'), ('OUT','cp'), ('FUND','fund'), ('RETIRED','retired')");
             sql.execute("INSERT INTO ip_pool_status VALUES (41,44,'IN','证券','cp','20',0)");
-            sql.execute("INSERT INTO ip_adjust_log VALUES "
+            sql.execute("INSERT INTO ip_adjust_log (id,security_code,security_type,crmw_stype,adjust_mode,audit_status,is_deleted,updt_time) VALUES "
                     + "(42,'IN','abs',NULL,'调入','20',0,NULL), (44,'IN','cp',NULL,'调入','20',0,NULL), "
                     + "(45,'IN','abs',NULL,'调出','20',0,NULL), (46,'OUT','abs','crmw','调出','20',0,NULL), "
                     + "(47,'IN','abs',NULL,'调入','00',0,NULL), (48,'IN','abs',NULL,'调入','20',1,NULL), "
                     + "(49,'MISSING','abs',NULL,'调出','20',0,NULL), (50,'IN','fund',NULL,'调入','20',0,NULL), "
                     + "(51,'FUND','abs',NULL,'调入','20',0,NULL), (52,'RETIRED','abs',NULL,'调入','20',0,NULL)");
+            sql.execute("INSERT INTO ip_adjust_log VALUES "
+                    + "(53,'IN','abs',NULL,'调出','20',0,NULL,'Excel导入','EXCEL_1',NULL),"
+                    + "(54,'IN','abs',NULL,'调入','20',0,NULL,'互斥调整','EXCEL_1',NULL),"
+                    + "(55,'IN','abs',NULL,'调入','20',0,NULL,'自动调整','FOLLOW',"
+                    + "'【任务名称：补债】【主体跟随】（【Excel主体跟随】）')");
             BondSecurityTypeChangeService service = new BondSecurityTypeChangeService();
             ReflectionTestUtils.setField(service, "bondSecurityMaintenanceMapper",
                     session.getMapper(BondSecurityMaintenanceMapper.class));
@@ -102,19 +108,21 @@ public class BondSecurityTypeChangeServiceTest {
 
             assertThat(result.isSuccess()).isTrue();
             assertThat(result.getAffectedCount()).isZero();
-            assertThat(result.getMessage()).contains("补齐 4 条调库流水类型");
+            assertThat(result.getMessage()).contains("补齐 7 条调库流水类型");
             List<String> logTypes = new ArrayList<>();
             try (ResultSet rows = sql.executeQuery("SELECT id, security_type, crmw_stype, updt_time FROM ip_adjust_log ORDER BY id")) {
                 while (rows.next()) {
                     logTypes.add(rows.getString("security_type"));
                     long id = rows.getLong("id");
-                    assertThat(rows.getTimestamp("updt_time") != null).isEqualTo(id == 42 || id == 45 || id == 46 || id == 50);
+                    assertThat(rows.getTimestamp("updt_time") != null)
+                            .isEqualTo(id == 42 || id == 45 || id == 46 || id == 50 || id == 53 || id == 54 || id == 55);
                     if (id == 46) {
                         assertThat(rows.getString("crmw_stype")).isEqualTo("crmw");
                     }
                 }
             }
-            assertThat(logTypes).containsExactly("cp", "cp", "cp", "cp", "abs", "abs", "abs", "cp", "abs", "abs");
+            assertThat(logTypes).containsExactly("cp", "cp", "cp", "cp", "abs", "abs", "abs", "cp", "abs", "abs",
+                    "cp", "cp", "cp");
             assertThat(service.execute().getMessage()).contains("补齐 0 条调库流水类型");
         }
     }

@@ -433,7 +433,8 @@
 
     <!-- 查询到期 CRMW 组合并标记调出限制，按凭证主档状态或摘牌日判断 -->
     <select id="queryCrmwPoolByExpired" resultType="com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto">
-        SELECT ips.security_code
+        SELECT ips.id AS pool_status_id
+               , ips.security_code
                , ips.security_short_name
                , ips.security_type
                , ips.crmw_name
@@ -477,6 +478,16 @@
         ORDER BY ips.crmw_scode ASC
                  , ips.security_code ASC
     </select>
+
+    <!-- 只结束本轮已复核的在池记录，保留同组合的其他入池依据 -->
+    <update id="deleteExpiredCrmwStatus">
+        UPDATE ip_pool_status_crmw
+        SET is_deleted = 1
+           , updt_time = NOW()
+        WHERE id = #{poolStatusId}
+          AND audit_status = '20'
+          AND is_deleted = 0
+    </update>
 
     <!-- 查询曾有主体生效的池，覆盖最后一个主体退出后仍需清理旗下债券的情况 -->
     <select id="queryCompanyHistoricalPoolIds" resultType="java.lang.Long">

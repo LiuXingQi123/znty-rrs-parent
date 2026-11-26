@@ -11,6 +11,7 @@ import com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto;
 import com.znty.rrs.entity.bo.SysScheduledTaskBo;
 import com.znty.rrs.exception.BizException;
 import com.znty.rrs.mapper.AutoAdjustMapper;
+import com.znty.rrs.mapper.ExcelPoolExclusionMapper;
 import com.znty.rrs.mapper.InvestmentPoolMapper;
 import com.znty.rrs.mapper.ScheduledTaskMapper;
 import com.znty.rrs.mapper.SecurityPoolAdjustMapper;
@@ -53,6 +54,10 @@ public class CompanyOuterRatingAaMinusAutoInServiceTest {
         ReflectionTestUtils.setField(service, "pledgeBlacklistRuleService", ruleService);
         AutoAdjustTestSupport.bindPoolScope(service, autoAdjustMapper);
         bindExternalRatingAgency(service);
+        ExcelPoolExclusionMapper exclusions = mock(ExcelPoolExclusionMapper.class);
+        ExcelPoolExclusionService exclusionService = new ExcelPoolExclusionService();
+        ReflectionTestUtils.setField(exclusionService, "excelPoolExclusionMapper", exclusions);
+        ReflectionTestUtils.setField(service, "excelPoolExclusionService", exclusionService);
 
         SysScheduledTaskBo conf = new SysScheduledTaskBo();
         conf.setTaskName("外评AA-及以下主体自动入池");
@@ -118,6 +123,26 @@ public class CompanyOuterRatingAaMinusAutoInServiceTest {
         assertThat(log.getAdjustAdvice()).isNull();
         assertThat(log.getAdjustBatchNo()).matches("COMP\\d{17}1001");
         assertThat(result.getDetailLog()).doesNotContain("批次号");
+
+        IpAdjustLogBo earlier = new IpAdjustLogBo();
+        earlier.setId(1L);
+        earlier.setSecurityCode("C90005");
+        earlier.setTargetPoolId(17L);
+        earlier.setAdjustMode(AdjustMode.IN.getCode());
+        IpAdjustLogBo latest = new IpAdjustLogBo();
+        latest.setId(2L);
+        latest.setSecurityCode("C90005");
+        latest.setTargetPoolId(17L);
+        latest.setAdjustMode(AdjustMode.OUT.getCode());
+        when(exclusions.queryExcelCompanyActions(Collections.singletonList(17L), null))
+                .thenReturn(Arrays.asList(latest, earlier));
+
+        ScheduledTaskResult excluded = service.execute();
+
+        assertThat(excluded.isSuccess()).isTrue();
+        assertThat(excluded.getAffectedCount()).isZero();
+        assertThat(excluded.getDetailLog()).contains("已通过 Excel 调出目标池");
+        verify(securityPoolAdjustMapper, times(1)).addPoolStatus(any(IpAdjustLogBo.class));
     }
 
     /** 验证参数说明包含黑名单质押库入池口径。 */

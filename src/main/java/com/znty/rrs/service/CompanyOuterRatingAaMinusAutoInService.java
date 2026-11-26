@@ -71,6 +71,7 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
                     + "评级临界：AA-及以下因评级入池；AA及以上不因评级入池；空评级/近一年无认可外评不因评级入池，但命中禁止库 15 或重点观察 23 时仍按相应条件入池\n"
                     + "评级口径：近一年（日历年）内配置表中的有效机构多评级取孰低，一年以前忽略；近一年无认可外评不因（二）入库\n"
                     + "限制规则：主体已在目标池配置的调入限制池时，跳过该条记录\n"
+                    + "Excel 调出：目标池最近一次生效的 Excel 决定为调出时跳过\n"
                     + "旗下债券由独立任务同步\n"
                     + "执行方式：直接生效，不走审批；参数格式错误时，本轮任务失败";
 
@@ -101,6 +102,10 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
     /** 外部评级机构配置服务 */
     @Resource
     private ExternalRatingAgencyService externalRatingAgencyService;
+
+    /** 读取各目标池的最新生效 Excel 主体决定 */
+    @Resource
+    private ExcelPoolExclusionService excelPoolExclusionService;
 
     /**
      * 返回与库表绑定的任务编码
@@ -197,6 +202,7 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
         List<String> agencyCodes = externalRatingAgencyService.queryRequiredAgencyCodeList();
         // 2. 合并扩展参数和关系配置中的入池目标池
         List<Long> poolIds = resolvePoolIds(taskName, detail);
+        ExcelPoolExclusionService.CompanyDecisions excelDecisions = excelPoolExclusionService.loadCompanyDecisions(poolIds, null);
         // 写 INFO 级过程日志并同步控制台
         infoDetail(detail, "扫描范围：目标池编号 " + poolIds);
         // 写 INFO 级过程日志并同步控制台
@@ -235,6 +241,12 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
                     poolSkippedCount++;
                     // 记录业务上未处理的主体或债券，不把可预期情况写成任务异常
                     skipDetail(detail, "扫描结果缺少主体编码，无法处理");
+                    continue;
+                }
+                // 目标池最近一次生效的 Excel 主体决定为调出时不再自动补回
+                if (excelDecisions.hasExcelDecision(company.getSecurityCode(), poolId, AdjustMode.OUT)) {
+                    poolSkippedCount++;
+                    skipDetail(detail, "主体【" + company.getSecurityCode() + "】已通过 Excel 调出目标池，本轮不处理");
                     continue;
                 }
                 if (PledgeBlacklistRuleService.BLACKLIST_POOL_ID.equals(poolId)

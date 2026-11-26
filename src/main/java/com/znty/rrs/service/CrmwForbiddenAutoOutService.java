@@ -27,6 +27,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * CRMW关联禁投自动出库
@@ -49,6 +50,10 @@ public class CrmwForbiddenAutoOutService implements RrsScheduledTask {
     /** 扫描及原组合状态更新 */
     @Resource
     private CrmwForbiddenAutoOutMapper crmwForbiddenAutoOutMapper;
+
+    /** Excel 组合入池来源 */
+    @Resource
+    private ExcelPoolExclusionService excelPoolExclusionService;
 
     /** CRMW自动出库日志写入 */
     @Resource
@@ -83,7 +88,7 @@ public class CrmwForbiddenAutoOutService implements RrsScheduledTask {
     public String getParamHelp() {
         return "参数说明：无需扩展参数，请将 param_json 留空\n"
                 + "业务示例：1. 标的债券：A 公司发行的债券；2. CRMW 凭证：由 B 机构创设／提供信用保护\n"
-                + "扫描条件：有效CRMW池中未删除、审批通过的在库组合，一次读取全部有效组合\n"
+                + "扫描条件：有效CRMW池中未删除、审批通过的在库组合，排除 Excel 导入及同批配套调入\n"
                 + "出库条件：标的债券、A公司、CRMW凭证、B机构任一在有效禁止库，合并全部命中原因\n"
                 + "主体口径：标的与凭证分别取各自主档issuer_code，不扩展担保人或未确认ABS权益人\n"
                 + "执行方式：禁投硬规则直接清退，不受人工调库的冻结期、锁定、开放日或调出限制影响\n"
@@ -151,6 +156,11 @@ public class CrmwForbiddenAutoOutService implements RrsScheduledTask {
         detail.line("执行口径：四类对象任一命中即退出原组合，单组合事务，单条失败继续；不检查人工调出限制，不新增禁止库记录");
         // 1. 组合数量不足一万，一次读取全部候选，不再分页或排序
         List<CrmwForbiddenOutCandidateDto> rows = crmwForbiddenAutoOutMapper.queryCrmwInPoolList();
+        Set<Long> poolIds = rows.stream().map(CrmwForbiddenOutCandidateDto::getTargetPoolId).collect(Collectors.toSet());
+        Set<Long> protectedIds = excelPoolExclusionService.loadProtectedCrmwStatusIds(poolIds);
+        int candidateCount = rows.size();
+        rows = rows.stream().filter(row -> !protectedIds.contains(row.getPoolStatusId())).collect(Collectors.toList());
+        detail.line("排除 Excel 入池保护组合 " + (candidateCount - rows.size()) + " 条");
         AutoOutSummary summary = new AutoOutSummary();
         summary.scannedCount = rows.size();
         if (rows.isEmpty()) {
@@ -206,7 +216,7 @@ public class CrmwForbiddenAutoOutService implements RrsScheduledTask {
                 // 5. 准备日志并通过任务代理调用事务方法，失败只回滚当前组合
                 int changed = autoOutCombination(row, reasons, batchContext);
                 summary.outCount += changed;
-                detail.line(context + (changed == 0 ? "原组合已出库，跳过" : "出库已提交，" + String.join("；", reasons)));
+                detail.line(context + (changed == 0 ? "本轮未产生组合出库" : "出库已提交，" + String.join("；", reasons)));
             } catch (Exception e) {
                 summary.failedCount++;
                 log.error("{}处理失败，保留原组合并继续：{}", context, e.getMessage(), e);
@@ -254,7 +264,8 @@ public class CrmwForbiddenAutoOutService implements RrsScheduledTask {
      *
      * 执行顺序：
      * 1. 软删除仍有效的原状态，已退出时返回0且不重复生成日志
-     * 2. 写入已准备的系统自动出库日志，失败时抛出异常回滚本条状态
+     * 2. 该组合仍在目标池时保留其他状态，不写出库流水
+     * 3. 写入已准备的系统自动出库日志，失败时抛出异常回滚本条状态
      *
      * @param row 已核验禁投依据并填写日志字段的组合
      * @return 实际出库数量，0或1
@@ -265,7 +276,12 @@ public class CrmwForbiddenAutoOutService implements RrsScheduledTask {
         if (crmwForbiddenAutoOutMapper.editCrmwPoolStatusOut(row) == 0) {
             return 0;
         }
-        // 2. 写入失败向外抛出，由注解事务撤销本条已软删的池状态
+        // 2. 组合在本池还有有效记录时不对下游报告组合出库
+        if (crmwPoolAdjustMapper.queryCrmwComboInPool(
+                row.getCrmwScode(), row.getCrmwStype(), row.getSecurityCode(), row.getTargetPoolId())) {
+            return 0;
+        }
+        // 3. 写入失败向外抛出，由注解事务撤销本条已软删的池状态
         if (crmwPoolAdjustMapper.addAdjustLog(row) != 1) {
             throw new BizException("出库日志写入失败");
         }

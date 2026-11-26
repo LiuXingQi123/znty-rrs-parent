@@ -3,6 +3,7 @@ package com.znty.rrs.service;
 import com.znty.rrs.entity.schedule.CrmwForbiddenOutCandidateDto;
 import com.znty.rrs.mapper.CrmwForbiddenAutoOutMapper;
 import com.znty.rrs.mapper.CrmwPoolAdjustMapper;
+import com.znty.rrs.mapper.ExcelPoolExclusionMapper;
 import com.znty.rrs.schedule.ScheduledTaskResult;
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.io.Resources;
@@ -73,7 +74,8 @@ public class CrmwForbiddenAutoOutMapperTest {
         // 2. 任务扫描和日志写入共同使用Spring管理的数据库连接
         Configuration config = new Configuration(new Environment("test", new SpringManagedTransactionFactory(), database));
         config.setMapUnderscoreToCamelCase(true);
-        for (String resource : new String[]{"mapper/CrmwForbiddenAutoOutMapper.xml", "mapper/CrmwPoolAdjustMapper.xml"}) {
+        for (String resource : new String[]{"mapper/CrmwForbiddenAutoOutMapper.xml", "mapper/CrmwPoolAdjustMapper.xml",
+                "mapper/ExcelPoolExclusionMapper.xml"}) {
             try (InputStream input = Resources.getResourceAsStream(resource)) {
                 new XMLMapperBuilder(input, config, resource, config.getSqlFragments()).parse();
             }
@@ -85,8 +87,9 @@ public class CrmwForbiddenAutoOutMapperTest {
         context.getDefaultListableBeanFactory().setAllowCircularReferences(false);
         context.getBeanFactory().registerSingleton("crmwForbiddenAutoOutMapper", mapper);
         context.getBeanFactory().registerSingleton("crmwPoolAdjustMapper", session.getMapper(CrmwPoolAdjustMapper.class));
+        context.getBeanFactory().registerSingleton("excelPoolExclusionMapper", session.getMapper(ExcelPoolExclusionMapper.class));
         context.getBeanFactory().registerSingleton("transactionManager", new DataSourceTransactionManager(database));
-        context.register(TransactionConfig.class, CrmwForbiddenAutoOutService.class);
+        context.register(TransactionConfig.class, CrmwForbiddenAutoOutService.class, ExcelPoolExclusionService.class);
         context.refresh();
         service = context.getBean(CrmwForbiddenAutoOutService.class);
         assertThat(AopUtils.isAopProxy(service)).isTrue();
@@ -210,6 +213,28 @@ public class CrmwForbiddenAutoOutMapperTest {
         assertThat(result.getDetailLog()).contains("标的[D2]", "保留原组合并继续");
         assertThat(jdbc.queryForList("SELECT security_code FROM ip_pool_status_crmw WHERE is_deleted=0", String.class)).containsExactly("D2");
         assertThat(jdbc.queryForList("SELECT security_code FROM ip_adjust_log", String.class)).containsExactlyInAnyOrder("D1", "D3");
+    }
+
+    /** 同组合的调出流水只在各池的最后一条生效状态关闭时生成 */
+    @Test
+    public void excelBatchShouldPreserveOnlyItsOwnCombination() {
+        addCombination(1, "C1", "D1", 18);
+        addCombination(2, "C1", "D1", 19);
+        addCombination(3, "C1", "D1", 18);
+        jdbc.execute("UPDATE ip_pool_status_crmw SET adjust_type='联动调整',adjust_batch_no='EXCEL' WHERE id=1");
+        jdbc.execute("INSERT INTO ip_adjust_log(adjust_batch_no,adjust_type,adjust_mode,audit_status,is_deleted)"
+                + " VALUES ('EXCEL','Excel导入','调入','20',0)");
+        jdbc.execute("INSERT INTO ip_pool_status(security_code,target_pool_id,audit_status,is_deleted) VALUES ('B',15,'20',0)");
+
+        ScheduledTaskResult result = service.execute();
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getAffectedCount()).isEqualTo(1);
+        assertThat(result.getDetailLog()).contains("排除 Excel 入池保护组合 1 条");
+        assertThat(jdbc.queryForList("SELECT id FROM ip_pool_status_crmw WHERE is_deleted=0", Long.class))
+                .containsExactly(1L);
+        assertThat(jdbc.queryForList("SELECT target_pool_id FROM ip_adjust_log WHERE adjust_mode='调出'", Long.class))
+                .containsExactly(19L);
     }
 
     /** 超过原500条边界仍一次读取，逐组合独立提交全部出库 */

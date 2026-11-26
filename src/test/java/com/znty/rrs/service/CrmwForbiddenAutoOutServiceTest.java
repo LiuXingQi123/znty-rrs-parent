@@ -39,6 +39,8 @@ public class CrmwForbiddenAutoOutServiceTest {
     private CrmwForbiddenAutoOutMapper mapper;
     /** 自动调库日志数据访问 */
     private CrmwPoolAdjustMapper logMapper;
+    /** Excel 组合入池保护 */
+    private ExcelPoolExclusionService exclusions;
     /** 单组合事务管理器 */
     private PlatformTransactionManager transactionManager;
     /** 本次测试的任务实现 */
@@ -49,10 +51,12 @@ public class CrmwForbiddenAutoOutServiceTest {
     public void setUp() {
         mapper = mock(CrmwForbiddenAutoOutMapper.class);
         logMapper = mock(CrmwPoolAdjustMapper.class);
+        exclusions = mock(ExcelPoolExclusionService.class);
         transactionManager = mock(PlatformTransactionManager.class);
         service = new CrmwForbiddenAutoOutService();
         ReflectionTestUtils.setField(service, "crmwForbiddenAutoOutMapper", mapper);
         ReflectionTestUtils.setField(service, "crmwPoolAdjustMapper", logMapper);
+        ReflectionTestUtils.setField(service, "excelPoolExclusionService", exclusions);
         ProxyFactory proxy = new ProxyFactory(service);
         proxy.setProxyTargetClass(true);
         proxy.addAdvice(new TransactionInterceptor(transactionManager, new AnnotationTransactionAttributeSource()));
@@ -65,6 +69,24 @@ public class CrmwForbiddenAutoOutServiceTest {
                 security("C1", "crmw", "B")));
         when(mapper.editCrmwPoolStatusOut(any())).thenReturn(1);
         when(logMapper.addAdjustLog(any())).thenReturn(1);
+    }
+
+    /** Excel 组合即使命中禁投也留在库内，同组合的普通来源仍然出库 */
+    @Test
+    public void shouldPreserveExcelProtectedCombinations() {
+        CrmwForbiddenOutCandidateDto protectedRow = candidate(7L);
+        CrmwForbiddenOutCandidateDto ordinaryRow = candidate(9L);
+        when(mapper.queryCrmwInPoolList()).thenReturn(Arrays.asList(protectedRow, ordinaryRow));
+        when(exclusions.loadProtectedCrmwStatusIds(Collections.singleton(protectedRow.getTargetPoolId())))
+                .thenReturn(Collections.singleton(7L));
+        when(mapper.queryForbiddenCodeList(anyList())).thenReturn(Collections.singletonList("B1"));
+
+        ScheduledTaskResult result = service.execute();
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getAffectedCount()).isEqualTo(1);
+        verify(mapper).editCrmwPoolStatusOut(ordinaryRow);
+        verify(mapper, never()).editCrmwPoolStatusOut(protectedRow);
     }
 
     /** 债券、A主体、凭证、B主体任一禁投都能独立清退，且只写CRMW出库日志 */
@@ -146,7 +168,7 @@ public class CrmwForbiddenAutoOutServiceTest {
 
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getAffectedCount()).isZero();
-        assertThat(result.getDetailLog()).contains("原组合已出库");
+        assertThat(result.getDetailLog()).contains("本轮未产生组合出库");
         verify(logMapper, never()).addAdjustLog(any());
     }
 

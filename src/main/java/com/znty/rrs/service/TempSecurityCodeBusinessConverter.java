@@ -160,19 +160,6 @@ public class TempSecurityCodeBusinessConverter {
         List<PoolRelationBo> relations = securityPoolAdjustMapper.queryAllPoolRelationList();
         // 3. 检查新代码是否已经在这些池里，记下已经在池的情况，避免重复调入
         readExistingGroupState(plan, codes, poolIds, relations);
-        if (plan.taskLabel != null) {
-            // 定时替换不可结束受线下导入保护的旧码或互斥关系池状态
-            Map<String, List<Long>> protectedPools = new HashMap<>();
-            List<IpPoolStatusBo> affected = new ArrayList<>(plan.active);
-            affected.addAll(plan.activeMutexOut);
-            for (IpPoolStatusBo status : affected) {
-                if (protectedPools.computeIfAbsent(status.getSecurityCode(),
-                        securityPoolAdjustMapper::queryExcelProtectedPoolIds).contains(status.getTargetPoolId())) {
-                    throw new BizException("证券[" + status.getSecurityCode() + "]在池["
-                            + status.getTargetPoolName() + "]受 Excel 导入保护，跳过本次自动换码");
-                }
-            }
-        }
         // 4. 新代码在信用债大库及各级库已有 00/11 申请时，先报错，避免同时处理两份申请
         validateCreditBondPending(codes);
         // 5. 检查调入调出是否符合实际在池情况、市场是否允许，以及是否违反池关系配置

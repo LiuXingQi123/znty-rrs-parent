@@ -39,6 +39,7 @@ public class CrmwRuleAlertTaskServiceTest {
         mapper = mock(CrmwRuleAlertTaskMapper.class);
         grades = mock(CreditBondGradeRuleMapper.class);
         ReflectionTestUtils.setField(service, "crmwRuleAlertTaskMapper", mapper);
+        ReflectionTestUtils.setField(service, "excelPoolExclusionService", mock(ExcelPoolExclusionService.class));
         ReflectionTestUtils.setField(service, "creditBondGradeRuleMapper", grades);
         List<CreditBondInnerRatingGradeBo> list = new ArrayList<>();
         String[] codes = {"1", "2+", "2", "2-", "3+", "3", "3-", "4"};

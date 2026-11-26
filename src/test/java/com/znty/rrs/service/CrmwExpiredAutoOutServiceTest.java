@@ -16,12 +16,12 @@ import com.znty.rrs.schedule.ScheduledTaskResult;
 import org.junit.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.util.Arrays;
 import java.util.Collections;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -42,6 +42,7 @@ public class CrmwExpiredAutoOutServiceTest {
         CrmwExpiredAutoOutService service = new CrmwExpiredAutoOutService();
         ReflectionTestUtils.setField(service, "autoAdjustMapper", mapper);
         ReflectionTestUtils.setField(service, "crmwPoolAdjustMapper", adjustMapper);
+        ReflectionTestUtils.setField(service, "excelPoolExclusionService", mock(ExcelPoolExclusionService.class));
         ReflectionTestUtils.setField(service, "investmentPoolMapper", poolMapper);
         ReflectionTestUtils.setField(service, "scheduledTaskMapper", taskMapper);
         AutoAdjustTestSupport.bindPoolScope(service, mapper);
@@ -53,11 +54,12 @@ public class CrmwExpiredAutoOutServiceTest {
         pool.setPoolName("CRMW库");
         pool.setPoolType("crmw");
         when(poolMapper.queryPoolList()).thenReturn(Collections.singletonList(pool));
-        when(adjustMapper.deletePoolStatusSoft("B001", "CRMW001", "crmw", 18L)).thenReturn(1);
+        when(mapper.deleteExpiredCrmwStatus(91L)).thenReturn(1);
 
         for (int days : new int[]{3, 0, -1}) {
             conf.setParamJson("{\"poolIds\":[18],\"maturityOffsetDays\":" + days + "}");
             ScheduledAdjustCandidateDto item = new ScheduledAdjustCandidateDto();
+            item.setPoolStatusId(91L);
             item.setSecurityCode("B001");
             item.setCrmwScode("CRMW001");
             item.setCrmwStype("crmw");
@@ -101,6 +103,10 @@ public class CrmwExpiredAutoOutServiceTest {
         CrmwExpiredAutoOutService service = new CrmwExpiredAutoOutService();
         ReflectionTestUtils.setField(service, "autoAdjustMapper", autoAdjustMapper);
         ReflectionTestUtils.setField(service, "crmwPoolAdjustMapper", crmwPoolAdjustMapper);
+        ExcelPoolExclusionService exclusions = mock(ExcelPoolExclusionService.class);
+        ReflectionTestUtils.setField(service, "excelPoolExclusionService", exclusions);
+        when(exclusions.loadProtectedCrmwStatusIds(Collections.singletonList(18L)))
+                .thenReturn(Collections.singleton(82L));
         ReflectionTestUtils.setField(service, "investmentPoolMapper", investmentPoolMapper);
         ReflectionTestUtils.setField(service, "scheduledTaskMapper", scheduledTaskMapper);
         AutoAdjustTestSupport.bindPoolScope(service, autoAdjustMapper);
@@ -117,13 +123,20 @@ public class CrmwExpiredAutoOutServiceTest {
         when(crmwPoolAdjustMapper.queryAllPoolRelationList()).thenReturn(Collections.<PoolRelationBo>emptyList());
 
         ScheduledAdjustCandidateDto item = new ScheduledAdjustCandidateDto();
+        item.setPoolStatusId(81L);
         item.setSecurityCode("B001");
         item.setCrmwScode("CRMW001");
         item.setCrmwStype("crmw");
         item.setSecurityStatus("D");
         item.setDelistDate("20991231");
-        when(autoAdjustMapper.queryCrmwPoolByExpired(18L, 1, Collections.emptyList())).thenReturn(Collections.singletonList(item));
-        when(crmwPoolAdjustMapper.deletePoolStatusSoft("B001", "CRMW001", "crmw", 18L)).thenReturn(1);
+        ScheduledAdjustCandidateDto protectedItem = new ScheduledAdjustCandidateDto();
+        protectedItem.setPoolStatusId(82L);
+        protectedItem.setSecurityCode("B001");
+        protectedItem.setCrmwScode("CRMW002");
+        protectedItem.setCrmwStype("crmw");
+        when(autoAdjustMapper.queryCrmwPoolByExpired(18L, 1, Collections.emptyList()))
+                .thenReturn(Arrays.asList(item, protectedItem));
+        when(autoAdjustMapper.deleteExpiredCrmwStatus(81L)).thenReturn(1);
         when(crmwPoolAdjustMapper.addAdjustLog(any(IpAdjustLogBo.class))).thenReturn(1);
 
         ScheduledTaskResult result = service.execute();
@@ -132,7 +145,8 @@ public class CrmwExpiredAutoOutServiceTest {
         assertThat(result.getAffectedCount()).isEqualTo(1);
         assertThat(result.getMessage()).contains("本轮共自动出池 1 条到期 CRMW 组合")
                 .contains("目标池明细：CRMW库(18)：1 条 CRMW 组合");
-        verify(crmwPoolAdjustMapper).deletePoolStatusSoft(eq("B001"), eq("CRMW001"), eq("crmw"), eq(18L));
+        verify(autoAdjustMapper).deleteExpiredCrmwStatus(81L);
+        verify(autoAdjustMapper, never()).deleteExpiredCrmwStatus(82L);
         verify(crmwPoolAdjustMapper).addAdjustLog(any(IpAdjustLogBo.class));
         assertThat(item.getAdjustMode()).isEqualTo(AdjustMode.OUT.getCode());
         assertThat(item.getAuditStatus()).isEqualTo(AuditStatus.APPROVED.getCode());
@@ -152,6 +166,7 @@ public class CrmwExpiredAutoOutServiceTest {
         CrmwExpiredAutoOutService service = new CrmwExpiredAutoOutService();
         ReflectionTestUtils.setField(service, "autoAdjustMapper", autoAdjustMapper);
         ReflectionTestUtils.setField(service, "crmwPoolAdjustMapper", crmwPoolAdjustMapper);
+        ReflectionTestUtils.setField(service, "excelPoolExclusionService", mock(ExcelPoolExclusionService.class));
         ReflectionTestUtils.setField(service, "investmentPoolMapper", investmentPoolMapper);
         ReflectionTestUtils.setField(service, "scheduledTaskMapper", scheduledTaskMapper);
         AutoAdjustTestSupport.bindPoolScope(service, autoAdjustMapper);
@@ -166,11 +181,12 @@ public class CrmwExpiredAutoOutServiceTest {
         when(investmentPoolMapper.queryPoolList()).thenReturn(Collections.singletonList(pool));
         when(crmwPoolAdjustMapper.queryAllPoolRelationList()).thenReturn(Collections.<PoolRelationBo>emptyList());
         ScheduledAdjustCandidateDto item = new ScheduledAdjustCandidateDto();
+        item.setPoolStatusId(91L);
         item.setSecurityCode("B001");
         item.setCrmwScode("CRMW001");
         item.setCrmwStype("crmw");
         when(autoAdjustMapper.queryCrmwPoolByExpired(18L, 1, Collections.emptyList())).thenReturn(Collections.singletonList(item));
-        when(crmwPoolAdjustMapper.deletePoolStatusSoft("B001", "CRMW001", "crmw", 18L)).thenReturn(0);
+        when(autoAdjustMapper.deleteExpiredCrmwStatus(91L)).thenReturn(0);
 
         ScheduledTaskResult result = service.execute();
 

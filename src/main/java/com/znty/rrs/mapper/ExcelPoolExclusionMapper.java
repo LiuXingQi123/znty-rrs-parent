@@ -25,6 +25,22 @@ public interface ExcelPoolExclusionMapper {
                                                @Param("includeCompanyFollow") boolean includeCompanyFollow);
 
     /**
+     * 批量查询由 Excel 导入及同批配套调入形成的生效 CRMW 组合状态
+     *
+     * @param poolIds 目标池范围，空引用时查询全部 CRMW 池
+     * @return 受保护的 CRMW 组合状态 ID
+     */
+    Set<Long> queryExcelProtectedCrmwStatusIds(@Param("poolIds") Collection<Long> poolIds);
+
+    /**
+     * 批量识别候选流水中的 Excel 导入、同批配套及主体跟随记录
+     *
+     * @param adjustLogIds 待判断的调库流水 ID
+     * @return 由 Excel 导入产生的候选流水 ID
+     */
+    Set<Long> queryExcelOriginAdjustLogIds(@Param("adjustLogIds") Collection<Long> adjustLogIds);
+
+    /**
      * 查询生效的主体 Excel 调整流水
      *
      * @param poolIds 目标池范围，空引用时按主体代码范围查询

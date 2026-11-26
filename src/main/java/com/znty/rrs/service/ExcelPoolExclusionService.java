@@ -51,6 +51,40 @@ public class ExcelPoolExclusionService {
     }
 
     /**
+     * 批量读取受 Excel 入池保护的 CRMW 组合状态
+     *
+     * 执行顺序：
+     * 1. 指定空的池范围时直接返回空集合
+     * 2. 按范围读取已生效的 Excel 导入及同批配套组合
+     *
+     * @param poolIds 池范围，为 null 时查询全部 CRMW 池
+     * @return 受保护的 CRMW 组合状态 ID
+     */
+    Set<Long> loadProtectedCrmwStatusIds(Collection<Long> poolIds) {
+        if (poolIds != null && poolIds.isEmpty()) {
+            return Collections.emptySet();
+        }
+        return excelPoolExclusionMapper.queryExcelProtectedCrmwStatusIds(poolIds);
+    }
+
+    /**
+     * 识别本轮增量候选中由 Excel 导入产生的调库流水
+     *
+     * 执行顺序：
+     * 1. 无候选时直接返回空集合
+     * 2. 批量识别候选的导入、同批配套及主体跟随来源
+     *
+     * @param adjustLogIds 本轮候选流水 ID
+     * @return 候选中应按 Excel 来源排除的调库流水 ID
+     */
+    Set<Long> loadExcelOriginAdjustLogIds(Collection<Long> adjustLogIds) {
+        if (adjustLogIds.isEmpty()) {
+            return Collections.emptySet();
+        }
+        return excelPoolExclusionMapper.queryExcelOriginAdjustLogIds(adjustLogIds);
+    }
+
+    /**
      * 读取本轮主体的 Excel 调整决定
      *
      * 执行顺序：
@@ -241,7 +275,7 @@ public class ExcelPoolExclusionService {
          * @param mode 指定的调整方向
          * @return true=最新生效决定为指定方向，false=没有生效决定或方向不同
          */
-        private boolean hasExcelDecision(String issuerCode, Long poolId, AdjustMode mode) {
+        boolean hasExcelDecision(String issuerCode, Long poolId, AdjustMode mode) {
             Map<Long, IpAdjustLogBo> actionsByPool = latestActionsByIssuerAndPool
                     .getOrDefault(issuerCode, Collections.emptyMap());
             IpAdjustLogBo action = actionsByPool.get(poolId);

@@ -648,6 +648,39 @@ public class TempSecurityCodePersistenceTest {
         assertThat(count("SELECT COUNT(*) FROM ip_adjust_log")).isEqualTo(1);
     }
 
+    /** 普通池和 CRMW 的 Excel 在池记录均可随 Wind 换码，正式代码保留导入类型 */
+    @Test
+    public void windShouldConvertExcelEntriesInOrdinaryAndCrmwPools() {
+        when(markets.queryMarketCode("NEW.IB")).thenReturn("NIB");
+        addPool(100L, "[]", 10);
+        addActive("FORMAL.IB", 100L);
+        jdbc.update("UPDATE ip_pool_status SET adjust_type='Excel导入' WHERE security_code='FORMAL.IB'");
+        jdbc.update("UPDATE ip_adjust_log SET adjust_type='Excel导入' WHERE security_code='FORMAL.IB'");
+        addCrmwPool(200L, "[]");
+        IpAdjustLogBo input = baseLog("FORMAL.IB", 200L);
+        input.setCrmwScode("K.IB");
+        input.setCrmwMktcode("NIB");
+        input.setCrmwStype("crmw");
+        input.setPoolType("crmw");
+        input.setTargetPoolName("CRMW池");
+        input.setAdjustType("Excel导入");
+        input.setAuditStatus("20");
+        crmwMapper.addAdjustLog(input);
+        input.setAdjustLogId(input.getId());
+        crmwMapper.addPoolStatus(input);
+
+        assertThat(service.editWindCodeChangeByJob(windChange("E1", "OFFICIAL_ID", "FORMAL.IB", "NEW.IB")))
+                .isEqualTo(WindCodeChangeResult.UPDATED);
+
+        assertThat(activeCodes(100L)).containsExactly("NEW.IB");
+        assertThat(jdbc.queryForObject("SELECT adjust_type FROM ip_pool_status WHERE security_code='NEW.IB' AND is_deleted=0",
+                String.class)).isEqualTo("Excel导入");
+        assertThat(jdbc.queryForList("SELECT security_code FROM ip_pool_status_crmw WHERE crmw_scode='K.IB' AND is_deleted=0",
+                String.class)).containsExactly("NEW.IB");
+        assertThat(jdbc.queryForObject("SELECT adjust_type FROM ip_pool_status_crmw WHERE security_code='NEW.IB' AND is_deleted=0",
+                String.class)).isEqualTo("Excel导入");
+    }
+
     /** 无效日期及登记缺失必须明确拒绝，不能部分更名或补造人工登记。 */
     @Test
     public void windShouldRejectInvalidDateAndMissingTemporaryRegistration() {

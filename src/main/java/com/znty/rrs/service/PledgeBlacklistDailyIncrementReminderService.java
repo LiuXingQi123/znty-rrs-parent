@@ -19,6 +19,7 @@ import java.util.Date;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 import javax.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -29,7 +30,7 @@ import org.springframework.util.StringUtils;
  *
  * 执行顺序：
  * 1. 确定扫描池和增量窗口，首次从当天零点开始，后续从上次成功执行开始时间继续
- * 2. 筛选窗口内审批通过的债券和主体调入调出记录，排除已到期债券
+ * 2. 查询窗口内审批通过的债券和主体调库流水，排除已到期债券，再按流水 ID 排除 Excel 来源
  * 3. 通过 {@link ScheduledReminderDeliveryService} 提交候选明细，记录通知状态和本轮处理结果
  */
 @Slf4j
@@ -54,11 +55,16 @@ public class PledgeBlacklistDailyIncrementReminderService implements RrsSchedule
                     + "poolIds：可选，质押黑名单增量扫描池；未配置时默认 [17]\n"
                     + "增量水位：优先使用本任务上次成功执行开始时间；首次执行从当天 00:00:00 开始\n"
                     + "扫描内容：时间窗口内 audit_status=20 的债券、主体调入调出记录；到期债券不提醒\n"
+                    + "Excel 来源：排除 Excel 导入、同批配套及 Excel 主体跟随产生的调入和调出流水\n"
                     + "消息投递：当前通知通道未接入，仅生成候选明细并写执行过程日志";
 
     /** 提醒查询 Mapper */
     @Resource
     private BondReminderMapper bondReminderMapper;
+
+    /** 批量识别增量候选流水的 Excel 来源 */
+    @Resource
+    private ExcelPoolExclusionService excelPoolExclusionService;
 
     /** 定时任务配置与水位 Mapper */
     @Resource
@@ -99,7 +105,7 @@ public class PledgeBlacklistDailyIncrementReminderService implements RrsSchedule
      *
      * 执行顺序：
      * 1. 读取扫描池和上次成功执行水位，构造左闭右开增量窗口
-     * 2. 查询窗口内审批通过且仍需提醒的债券、主体调库记录
+     * 2. 查询窗口内审批通过的债券、主体调库记录，按流水 ID 排除 Excel 来源
      * 3. 组装消息、写入可追溯明细并调用统一通知投递服务
      * 4. 返回本轮候选数量、通知状态和过程日志
      *
@@ -122,11 +128,17 @@ public class PledgeBlacklistDailyIncrementReminderService implements RrsSchedule
             detail.line("增量窗口：[" + formatTime(windowStart)
                     // 格式化时间
                     + ", " + formatTime(startTime) + ")");
-            // 3. 查询本轮增量提醒候选
+            // 3. 查询本轮增量候选，再按调库流水 ID 排除 Excel 来源
             List<BondReminderDto> sourceList = bondReminderMapper.queryPledgeBlacklistIncrementList(
                     poolIds, windowStart, startTime);
-            List<BondReminderDto> rows = sourceList == null
+            List<BondReminderDto> candidates = sourceList == null
                     ? Collections.<BondReminderDto>emptyList() : sourceList;
+            Set<Long> candidateIds = candidates.stream().map(BondReminderDto::getRecordId).collect(Collectors.toSet());
+            Set<Long> excelLogIds = excelPoolExclusionService.loadExcelOriginAdjustLogIds(candidateIds);
+            List<BondReminderDto> rows = candidates.stream()
+                    .filter(row -> !excelLogIds.contains(row.getRecordId()))
+                    .collect(Collectors.toList());
+            detail.line("排除 Excel 来源调库流水 " + (candidates.size() - rows.size()) + " 条");
             detail.line("扫描完成：增量提醒候选 " + rows.size() + " 条");
             // 4. 生成消息及执行历史中的可追溯明细
             ScheduledReminderMessageDto reminder = buildReminder(rows);

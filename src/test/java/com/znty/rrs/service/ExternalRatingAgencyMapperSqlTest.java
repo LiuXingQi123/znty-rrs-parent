@@ -41,6 +41,17 @@ public class ExternalRatingAgencyMapperSqlTest {
                 .doesNotContain("Excel导入", "Excel主体跟随", "COALESCE(e.rating_value");
     }
 
+    /** 来源池按生效状态筛选主体，已在目标池生效的主体跳过 */
+    @Test
+    public void autoInQuery_ShouldUseEffectivePoolStatusRegardlessOfSource() throws Exception {
+        String xml = readMapper("AutoAdjustMapper.xml");
+
+        assertThat(selectBlock(xml, "queryCompanyInPoolNotInTarget"))
+                .contains("ips.target_pool_id = #{sourcePoolId}", "ips.audit_status = '20'",
+                        "AND NOT EXISTS", "tgt.target_pool_id = #{targetPoolId}", "tgt.audit_status = '20'")
+                .doesNotContain("adjust_type", "ip_adjust_log");
+    }
+
     /** 黑名单质押库校验和定时任务使用相同的评级提取规则 */
     @Test
     public void pledgeRatingQueries_ShouldNormalizeRatingSuffixes() throws Exception {

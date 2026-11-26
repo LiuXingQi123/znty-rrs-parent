@@ -26,6 +26,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * CRMW规则提醒
@@ -48,6 +49,10 @@ public class CrmwRuleAlertTaskService implements RrsScheduledTask {
     /** 任务扫描及待办生成数据访问 */
     @Resource
     private CrmwRuleAlertTaskMapper crmwRuleAlertTaskMapper;
+
+    /** Excel 组合入池来源 */
+    @Resource
+    private ExcelPoolExclusionService excelPoolExclusionService;
 
     /** 复用主体内评档位顺序，不使用信用债准入矩阵 */
     @Resource
@@ -77,7 +82,7 @@ public class CrmwRuleAlertTaskService implements RrsScheduledTask {
     @Override
     public String getParamHelp() {
         return "参数说明：无需扩展参数，请将 param_json 留空\n"
-                + "扫描条件：ip_pool_status_crmw 中未删除、审批通过且投资池有效的 CRMW 组合\n"
+                + "扫描条件：ip_pool_status_crmw 中未删除、审批通过且投资池有效的 CRMW 组合，排除 Excel 导入及同批配套调入\n"
                 + "主体来源：凭证主档发行主体代表创设方或保护方，不使用标的债发行主体\n"
                 + "评级来源：按主体代码查询 v_inv_grade_result 中 ts 最新内评，按启用档位顺序判断\n"
                 + "提醒条件：内评低于3档，或主体已在观察池、重点观察名单；3档本身不触发评级提醒\n"
@@ -161,6 +166,11 @@ public class CrmwRuleAlertTaskService implements RrsScheduledTask {
             throw new BizException("CRMW规则提醒缺少启用的主体内评3档顺序配置");
         }
         List<CrmwRuleAlertScanDto> rows = crmwRuleAlertTaskMapper.queryCrmwInPoolList();
+        Set<Long> poolIds = rows.stream().map(CrmwRuleAlertScanDto::getCurrentPoolId).collect(Collectors.toSet());
+        Set<Long> protectedIds = excelPoolExclusionService.loadProtectedCrmwStatusIds(poolIds);
+        int candidateCount = rows.size();
+        rows = rows.stream().filter(row -> !protectedIds.contains(row.getPoolStatusId())).collect(Collectors.toList());
+        detail.line("排除 Excel 入池保护组合 " + (candidateCount - rows.size()) + " 条");
         // 2. 以本轮在池凭证为范围去重，主档、评级和名单不再跟随组合逐条查询
         Set<String> crmwCodeSet = new LinkedHashSet<>();
         for (CrmwRuleAlertScanDto row : rows) {

@@ -5,6 +5,7 @@ import com.znty.rrs.entity.schedule.BondReminderDto;
 import com.znty.rrs.mapper.BondReminderMapper;
 import com.znty.rrs.mapper.ScheduledTaskMapper;
 import com.znty.rrs.schedule.ScheduledTaskResult;
+import java.util.Arrays;
 import java.util.Collections;
 import org.junit.Test;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -25,17 +26,25 @@ public class BondIssuerNotInCompanyPoolReminderServiceTest {
         BondIssuerNotInCompanyPoolReminderService service =
                 new BondIssuerNotInCompanyPoolReminderService();
         ReflectionTestUtils.setField(service, "bondReminderMapper", reminderMapper);
+        ExcelPoolExclusionService exclusions = mock(ExcelPoolExclusionService.class);
+        ReflectionTestUtils.setField(service, "excelPoolExclusionService", exclusions);
+        when(exclusions.loadProtectedStatusIds(Collections.singleton(17L), true))
+                .thenReturn(Collections.singleton(2L));
         ReflectionTestUtils.setField(service, "scheduledTaskMapper", taskMapper);
         ReflectionTestUtils.setField(service, "reminderDeliveryService", new ScheduledReminderDeliveryService());
         SysScheduledTaskBo conf = new SysScheduledTaskBo();
         conf.setParamJson("{\"mappings\":[{\"bondPoolId\":17,\"companyPoolId\":15}]}");
         BondReminderDto row = new BondReminderDto();
+        row.setRecordId(1L);
         row.setSecurityCode("SEC001");
         row.setSecurityShortName("测试债");
+        BondReminderDto protectedRow = new BondReminderDto();
+        protectedRow.setRecordId(2L);
+        protectedRow.setSecurityCode("SEC002");
         when(taskMapper.queryTaskByCode(BondIssuerNotInCompanyPoolReminderService.TASK_CODE))
                 .thenReturn(conf);
         when(reminderMapper.queryIssuerNotInCompanyPoolBondList(17L, 15L))
-                .thenReturn(Collections.singletonList(row));
+                .thenReturn(Arrays.asList(row, protectedRow));
 
         ScheduledTaskResult result = service.execute();
 
@@ -47,8 +56,10 @@ public class BondIssuerNotInCompanyPoolReminderServiceTest {
                 .contains("债券在 bondPoolId，发行主体不在对应 companyPoolId 的生效主体记录中")
                 .contains("扫描范围：池映射 1 组")
                 .contains("映射 bondPoolId=17，companyPoolId=15，命中 1 条")
+                .contains("排除 Excel 入池保护记录 1 条")
                 .contains("扫描完成：主体不在池债券候选 1 条")
                 .contains("任务结束（成功）：扫描映射 1 组，候选 1 条，通知状态=待接入");
+        assertThat(result.getDetailLog()).doesNotContain("SEC002");
         verify(reminderMapper).queryIssuerNotInCompanyPoolBondList(17L, 15L);
     }
 }

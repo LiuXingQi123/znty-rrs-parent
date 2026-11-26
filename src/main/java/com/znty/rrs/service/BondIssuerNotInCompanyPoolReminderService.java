@@ -17,6 +17,7 @@ import java.util.Date;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 import javax.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -49,12 +50,16 @@ public class BondIssuerNotInCompanyPoolReminderService implements RrsScheduledTa
                     + "<code>{\"mappings\":[{\"bondPoolId\":15,\"companyPoolId\":15}]}</code>\n"
                     + "poolIds：每个 ID 同时作为债券池和主体池；未配置参数时默认 [15]\n"
                     + "mappings：bondPoolId 为债券当前所在池，companyPoolId 为发行主体应在池\n"
-                    + "扫描内容：债券池内 audit_status=20、发行主体不在主体池的债券；排除 CRMW\n"
+                    + "扫描内容：债券池内 audit_status=20、发行主体不在主体池的债券；排除 CRMW 及受 Excel 入池保护的记录\n"
                     + "消息投递：当前通知通道未接入，仅生成候选明细并写执行过程日志";
 
     /** 提醒查询 Mapper */
     @Resource
     private BondReminderMapper bondReminderMapper;
+
+    /** 按当前在池记录识别 Excel 导入来源 */
+    @Resource
+    private ExcelPoolExclusionService excelPoolExclusionService;
 
     /** 定时任务配置 Mapper */
     @Resource
@@ -113,16 +118,25 @@ public class BondIssuerNotInCompanyPoolReminderService implements RrsScheduledTa
             detail.line("扫描条件：ip_pool_status.is_deleted=0、audit_status=20、category_type=bond、"
                     + "security_type!=crmw；债券在 bondPoolId，发行主体不在对应 companyPoolId 的生效主体记录中");
             detail.line("扫描范围：池映射 " + mappings.size() + " 组");
+            Set<Long> bondPoolIds = mappings.stream().map(mapping -> mapping[0]).collect(Collectors.toSet());
+            Set<Long> protectedIds = excelPoolExclusionService.loadProtectedStatusIds(bondPoolIds, true);
             List<BondReminderDto> rows = new ArrayList<BondReminderDto>();
             for (long[] mapping : mappings) {
                 // 2. 按单个池映射扫描主体不在池债券
                 List<BondReminderDto> current = bondReminderMapper.queryIssuerNotInCompanyPoolBondList(
                         mapping[0], mapping[1]);
+                int startCount = rows.size();
                 if (current != null) {
-                    rows.addAll(current);
+                    for (BondReminderDto row : current) {
+                        if (!protectedIds.contains(row.getRecordId())) {
+                            rows.add(row);
+                        }
+                    }
                 }
+                int hitCount = rows.size() - startCount;
                 detail.line("映射 bondPoolId=" + mapping[0] + "，companyPoolId=" + mapping[1]
-                        + "，命中 " + (current == null ? 0 : current.size()) + " 条");
+                        + "，命中 " + hitCount + " 条，排除 Excel 入池保护记录 "
+                        + (current == null ? 0 : current.size() - hitCount) + " 条");
             }
             detail.line("扫描完成：主体不在池债券候选 " + rows.size() + " 条");
             // 3. 生成消息及执行历史中的可追溯明细
