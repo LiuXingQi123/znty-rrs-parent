@@ -26,7 +26,7 @@
                , f.name AS flowName
                , s.node_label AS stepName
                -- 主体禁投：先看 pool_type，旧数据无类型时再用 15/16/17/23 兜底
-               , CASE WHEN al.pool_type = 'crmw' AND NULLIF(al.crmw_scode, '') IS NOT NULL
+               , CASE WHEN al.pool_type = 'crmw' AND al.crmw_scode IS NOT NULL
                      THEN 'crmwAdjust'
                      WHEN dst.category_type = 'company'
                           AND (
@@ -43,12 +43,7 @@
                     SELECT 1
                     FROM ip_adjust_step ps
                     WHERE ps.step_status = 'pending'
-                      AND (
-                          (al.adjust_batch_no IS NOT NULL AND al.adjust_batch_no != ''
-                           AND ps.adjust_batch_no = al.adjust_batch_no)
-                          OR ((al.adjust_batch_no IS NULL OR al.adjust_batch_no = '')
-                              AND ps.adjust_log_id = al.id)
-                      )
+                      AND ps.adjust_batch_no = al.adjust_batch_no
                       <if test="!adminUser">
                           AND ps.handler_id = #{currentUserId}
                           <!-- 发起人只能处理提交/修改语义节点，不能审批自己的后续节点 -->
@@ -205,7 +200,7 @@
                , f.name AS flowName
                , s.node_label AS stepName
                -- 主体禁投：先看 pool_type，旧数据无类型时再用 15/16/17/23 兜底
-               , CASE WHEN al.pool_type = 'crmw' AND NULLIF(al.crmw_scode, '') IS NOT NULL
+               , CASE WHEN al.pool_type = 'crmw' AND al.crmw_scode IS NOT NULL
                      THEN 'crmwAdjust'
                      WHEN dst.category_type = 'company'
                           AND (
@@ -222,12 +217,7 @@
                     SELECT 1
                     FROM ip_adjust_step ps
                     WHERE ps.step_status = 'pending'
-                      AND (
-                          (al.adjust_batch_no IS NOT NULL AND al.adjust_batch_no != ''
-                           AND ps.adjust_batch_no = al.adjust_batch_no)
-                          OR ((al.adjust_batch_no IS NULL OR al.adjust_batch_no = '')
-                              AND ps.adjust_log_id = al.id)
-                      )
+                      AND ps.adjust_batch_no = al.adjust_batch_no
                       <if test="!adminUser">
                           AND ps.handler_id = #{currentUserId}
                           <!-- 发起人只能处理提交/修改语义节点，不能审批自己的后续节点 -->

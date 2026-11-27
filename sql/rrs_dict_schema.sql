@@ -21,7 +21,7 @@ DROP TABLE IF EXISTS `dict_external_rating_agency`;
 -- ----------------------------------------------------------------------------
 CREATE TABLE `dict_external_rating_agency` (
     `id`                          BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
-    `b_info_creditratingagency`   VARCHAR(10)  DEFAULT NULL            COMMENT 'Wind 外部评级机构编码',
+    `b_info_creditratingagency`   VARCHAR(10)  DEFAULT NULL            COMMENT 'Wind 外部评级机构编码，机构配置保证有值，不为 NULL 或空字符串',
     `b_info_creditrating_name`    VARCHAR(100) DEFAULT NULL            COMMENT '外部评级机构名称',
     `s_info_compcode`             VARCHAR(10)  DEFAULT NULL            COMMENT '外部评级机构主体代码',
     `is_deleted`                  TINYINT(1)   DEFAULT NULL            COMMENT '逻辑删除标志：0=正常 / 1=已删除',
@@ -41,7 +41,7 @@ CREATE TABLE `dict_security_type` (
     `id`                 BIGINT      NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
     `security_type`      VARCHAR(64) DEFAULT NULL            COMMENT '证券类型编码，如：company_bond、mtn、ncd、a_share、etf_fund',
     `security_type_name` VARCHAR(64) DEFAULT NULL            COMMENT '证券类型名称，如：公司债、中期票据、同业存单、A股、ETF基金',
-    `category_type`      VARCHAR(32) DEFAULT NULL            COMMENT '大类类型编码（演示数据口径，与 security_type 多对一）：bond=债券 / stock=股票 / fund=基金 / company=公司主体 / index=指数 / warrant=权证 / trust=信托 / private_wealth=私募理财 / unknown=未知',
+    `category_type`      VARCHAR(32) DEFAULT NULL            COMMENT '大类类型编码（演示数据口径，与 security_type 多对一）：bond=债券 / stock=股票 / fund=基金 / company=公司主体 / index=指数 / warrant=权证 / trust=信托 / private_wealth=私募理财 / unknown=未知，字典记录保证有值，不为 NULL 或空字符串',
     `category_type_name` VARCHAR(32) DEFAULT NULL            COMMENT '大类类型名称，与 category_type 对应：债券 / 股票 / 基金 / 公司主体 / 指数 / 权证 / 信托 / 私募理财 / 未知',
     `sort_order`         INT         DEFAULT NULL            COMMENT '排序序号',
     `is_deleted`         TINYINT(1)  DEFAULT NULL            COMMENT '逻辑删除标志：0=正常 / 1=已删除',

@@ -94,8 +94,7 @@ public class IssuerCodeAssociationMapperSqlTest {
         jdbc.update("INSERT INTO rrs_securityinfo VALUES "
                 + "('CURRENT', '同名发行人', 'C001'), ('RENAMED', '发行人新名称', 'C001'),"
                 + "('SAME_NAME', '同名发行人', 'C002'), ('NULL_A', '同名发行人', NULL),"
-                + "('NULL_B', '同名发行人', NULL), ('EMPTY_A', '同名发行人', ''),"
-                + "('EMPTY_B', '同名发行人', '')");
+                + "('NULL_B', '同名发行人', NULL)");
     }
 
     /** 关闭本组测试创建的内存库。 */
@@ -120,13 +119,6 @@ public class IssuerCodeAssociationMapperSqlTest {
     public void shouldNotAssociateNullIssuerCodes() {
         // 验证缺少主体代码时不会回退到名称关联。
         assertThat(associatedCodes("NULL_A")).isEmpty();
-    }
-
-    /** 空字符串主体代码按 SQL 相等条件直接匹配。 */
-    @Test
-    public void shouldUseDirectEqualityForEmptyIssuerCodes() {
-        // 验证空字符串按相等条件得到匹配结果。
-        assertThat(associatedCodes("EMPTY_A")).containsExactlyInAnyOrder("EMPTY_A", "EMPTY_B");
     }
 
     /** 对最小证券数据集执行 Mapper 原有的主体关联条件。 */

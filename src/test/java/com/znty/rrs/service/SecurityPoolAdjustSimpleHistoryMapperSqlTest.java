@@ -51,7 +51,7 @@ public class SecurityPoolAdjustSimpleHistoryMapperSqlTest {
                 + "target_pool_id BIGINT, pool_type VARCHAR(40), adjust_mode VARCHAR(20), flow_type VARCHAR(40),"
                 + "audit_status VARCHAR(10), entry_time TIMESTAMP, is_deleted INT)");
         jdbc.update("INSERT INTO rrs_securityinfo VALUES ('CURRENT','C001'),('SAME_ISSUER','C001'),"
-                + "('OTHER_ISSUER','C002'),('EMPTY_CURRENT',''),('EMPTY_HISTORY',''),"
+                + "('OTHER_ISSUER','C002'),"
                 + "('NULL_CURRENT',NULL),('NULL_HISTORY',NULL)");
         jdbc.update("INSERT INTO dict_security_type VALUES ('company_bond','bond',0),"
                 + "('stock','stock',0),('deleted_bond','bond',1)");
@@ -113,7 +113,7 @@ public class SecurityPoolAdjustSimpleHistoryMapperSqlTest {
     /** 简易流程以及空流程类型不能充当非简易入库经历。 */
     @Test
     public void shouldRejectSimpleOrMissingInboundFlowType() {
-        for (String flowType : new String[]{"simpleInbound", null, ""}) {
+        for (String flowType : new String[]{"simpleInbound", null}) {
             jdbc.update("DELETE FROM ip_pool_status");
             // 未明确记录流程类型时不能认定为非简易入库。
             insertHistory("SAME_ISSUER", flowType, RECENT_ENTRY_TIME);
@@ -173,16 +173,14 @@ public class SecurityPoolAdjustSimpleHistoryMapperSqlTest {
         assertThat(hasHistory("CURRENT", 180)).isFalse();
     }
 
-    /** 不同发行人、缺失或空发行人代码均不得命中同主体经历。 */
+    /** 发行人代码不同或为 NULL 时都不能命中同主体经历 */
     @Test
     public void shouldRequireSameNonEmptyIssuerCode() {
         // 名称不参与关联，发行人代码不同的债券不能提供历史。
         insertHistory("OTHER_ISSUER", "normalInbound", RECENT_ENTRY_TIME);
         assertThat(hasHistory("CURRENT", 180)).isFalse();
-        // 空主体与 NULL 主体均不得相互误认。
-        insertHistory("EMPTY_HISTORY", "normalInbound", RECENT_ENTRY_TIME);
+        // 两条证券的发行人代码均为 NULL 时不能认作同一主体
         insertHistory("NULL_HISTORY", "normalInbound", RECENT_ENTRY_TIME);
-        assertThat(hasHistory("EMPTY_CURRENT", 180)).isFalse();
         assertThat(hasHistory("NULL_CURRENT", 180)).isFalse();
         assertThat(hasHistory("UNKNOWN", 180)).isFalse();
     }

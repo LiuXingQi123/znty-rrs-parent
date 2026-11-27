@@ -61,7 +61,7 @@ public class SecurityPoolAdjustRecentReportMapperSqlTest {
         jdbc.execute("CREATE TABLE sys_attachment (table_name VARCHAR(40), main_id BIGINT,"
                 + "attachment_category VARCHAR(40), is_deleted INT, crte_time TIMESTAMP)");
         jdbc.update("INSERT INTO rrs_securityinfo VALUES ('CURRENT','C001'),('SAME_ISSUER','C001'),"
-                + "('OTHER_ISSUER','C002'),('EMPTY_ISSUER',''),('NULL_ISSUER',NULL)");
+                + "('OTHER_ISSUER','C002'),('NULL_ISSUER',NULL)");
         jdbc.update("INSERT INTO dict_security_type VALUES ('company_bond','bond',0),('stock','stock',0)");
         Configuration configuration = new Configuration();
         String resource = "mapper/SecurityPoolAdjustMapper.xml";
@@ -126,10 +126,10 @@ public class SecurityPoolAdjustRecentReportMapperSqlTest {
         jdbc.update("UPDATE ip_pool_status SET security_code = 'SAME_ISSUER'");
         jdbc.update("UPDATE ip_adjust_log SET security_code = 'SAME_ISSUER'");
         assertThat(hasReport("CURRENT", 180)).isTrue();
-        for (String securityCode : new String[]{"EMPTY_ISSUER", "NULL_ISSUER", "UNKNOWN"}) {
+        for (String securityCode : new String[]{"NULL_ISSUER", "UNKNOWN"}) {
             assertThat(hasReport(securityCode, 180)).as("当前券 %s", securityCode).isFalse();
         }
-        jdbc.update("UPDATE rrs_securityinfo SET issuer_code = '' WHERE wind_code = 'SAME_ISSUER'");
+        jdbc.update("UPDATE rrs_securityinfo SET issuer_code = NULL WHERE wind_code = 'SAME_ISSUER'");
         assertThat(hasReport("CURRENT", 180)).isFalse();
     }
 

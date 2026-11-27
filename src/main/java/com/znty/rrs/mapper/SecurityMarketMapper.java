@@ -18,7 +18,7 @@ public interface SecurityMarketMapper {
      */
     List<SecurityMarketMappingDto> queryMarketMappingList(@Param("windCodes") List<String> windCodes);
     /**
-     * 按非空 ISIN 和共用市场集合查询同券代码，不递归，范围内缺少主档仍保留
+     * 按相同 ISIN 和共用市场集合查询同券代码，不递归，范围内缺少主档仍保留
      *
      * @param windCode Wind 证券代码
      * @param marketCodes 市场代码列表

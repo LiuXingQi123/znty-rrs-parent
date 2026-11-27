@@ -246,8 +246,6 @@
                    ) AS row_num
             FROM ais_inv_ods.wind_cbondissuer issuer
             WHERE issuer.s_info_windcode = #{securityCode}
-              AND issuer.s_info_compcode IS NOT NULL
-              AND issuer.s_info_compcode != ''
               AND issuer.s_info_typecode IN (115004000, 115203000, 115200000, 115201000)
         )
         <!-- 同证券、同主体、同类型仅保留一条；兼多类关系的主体按类型各保留一行 -->
@@ -337,12 +335,11 @@
         <!-- 从投资分析主体表按编码汇总可选择主体，并应用页面查询条件 -->
         WITH source_company AS (
             SELECT company.wind_code AS company_code
-                   , MAX(COALESCE(NULLIF(company.full_name, ''), NULLIF(company.short_names, ''))) AS company_name
+                   , MAX(COALESCE(company.full_name, company.short_names)) AS company_name
             FROM ais_inv_analysis.t_inv_company company
             <where>
                 AND company.wind_code IS NOT NULL
-                AND company.wind_code != ''
-                AND COALESCE(NULLIF(company.full_name, ''), NULLIF(company.short_names, '')) IS NOT NULL
+                AND COALESCE(company.full_name, company.short_names) IS NOT NULL
                 <if test="companyCode != null and companyCode != ''">
                     AND company.wind_code LIKE CONCAT(#{companyCode}, '%')
                 </if>
@@ -413,10 +410,10 @@
         <!-- 按提交编码从投资分析主体表精确读取有效主体 -->
         WITH source_company AS (
             SELECT company.wind_code AS company_code
-                   , MAX(COALESCE(NULLIF(company.full_name, ''), NULLIF(company.short_names, ''))) AS company_name
+                   , MAX(COALESCE(company.full_name, company.short_names)) AS company_name
             FROM ais_inv_analysis.t_inv_company company
             WHERE company.wind_code = #{companyCode}
-              AND COALESCE(NULLIF(company.full_name, ''), NULLIF(company.short_names, '')) IS NOT NULL
+              AND COALESCE(company.full_name, company.short_names) IS NOT NULL
             GROUP BY company.wind_code
         )
         <!-- 读取该主体的内评，并按更新时间倒序编号 -->
@@ -691,7 +688,6 @@
             FROM rrs_securityinfo si
             WHERE si.wind_code = #{securityCode}
               AND si.issuer_code IS NOT NULL
-              AND si.issuer_code != ''
             LIMIT 1
         )
           AND p.pool_type = 'observe'
@@ -722,7 +718,6 @@
             FROM rrs_securityinfo si
             WHERE si.wind_code = #{securityCode}
               AND si.issuer_code IS NOT NULL
-              AND si.issuer_code != ''
             LIMIT 1
         )
           AND p.pool_type = 'restricted'
@@ -930,11 +925,9 @@
             LIMIT 1
         )
           AND si.issuer_code IS NOT NULL
-          AND si.issuer_code != ''
           AND ips.pool_type = 'credit_bond'
           AND ips.adjust_mode = '调入'
           AND ips.flow_type IS NOT NULL
-          AND ips.flow_type != ''
           AND ips.flow_type != 'simpleInbound'
           AND ips.audit_status = '20'
           AND ips.entry_time >= DATE_SUB(NOW(), INTERVAL #{days} DAY)
@@ -958,7 +951,6 @@
             LIMIT 1
         )
           AND si.issuer_code IS NOT NULL
-          AND si.issuer_code != ''
           AND ips.adjust_mode = '调入'
           AND ips.audit_status = '20'
           AND ips.entry_time >= DATE_SUB(NOW(), INTERVAL #{days} DAY)
@@ -989,7 +981,6 @@
             LIMIT 1
         )
           AND si.issuer_code IS NOT NULL
-          AND si.issuer_code != ''
           AND l.adjust_mode = '调入'
           AND l.audit_status = '20'
           AND l.is_deleted = 0
@@ -1011,7 +1002,6 @@
             LIMIT 1
         )
           AND si.issuer_code IS NOT NULL
-          AND si.issuer_code != ''
           AND l.adjust_mode = '调入'
           AND l.audit_status = '20'
           AND l.is_deleted = 0

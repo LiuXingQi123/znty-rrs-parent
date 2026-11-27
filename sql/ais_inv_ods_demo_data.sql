@@ -334,8 +334,8 @@ INSERT INTO `wind_companyfinancial` (
 -- ----------------------------------------------------------------------------
 -- 跨市场证券代码：覆盖全部 55 条主档代码，包含 51 条正式证券及 4 条临时代码。
 -- OBJECT_ID 为简洁 Demo 编号；所有证券代码、ISIN 与状态/类型编码仅用于模拟。
--- 相同且非空的 S_INFO_ISINCODE 表示同券不同市场代码；每组内 EXCHMARKET 各不相同。
--- 四条临时代码和反向换码样例的 ISIN 为空；S_INFO_WINDCODE 与主档、主体关系对齐。
+-- 相同的 S_INFO_ISINCODE 表示同券不同市场代码，每组内 EXCHMARKET 各不相同。
+-- 四条临时代码和反向换码样例各用独立的模拟 ISIN。S_INFO_WINDCODE 与主档、主体关系对齐。
 -- 与外部导入 Demo 均须初始化；两份脚本各自独立，不依赖跨库 SELECT 生成数据。
 -- 银行间交易时间及信用债小类编码未提供原始字典，保持 NULL。
 -- ----------------------------------------------------------------------------
@@ -397,9 +397,9 @@ INSERT INTO `wind_windcustomcode` (
 ('WCC_DEMO_047', 'CORP001.IB', 'S9001047', 'C10007', 'Q', '企债', '中国', 'CN', '其他', 'OTHER', '人民币元', 'CNY', 'CNDEMO000400', 'CORP001', '24科技Corp', 'OTHER', 101001000, NULL, 120001000, 0.001, 10, NULL, NULL, 100003000, NULL, NULL, '2026-10-12', '0'),
 ('WCC_DEMO_048', 'GOVT001.IB', 'S9001048', 'C10001', 'Q', '企债', '中国', 'CN', '其他', 'OTHER', '人民币元', 'CNY', 'CNDEMO000418', 'GOVT001', '24交投Govt', 'OTHER', 101001000, NULL, 120001000, 0.001, 10, NULL, NULL, 100003000, NULL, NULL, '2026-10-12', '0'),
 ('WCC_DEMO_049', 'CP001.IB', 'S9001049', 'C10005', 'Q', '企债', '中国', 'CN', '银行间', 'IB', '人民币元', 'CNY', 'CNDEMO000434', 'CP001', '24地产CP', 'NIB', 101001000, NULL, 120001000, 0.001, 10, NULL, NULL, 100003000, NULL, NULL, '2026-10-12', '0'),
-('WCC_DEMO_050', 'TMP001.IB', NULL, 'C10001', NULL, NULL, '中国', 'CN', '银行间', 'IB', '人民币元', 'CNY', NULL, 'TMP001', '交投临时中票', 'NIB', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-10-12', '0'),
-('WCC_DEMO_051', 'TMP003.IB', NULL, 'C10003', NULL, NULL, '中国', 'CN', '银行间', 'IB', '人民币元', 'CNY', NULL, 'TMP003', '能源临时金融', 'NIB', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-10-12', '0'),
-('WCC_DEMO_052', 'WCTMP001.IB', NULL, 'C10001', NULL, NULL, '中国', 'CN', '银行间', 'IB', '人民币元', 'CNY', NULL, 'WCTMP001', '换码临时中票', 'NIB', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-10-12', '0'),
+('WCC_DEMO_050', 'TMP001.IB', NULL, 'C10001', NULL, NULL, '中国', 'CN', '银行间', 'IB', '人民币元', 'CNY', 'CNDEMO900005', 'TMP001', '交投临时中票', 'NIB', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-10-12', '0'),
+('WCC_DEMO_051', 'TMP003.IB', NULL, 'C10003', NULL, NULL, '中国', 'CN', '银行间', 'IB', '人民币元', 'CNY', 'CNDEMO900013', 'TMP003', '能源临时金融', 'NIB', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-10-12', '0'),
+('WCC_DEMO_052', 'WCTMP001.IB', NULL, 'C10001', NULL, NULL, '中国', 'CN', '银行间', 'IB', '人民币元', 'CNY', 'CNDEMO900021', 'WCTMP001', '换码临时中票', 'NIB', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-10-12', '0'),
 ('WCC_DEMO_053', 'ABG001.IB', 'S9001051', 'C10008', 'Q', '企债', '中国', 'CN', '银行间', 'IB', '人民币元', 'CNY', 'CNDEMO000460', 'ABG001', '25资管担保ABS', 'NIB', 101001000, NULL, 120001000, 0.001, 10, NULL, NULL, 100003000, NULL, NULL, '2026-10-12', '0'),
-('WCC_DEMO_054', 'WCTMP002.IB', 'S9001052', 'C10001', NULL, NULL, '中国', 'CN', '银行间', 'IB', '人民币元', 'CNY', NULL, 'WCTMP002', '未调库临时中票', 'NIB', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-10-12', '0'),
-('WCC_DEMO_055', '102684582.IB', 'S77052872', 'C10001', NULL, NULL, '中国', 'CN', '银行间', 'IB', '人民币元', 'CNY', NULL, '102684582', '反向换码中票', 'NIB', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-11-20', '0');
+('WCC_DEMO_054', 'WCTMP002.IB', 'S9001052', 'C10001', NULL, NULL, '中国', 'CN', '银行间', 'IB', '人民币元', 'CNY', 'CNDEMO900039', 'WCTMP002', '未调库临时中票', 'NIB', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-10-12', '0'),
+('WCC_DEMO_055', '102684582.IB', 'S77052872', 'C10001', NULL, NULL, '中国', 'CN', '银行间', 'IB', '人民币元', 'CNY', 'CNDEMO900047', '102684582', '反向换码中票', 'NIB', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-11-20', '0');

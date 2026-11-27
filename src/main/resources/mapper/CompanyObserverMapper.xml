@@ -20,11 +20,8 @@
         LEFT JOIN ais_inv_analysis.t_inv_company c ON c.id = o.company_id
         WHERE o.company_id IS NOT NULL
           AND o.company_code IS NOT NULL
-          AND o.company_code != ''
           AND c.wind_code IS NOT NULL
-          AND c.wind_code != ''
           AND c.full_name IS NOT NULL
-          AND c.full_name != ''
         <!-- 3. 每个主体只返回一条，观察类型按 3重点观察 > 2观察 > 1空 取最强档 -->
         GROUP BY o.company_code
     </select>

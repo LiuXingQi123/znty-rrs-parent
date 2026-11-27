@@ -272,7 +272,7 @@ public class AbsIdentityMapperIntegrationTest {
     /** 两条链路同时有申请时都参与唯一主体校验，不能因共用日志而读取错快照 */
     @Test
     public void ordinaryAndCrmwPendingShouldReserveIdentityTogether() {
-        jdbc.update("INSERT INTO ip_adjust_log(id,security_code,security_type,target_pool_id,pool_type,crmw_scode,audit_status,is_deleted) VALUES(1,'ABS1','abs',101,'crmw','', '00',0),(2,'ABS1','abs',102,'crmw','CRMW.IB','11',0)");
+        jdbc.update("INSERT INTO ip_adjust_log(id,security_code,security_type,target_pool_id,pool_type,crmw_scode,audit_status,is_deleted) VALUES(1,'ABS1','abs',101,'crmw',NULL,'00',0),(2,'ABS1','abs',102,'crmw','CRMW.IB','11',0)");
         jdbc.update("INSERT INTO ip_adjust_security_snapshot(adjust_log_id,wind_code,issuer_code,is_deleted) VALUES(1,'ABS1','A',0)");
         jdbc.update("INSERT INTO ip_adjust_security_snapshot_crmw(adjust_log_id,wind_code,issuer_code,is_deleted) VALUES(2,'ABS1','B',0)");
         try (SqlSession session = factory.openSession()) {

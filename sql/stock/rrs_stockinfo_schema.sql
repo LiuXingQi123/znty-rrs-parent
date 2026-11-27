@@ -32,7 +32,7 @@ CREATE TABLE `rrs_stockinfo`
     `stock_code`              VARCHAR(32)     DEFAULT NULL                 COMMENT '股票代码，包含市场后缀',
     `stock_name`              VARCHAR(300)    DEFAULT NULL                 COMMENT '股票名称',
     `stock_short_name`        VARCHAR(100)    DEFAULT NULL                 COMMENT '股票简称',
-    `industry_code`           VARCHAR(100)    DEFAULT NULL                 COMMENT '所属行业编码',
+    `industry_code`           VARCHAR(100)    DEFAULT NULL                 COMMENT '所属行业编码，允许 NULL 或空字符串',
     `industry_name`           VARCHAR(100)    DEFAULT NULL                 COMMENT '所属行业名称',
     `security_type`           VARCHAR(64)     DEFAULT NULL                 COMMENT '证券类型：a_share=A股 / hk_share=港股，关联 dict_security_type.security_type',
     `security_status`         VARCHAR(1)      DEFAULT NULL                 COMMENT '证券状态：L=上市 / D=退市 / N=未上市',

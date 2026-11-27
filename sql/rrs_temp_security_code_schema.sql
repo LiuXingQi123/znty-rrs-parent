@@ -33,7 +33,7 @@ CREATE TABLE `rrs_temp_security_code`
     `temp_issue_date`            DATE         DEFAULT NULL            COMMENT '临时发行日期',
     `temp_maturity_date`         DATE         DEFAULT NULL            COMMENT '临时到期日期',
     `security_name`              VARCHAR(200) DEFAULT NULL            COMMENT '正式证券名称',
-    `security_code`              VARCHAR(100) DEFAULT NULL            COMMENT '正式证券代码',
+    `security_code`              VARCHAR(100) DEFAULT NULL            COMMENT '正式证券代码，尚未补齐时为 NULL，不使用空字符串',
     `security_market`            VARCHAR(32)  DEFAULT NULL            COMMENT '正式证券市场：SSE=上海证券交易所 / SZSE=深圳证券交易所 / NIB=银行间市场 / BSE=北京证券交易所 / COMPANY=主体 / OTC=场外市场 / QDII=其他QDII市场 / OTHER=其他',
     `security_type`              VARCHAR(64)  DEFAULT NULL            COMMENT '正式证券类型编码，关联 dict_security_type.security_type',
     `update_time`                DATETIME     DEFAULT NULL            COMMENT '业务更新时间，更新为正式证券或取消发行时写入',

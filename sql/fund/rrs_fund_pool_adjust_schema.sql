@@ -39,7 +39,7 @@ CREATE TABLE `ip_adjust_log_fund`
     `need_risk_leader_approval` TINYINT(1) DEFAULT NULL COMMENT '是否需要风管领导审批：0=否 / 1=是',
     `adjust_type`         VARCHAR(32)   DEFAULT NULL COMMENT '调整类型常见取值：手工调整=人工选择 / 联动调整=关联池联动 / 互斥调整=互斥池调整 / 关联调整=关联池调整 / 自动调整=系统触发 / Excel导入=文件导入 / 手动批量调整=人工批量发起',
     `adjust_mode`         VARCHAR(8)    DEFAULT NULL COMMENT '调整模式：调入=进入目标池 / 调出=退出目标池',
-    `adjust_batch_no`     VARCHAR(64)   DEFAULT NULL COMMENT '基金调库批次号，使用 FUND 前缀，同一组调库记录共用',
+    `adjust_batch_no`     VARCHAR(64)   DEFAULT NULL COMMENT '基金调库批次号，使用 FUND 前缀，同一组调库记录共用，业务保证有值，不为 NULL 或空字符串',
     `target_pool_id`      BIGINT        DEFAULT NULL COMMENT '目标投资池 ID，关联 ip_investment_pool.id',
     `target_pool_name`    VARCHAR(128)  DEFAULT NULL COMMENT '目标投资池名称',
     `pool_type`           VARCHAR(64)   DEFAULT NULL COMMENT '投资池类型快照（业务域可扩展）：credit_bond=信用债 / offshore_bond=境外债 / convertible_bond=转债 / bond_product=债券产品 / special_account=专户 / stock=股票 / stock_product=股票产品 / fund=基金 / forbidden=禁止库 / observe=观察池 / blacklist=黑名单 / restricted=限制名单 / whitelist=白名单 / crmw=CRMW库 / other=其他',

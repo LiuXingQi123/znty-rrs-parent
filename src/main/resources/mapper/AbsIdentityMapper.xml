@@ -14,7 +14,6 @@
         FROM rrs_securityinfo si
         WHERE si.wind_code = #{securityCode}
           AND si.issuer_code IS NOT NULL
-          AND TRIM(si.issuer_code) != ''
         UNION ALL
         SELECT snap.issuer_code
         FROM ip_adjust_log log
@@ -23,7 +22,7 @@
                                                   AND snap.is_deleted = 0
         WHERE log.security_code = #{securityCode} AND log.audit_status IN ('00', '11') AND log.is_deleted = 0
           AND snap.issuer_code IS NOT NULL AND TRIM(snap.issuer_code) != ''
-          AND (log.pool_type IS NULL OR log.pool_type != 'crmw' OR NULLIF(log.crmw_scode, '') IS NULL)
+          AND (log.pool_type IS NULL OR log.pool_type != 'crmw' OR log.crmw_scode IS NULL)
         UNION ALL
         SELECT snap.issuer_code
         FROM ip_adjust_log log
@@ -33,7 +32,7 @@
         WHERE log.security_code = #{securityCode} AND log.audit_status IN ('00', '11') AND log.is_deleted = 0
           AND snap.issuer_code IS NOT NULL AND TRIM(snap.issuer_code) != ''
           AND log.pool_type = 'crmw'
-          AND NULLIF(log.crmw_scode, '') IS NOT NULL
+          AND log.crmw_scode IS NOT NULL
     </select>
 
     <!-- 从证券主档读取非空白的主体代码 -->
@@ -42,7 +41,6 @@
         FROM rrs_securityinfo si
         WHERE si.wind_code = #{securityCode}
           AND si.issuer_code IS NOT NULL
-          AND TRIM(si.issuer_code) != ''
         LIMIT 1
     </select>
 
@@ -56,7 +54,7 @@
                                             AND ps.audit_status = '20'
                                             AND ps.is_deleted = 0
                 WHERE si.wind_code = #{securityCode}
-                  AND (si.issuer_code IS NULL OR TRIM(si.issuer_code) = '')
+                  AND si.issuer_code IS NULL
             )
             OR EXISTS (
                 SELECT 1
@@ -65,7 +63,7 @@
                                                  AND ps.audit_status = '20'
                                                  AND ps.is_deleted = 0
                 WHERE si.wind_code = #{securityCode}
-                  AND (si.issuer_code IS NULL OR TRIM(si.issuer_code) = '')
+                  AND si.issuer_code IS NULL
             )
             OR EXISTS (
                 SELECT 1
@@ -76,7 +74,7 @@
                 WHERE log.security_code = #{securityCode}
                   AND log.audit_status IN ('00', '11')
                   AND log.is_deleted = 0
-                  AND (log.pool_type IS NULL OR log.pool_type != 'crmw' OR NULLIF(log.crmw_scode, '') IS NULL)
+                  AND (log.pool_type IS NULL OR log.pool_type != 'crmw' OR log.crmw_scode IS NULL)
                   AND (snap.issuer_code IS NULL OR TRIM(snap.issuer_code) = '')
             )
             OR EXISTS (
@@ -89,7 +87,7 @@
                   AND log.audit_status IN ('00', '11')
                   AND log.is_deleted = 0
                   AND log.pool_type = 'crmw'
-                  AND NULLIF(log.crmw_scode, '') IS NOT NULL
+                  AND log.crmw_scode IS NOT NULL
                   AND (snap.issuer_code IS NULL OR TRIM(snap.issuer_code) = '')
             )
         )
@@ -135,7 +133,7 @@
         INNER JOIN ip_adjust_security_snapshot snap ON snap.adjust_log_id = log.id
                                                    AND snap.wind_code = log.security_code AND snap.is_deleted = 0
         WHERE log.security_code = #{securityCode} AND log.audit_status IN ('00', '11') AND log.is_deleted = 0
-          AND (log.pool_type IS NULL OR log.pool_type != 'crmw' OR NULLIF(log.crmw_scode, '') IS NULL)
+          AND (log.pool_type IS NULL OR log.pool_type != 'crmw' OR log.crmw_scode IS NULL)
         UNION ALL
         SELECT snap.wind_code
             , snap.issuer
@@ -148,7 +146,7 @@
                                                         AND snap.wind_code = log.security_code AND snap.is_deleted = 0
         WHERE log.security_code = #{securityCode} AND log.audit_status IN ('00', '11') AND log.is_deleted = 0
           AND log.pool_type = 'crmw'
-          AND NULLIF(log.crmw_scode, '') IS NOT NULL
+          AND log.crmw_scode IS NOT NULL
         LIMIT 1
     </select>
 
@@ -160,10 +158,9 @@
             FROM ais_inv_ods.wind_cbondissuer issuer
             WHERE issuer.s_info_windcode = #{securityCode}
               AND issuer.s_info_typecode IN (115004000, 115203000, 115200000, 115201000)
-              AND issuer.s_info_compcode IS NOT NULL AND issuer.s_info_compcode != ''
             UNION
             SELECT issuer_code FROM rrs_securityinfo
-            WHERE wind_code = #{securityCode} AND issuer_code IS NOT NULL AND issuer_code != ''
+            WHERE wind_code = #{securityCode} AND issuer_code IS NOT NULL
         )
         <!-- 按主体返回指定池的在池状态和跨池最新生效日志 ID，无日志时填 0 -->
         SELECT CONCAT(c.company_code, ':'

@@ -69,7 +69,7 @@ CREATE TABLE `ip_adjust_security_snapshot`
     `date_exists_str`            VARCHAR(20)    DEFAULT NULL COMMENT '证券期限（如：3年6天、3年6个月3天、6个月3天、6天）',
     `fund_use`                   LONGTEXT       DEFAULT NULL COMMENT '资金募集用途',
     `prompt_reason`              LONGTEXT       DEFAULT NULL COMMENT '观察事项',
-    `analysis`                   LONGTEXT       DEFAULT NULL COMMENT '证券分析，最大输入长度 5000 字',
+    `analysis`                   LONGTEXT       DEFAULT NULL COMMENT '证券分析，最大输入长度 5000 字，允许 NULL 或空字符串',
 
     -- ========== 预留：与 rrs_securityinfo 对应的仍用同名同类型 ==========
     `term_year`                  DECIMAL(10, 4) DEFAULT NULL COMMENT '证券期限(年)',

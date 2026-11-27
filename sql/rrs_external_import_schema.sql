@@ -38,7 +38,7 @@ CREATE TABLE `rrs_securityinfo`
     `sec_typename`               varchar(300)    DEFAULT NULL COMMENT '品种类别',
     `comp_type`                  varchar(100)    DEFAULT NULL COMMENT '发行人类型',
     `issuer`                     varchar(100)    DEFAULT NULL COMMENT '发行人',
-    `issuer_code`                varchar(20)     DEFAULT NULL COMMENT '发行人代码',
+    `issuer_code`                varchar(20)     DEFAULT NULL COMMENT '发行人代码，允许 NULL，不使用空字符串',
 
     -- ==========================================
     -- 发行与基本条款信息
@@ -70,7 +70,7 @@ CREATE TABLE `rrs_securityinfo`
     `repurchase_price`           decimal(10, 4)  DEFAULT NULL COMMENT '回售价格',
     `repurchase_content`         longtext        COMMENT '回售条款',
     `payment_date`               varchar(10)     DEFAULT NULL COMMENT '兑付起始日',
-    `delist_date`                varchar(10)     DEFAULT NULL COMMENT '摘牌日（业务到期日，格式 yyyyMMdd）',
+    `delist_date`                varchar(10)     DEFAULT NULL COMMENT '摘牌日（业务到期日，格式 yyyyMMdd），允许 NULL，不使用空字符串',
     `securities_types_dq`        int             DEFAULT NULL COMMENT '短期融资券,如果F4_1090等于DQ时-1,否则为0',
     `coupon_desc`                longtext        COMMENT '利率说明',
     `issue_type`                 varchar(100)    DEFAULT NULL COMMENT '发行方式',

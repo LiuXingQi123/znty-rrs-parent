@@ -368,7 +368,6 @@
             FROM rrs_securityinfo si
             WHERE si.wind_code = #{securityCode}
               AND si.issuer_code IS NOT NULL
-              AND si.issuer_code != ''
             LIMIT 1
         )
           AND p.pool_type = 'observe'
@@ -399,7 +398,6 @@
             FROM rrs_securityinfo si
             WHERE si.wind_code = #{securityCode}
               AND si.issuer_code IS NOT NULL
-              AND si.issuer_code != ''
             LIMIT 1
         )
           AND p.pool_type = 'restricted'

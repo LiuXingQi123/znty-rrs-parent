@@ -34,7 +34,7 @@ CREATE TABLE `wind_cbondissuer` (
     `object_id`                    VARCHAR(100)  NOT NULL     COMMENT '对象 ID',
     `s_info_windcode`              VARCHAR(40)   DEFAULT NULL COMMENT 'Wind 证券代码（与主体组合构成本表业务粒度）',
     `s_info_compname`              VARCHAR(100)  DEFAULT NULL COMMENT '发行主体名称',
-    `s_info_compcode`              VARCHAR(10)   DEFAULT NULL COMMENT '发行主体代码（同一主体可对应多行债券）',
+    `s_info_compcode`              VARCHAR(10)   DEFAULT NULL COMMENT '发行主体代码（同一主体可对应多行债券），上游保证有值，不为 NULL 或空字符串',
     `used`                         INT           DEFAULT NULL COMMENT '使用标识：1=有效 / 0=无效',
     `s_info_compind_code1`         VARCHAR(50)   DEFAULT NULL COMMENT '一级行业代码',
     `s_info_compind_name1`         VARCHAR(100)  DEFAULT NULL COMMENT '一级行业名称',
@@ -69,10 +69,10 @@ CREATE TABLE `wind_cbondissuerrating` (
     `s_info_compname`              VARCHAR(100)  DEFAULT NULL COMMENT '公司名称',
     `ann_dt`                       VARCHAR(8)    DEFAULT NULL COMMENT '评级日期，yyyyMMdd',
     `b_rate_style`                 VARCHAR(100)  DEFAULT NULL COMMENT '评级类型',
-    `b_info_creditrating`          VARCHAR(40)   DEFAULT NULL COMMENT '主体信用评级',
+    `b_info_creditrating`          VARCHAR(40)   DEFAULT NULL COMMENT '主体信用评级，允许 NULL，不使用空字符串',
     `b_rate_ratingoutlook`         DOUBLE        DEFAULT NULL COMMENT '评级展望',
     `b_info_creditratingagency`    VARCHAR(10)   DEFAULT NULL COMMENT '评级机构；有效外评机构由 znty_rrs.dict_external_rating_agency 配置',
-    `s_info_compcode`              VARCHAR(10)   DEFAULT NULL COMMENT '公司代码',
+    `s_info_compcode`              VARCHAR(10)   DEFAULT NULL COMMENT '公司代码，上游保证有值，不为 NULL 或空字符串',
     `b_info_creditratingexplain`   VARCHAR(1000) DEFAULT NULL COMMENT '评级说明',
     `b_info_precreditrating`       VARCHAR(40)   DEFAULT NULL COMMENT '前次主体信用评级',
     `b_creditratingchange`         VARCHAR(10)   DEFAULT NULL COMMENT '信用评级变动',
@@ -90,11 +90,11 @@ CREATE TABLE `wind_cbondissuerrating` (
 -- 3. Wind 跨市场证券代码关联表
 -- 创建 Wind 跨市场证券代码关联表
 -- 外部源结构按截图保留 28 列的名称、类型与顺序，不追加业务主键或时间字段。
--- S_INFO_WINDCODE 对齐 znty_rrs.rrs_securityinfo.wind_code；相同非空 ISIN 表示同券。
+-- S_INFO_WINDCODE 对齐 znty_rrs.rrs_securityinfo.wind_code；相同 ISIN 表示同券。
 -- ----------------------------------------------------------------------------
 CREATE TABLE `wind_windcustomcode` (
     `OBJECT_ID`                  VARCHAR(100) NOT NULL     COMMENT '对象 ID',
-    `S_INFO_WINDCODE`            VARCHAR(40)  DEFAULT NULL COMMENT 'Wind 证券代码，对齐 rrs_securityinfo.wind_code',
+    `S_INFO_WINDCODE`            VARCHAR(40)  DEFAULT NULL COMMENT 'Wind 证券代码，对齐 rrs_securityinfo.wind_code，上游保证有值，不为 NULL 或空字符串',
     `S_INFO_ASHARECODE`          VARCHAR(10)  DEFAULT NULL COMMENT 'Wind 内部证券代码',
     `S_INFO_COMPCODE`            VARCHAR(10)  DEFAULT NULL COMMENT '发行主体代码',
     `S_INFO_SECURITIESTYPES`     VARCHAR(10)  DEFAULT NULL COMMENT '证券类型，截图样本：Q=企债 / K=可转换债券',
@@ -105,7 +105,7 @@ CREATE TABLE `wind_windcustomcode` (
     `S_INFO_EXCHMARKET`          VARCHAR(10)  DEFAULT NULL COMMENT '交易市场代码，Demo：IB=银行间 / SSE=上海 / SZSE=深圳',
     `CRNCY_NAME`                VARCHAR(40)  DEFAULT NULL COMMENT '币种名称',
     `CRNCY_CODE`                VARCHAR(10)  DEFAULT NULL COMMENT '币种代码，如 CNY',
-    `S_INFO_ISINCODE`           VARCHAR(40)  DEFAULT NULL COMMENT '国际证券识别码，相同非空值表示同一只券，NULL 不作为关联依据',
+    `S_INFO_ISINCODE`           VARCHAR(40)  DEFAULT NULL COMMENT '国际证券识别码，上游保证不为 NULL 或空字符串，相同值表示同一只券',
     `S_INFO_CODE`               VARCHAR(40)  DEFAULT NULL COMMENT '市场证券代码，不含 Wind 市场后缀',
     `S_INFO_NAME`               VARCHAR(200) DEFAULT NULL COMMENT '证券名称',
     `EXCHMARKET`                VARCHAR(10)  DEFAULT NULL COMMENT '交易市场代码',
@@ -237,7 +237,7 @@ CREATE TABLE `wind_cbondchangewindcode` (
 -- 本表覆盖全部主体，不以是否发债或在池为条件；主体 Excel 匹配及调库身份校验使用本表。
 -- ----------------------------------------------------------------------------
 CREATE TABLE `wind_compintroduction` (
-    `COMP_ID`               VARCHAR(40)     DEFAULT NULL COMMENT '主体编码',
+    `COMP_ID`               VARCHAR(40)     DEFAULT NULL COMMENT '主体编码，上游保证有值，不为 NULL 或空字符串',
     `COMP_NAME`             VARCHAR(200)    DEFAULT NULL COMMENT '主体全称',
     `COMP_SNAME`            VARCHAR(100)    DEFAULT NULL COMMENT '主体简称',
     `COMP_NAME_ENG`         VARCHAR(100)    DEFAULT NULL COMMENT '主体英文全称',

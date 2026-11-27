@@ -499,7 +499,7 @@ public class HsPoolExcelExportServiceTest {
         assertThat(crmwBlockEnd).isGreaterThan(crmwBlockStart);
         assertThat(mapperXml.substring(ordinaryBlockStart, crmwBlockStart))
                 .contains("<if test=\"!includeExpired\">", "AND si.security_status != 'D'",
-                        "si.delist_date IS NULL", "TRIM(si.delist_date) = ''",
+                        "si.delist_date IS NULL",
                         "si.delist_date >= DATE_FORMAT(CURDATE(), '%Y%m%d')")
                 .doesNotContain("maturity_date");
         assertThat(mapperXml.substring(crmwBlockStart, crmwBlockEnd)).doesNotContain("maturity_date", "delist_date", "security_status");

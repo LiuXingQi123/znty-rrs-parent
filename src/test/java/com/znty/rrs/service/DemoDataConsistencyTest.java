@@ -456,9 +456,7 @@ public class DemoDataConsistencyTest {
         Map<String, List<String>> groups = new HashMap<>();
         for (Map<String, String> security : readRows("ais_inv_ods_demo_data.sql", "wind_windcustomcode")) {
             String isin = security.get("S_INFO_ISINCODE");
-            if (isin != null && !isin.trim().isEmpty()) {
-                groups.computeIfAbsent(isin, key -> new ArrayList<>()).add(security.get("S_INFO_WINDCODE"));
-            }
+            groups.computeIfAbsent(isin, key -> new ArrayList<>()).add(security.get("S_INFO_WINDCODE"));
         }
         // 汇总真实有效的当前池状态
         Map<String, Set<String>> pools = activePools(readRows("rrs_security_pool_adjust_demo_data.sql", "ip_pool_status"));

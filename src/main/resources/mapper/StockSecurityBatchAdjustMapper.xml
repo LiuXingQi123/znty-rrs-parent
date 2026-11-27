@@ -71,7 +71,7 @@
                , CASE
                     WHEN ips.security_type = 'crmw' THEN 'crmw'
                     WHEN ips.security_type = 'company' THEN 'company'
-                    WHEN dst.category_type IS NOT NULL AND dst.category_type != '' THEN dst.category_type
+                    WHEN dst.category_type IS NOT NULL THEN dst.category_type
                     ELSE 'unknown'
                 END AS typeCode
                , COUNT(DISTINCT ips.security_code) AS count
@@ -88,7 +88,7 @@
                  , CASE
                       WHEN ips.security_type = 'crmw' THEN 'crmw'
                       WHEN ips.security_type = 'company' THEN 'company'
-                      WHEN dst.category_type IS NOT NULL AND dst.category_type != '' THEN dst.category_type
+                      WHEN dst.category_type IS NOT NULL THEN dst.category_type
                       ELSE 'unknown'
                   END
     </select>

@@ -32,12 +32,7 @@
                     SELECT 1
                     FROM ip_adjust_step_fund ps
                     WHERE ps.step_status = 'pending'
-                      AND (
-                          (al.adjust_batch_no IS NOT NULL AND al.adjust_batch_no != ''
-                           AND ps.adjust_batch_no = al.adjust_batch_no)
-                          OR ((al.adjust_batch_no IS NULL OR al.adjust_batch_no = '')
-                              AND ps.adjust_log_id = al.id)
-                      )
+                      AND ps.adjust_batch_no = al.adjust_batch_no
                       <if test="!adminUser">
                           AND ps.handler_id = #{currentUserId}
                           <!-- 发起人只能处理提交/修改语义节点，不能审批自己的后续节点 -->
@@ -200,12 +195,7 @@
                     SELECT 1
                     FROM ip_adjust_step_fund ps
                     WHERE ps.step_status = 'pending'
-                      AND (
-                          (al.adjust_batch_no IS NOT NULL AND al.adjust_batch_no != ''
-                           AND ps.adjust_batch_no = al.adjust_batch_no)
-                          OR ((al.adjust_batch_no IS NULL OR al.adjust_batch_no = '')
-                              AND ps.adjust_log_id = al.id)
-                      )
+                      AND ps.adjust_batch_no = al.adjust_batch_no
                       <if test="!adminUser">
                           AND ps.handler_id = #{currentUserId}
                           <!-- 发起人只能处理提交/修改语义节点，不能审批自己的后续节点 -->

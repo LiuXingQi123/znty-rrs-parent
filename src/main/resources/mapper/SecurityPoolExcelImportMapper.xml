@@ -289,8 +289,6 @@
                 (c.COMP_NAME = lookup.lookup_value OR c.COMP_SNAME = lookup.lookup_value)
             </otherwise>
         </choose>
-        WHERE c.COMP_ID IS NOT NULL
-          AND TRIM(c.COMP_ID) != ''
     </select>
 
     <!-- ═══════════ 目标池解析 ═══════════ -->

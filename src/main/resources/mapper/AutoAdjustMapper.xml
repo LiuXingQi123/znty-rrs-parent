@@ -194,7 +194,6 @@
           AND ips.is_deleted = 0
           AND (si.security_status = 'D'
                OR (si.delist_date IS NOT NULL
-                   AND si.delist_date != ''
                    AND si.delist_date &lt; DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL #{maturityOffsetDays} DAY), '%Y%m%d')))
     </select>
 
@@ -259,10 +258,7 @@
                         ELSE 999
                     END AS rating_value
             FROM ais_inv_ods.wind_cbondissuerrating r
-            WHERE r.s_info_compcode IS NOT NULL
-              AND r.s_info_compcode != ''
-              AND r.b_info_creditrating IS NOT NULL
-              AND TRIM(r.b_info_creditrating) != ''
+            WHERE r.b_info_creditrating IS NOT NULL
             <choose>
                 <when test="agencyCodes != null and agencyCodes.size() > 0">
                   AND r.b_info_creditratingagency IN
@@ -353,10 +349,7 @@
                         ELSE 999
                     END AS rating_value
             FROM ais_inv_ods.wind_cbondissuerrating r
-            WHERE r.s_info_compcode IS NOT NULL
-              AND r.s_info_compcode != ''
-              AND r.b_info_creditrating IS NOT NULL
-              AND TRIM(r.b_info_creditrating) != ''
+            WHERE r.b_info_creditrating IS NOT NULL
             <choose>
                 <when test="agencyCodes != null and agencyCodes.size() > 0">
                   AND r.b_info_creditratingagency IN
@@ -473,7 +466,6 @@
           AND crmw.security_type = 'crmw'
           AND (crmw.security_status = 'D'
                OR (crmw.delist_date IS NOT NULL
-                   AND crmw.delist_date != ''
                    AND crmw.delist_date &lt; DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL #{maturityOffsetDays} DAY), '%Y%m%d')))
         ORDER BY ips.crmw_scode ASC
                  , ips.security_code ASC
@@ -560,7 +552,6 @@
               FROM rrs_temp_security_code ts
               WHERE ts.temp_security_code = bond.wind_code
                 AND ts.security_code IS NOT NULL
-                AND ts.security_code != ''
                 AND IFNULL(ts.is_deleted, 0) = 0
                 AND ts.status = 'updated'
           )
@@ -587,7 +578,6 @@
           AND ps.adjust_mode = '调入'
           AND NOT (COALESCE(bond.abs_flag, 0) = 1 OR bond.security_type = 'abs')
           AND bond.issuer_code IS NOT NULL
-          AND bond.issuer_code != ''
           AND ((ps.adjust_type = '自动调整'
                  AND (ps.adjust_reason LIKE '【任务名称：%】【主体跟随】（%'
                       OR (ps.adjust_batch_no LIKE 'BOND%'

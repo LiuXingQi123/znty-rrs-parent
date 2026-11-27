@@ -116,21 +116,21 @@ public class ExternalRatingAgencyMapperSqlTest {
                 "queryCompanyByNotLowOuterRatingInPool")) {
             assertThat(selectBlock(xml, queryId)).as(queryId)
                     .contains("WHEN 'AAA+' THEN 21", "WHEN 'AA-' THEN 17", "ELSE 999")
-                    .contains("ORDER BY rating_value ASC", "TRIM(r.b_info_creditrating) != ''")
-                    .doesNotContain("WHERE rating_value");
+                    .contains("ORDER BY rating_value ASC", "WHERE r.b_info_creditrating IS NOT NULL")
+                    .doesNotContain("WHERE rating_value", "TRIM(r.b_info_creditrating) != ''");
         }
     }
 
-    /** 配置查询应只返回未删除、非空机构并按数值编码升序。 */
+    /** 机构编码有值时直接查询未删除的配置并按数值编码升序 */
     @Test
     public void agencyQuery_ShouldFilterAndSortActiveCodes() throws Exception {
         String xml = readMapper("ExternalRatingAgencyMapper.xml");
 
         assertThat(xml).contains("FROM dict_external_rating_agency")
                 .contains("WHERE is_deleted = 0")
-                .contains("TRIM(b_info_creditratingagency) != ''")
                 .contains("GROUP BY TRIM(b_info_creditratingagency)")
-                .contains("ORDER BY CAST(TRIM(b_info_creditratingagency) AS UNSIGNED) ASC");
+                .contains("ORDER BY CAST(TRIM(b_info_creditratingagency) AS UNSIGNED) ASC")
+                .doesNotContain("b_info_creditratingagency IS NOT NULL", "TRIM(b_info_creditratingagency) != ''");
     }
 
     /** 校验指定 Mapper 查询使用 agencyCodes foreach，并具有空集合保护。 */

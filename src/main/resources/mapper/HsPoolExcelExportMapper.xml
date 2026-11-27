@@ -70,7 +70,7 @@
               AND dst.category_type != 'company'
               <if test="!includeExpired">
                   AND si.security_status != 'D'
-                  AND (si.delist_date IS NULL OR TRIM(si.delist_date) = '' OR si.delist_date >= DATE_FORMAT(CURDATE(), '%Y%m%d'))
+                  AND (si.delist_date IS NULL OR si.delist_date >= DATE_FORMAT(CURDATE(), '%Y%m%d'))
               </if>
             UNION ALL
             <!-- CRMW 当前状态：导出凭证本身，按状态表中的凭证代码输出，名称保留原回显口径 -->
@@ -122,7 +122,6 @@
               AND al.audit_time > #{startTime}
               AND al.audit_time &lt;= #{endTime}
               AND al.crmw_scode IS NOT NULL
-              AND TRIM(al.crmw_scode) != ''
               AND NOT (crmw_si.security_source = 'temporary' AND crmw_si.security_status = 'D')
         ) export_row
         ORDER BY export_row.securityShortName ASC

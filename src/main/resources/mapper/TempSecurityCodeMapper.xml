@@ -143,7 +143,6 @@
         WHERE is_deleted = 0
           AND status = 'temporary'
           AND security_code IS NOT NULL
-          AND TRIM(security_code) != ''
         ORDER BY id ASC
     </select>
 
@@ -179,8 +178,6 @@
                , c.COMP_SNAME AS shortName
         FROM ais_inv_ods.wind_compintroduction c
         <where>
-            AND c.COMP_ID IS NOT NULL
-            AND c.COMP_ID != ''
             <if test="companyKeyword != null and companyKeyword != ''">
                 AND (c.COMP_NAME LIKE CONCAT('%', #{companyKeyword}, '%')
                      OR c.COMP_ID LIKE CONCAT(#{companyKeyword}, '%'))
@@ -440,7 +437,7 @@
         UNION
         SELECT target_pool_id FROM ip_adjust_log
         WHERE security_code = #{tempSecurityCode} AND security_type = #{tempSecurityType}
-          AND (pool_type != 'crmw' OR (pool_type = 'crmw' AND NULLIF(crmw_scode, '') IS NULL))
+          AND (pool_type != 'crmw' OR (pool_type = 'crmw' AND crmw_scode IS NULL))
           AND audit_status IN ('00', '11') AND is_deleted = 0
         ORDER BY target_pool_id
     </select>
@@ -449,7 +446,7 @@
     <select id="queryOrdinaryPendingLogList" resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
         SELECT * FROM ip_adjust_log
         WHERE security_code = #{tempSecurityCode} AND security_type = #{tempSecurityType}
-          AND (pool_type != 'crmw' OR (pool_type = 'crmw' AND NULLIF(crmw_scode, '') IS NULL))
+          AND (pool_type != 'crmw' OR (pool_type = 'crmw' AND crmw_scode IS NULL))
           AND audit_status IN ('00', '11') AND is_deleted = 0
         ORDER BY id
     </select>
@@ -459,7 +456,7 @@
         SELECT * FROM ip_adjust_log
         WHERE security_code = #{tempSecurityCode} AND security_type = #{tempSecurityType}
           AND pool_type = 'crmw'
-          AND NULLIF(crmw_scode, '') IS NOT NULL
+          AND crmw_scode IS NOT NULL
           AND audit_status IN ('00', '11') AND is_deleted = 0
         ORDER BY id
     </select>

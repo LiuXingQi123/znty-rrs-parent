@@ -57,7 +57,7 @@
                , CASE
                     WHEN ips.security_type = 'crmw' THEN 'crmw'
                     WHEN ips.security_type = 'company' THEN 'company'
-                    WHEN dst.category_type IS NOT NULL AND dst.category_type != '' THEN dst.category_type
+                    WHEN dst.category_type IS NOT NULL THEN dst.category_type
                     ELSE 'unknown'
                 END AS typeCode
                , COUNT(DISTINCT ips.security_code) AS count
@@ -74,7 +74,7 @@
                  , CASE
                       WHEN ips.security_type = 'crmw' THEN 'crmw'
                       WHEN ips.security_type = 'company' THEN 'company'
-                      WHEN dst.category_type IS NOT NULL AND dst.category_type != '' THEN dst.category_type
+                      WHEN dst.category_type IS NOT NULL THEN dst.category_type
                       ELSE 'unknown'
                   END
     </select>
@@ -214,12 +214,11 @@
         <!-- 从投资分析主体表按编码汇总可选择主体，并应用页面查询条件 -->
         WITH source_company AS (
             SELECT company.wind_code AS company_code
-                   , MAX(COALESCE(NULLIF(company.full_name, ''), NULLIF(company.short_names, ''))) AS company_name
+                   , MAX(COALESCE(company.full_name, company.short_names)) AS company_name
             FROM ais_inv_analysis.t_inv_company company
             <where>
                 AND company.wind_code IS NOT NULL
-                AND company.wind_code != ''
-                AND COALESCE(NULLIF(company.full_name, ''), NULLIF(company.short_names, '')) IS NOT NULL
+                AND COALESCE(company.full_name, company.short_names) IS NOT NULL
                 <if test="companyCode != null and companyCode != ''">
                     AND company.wind_code LIKE CONCAT(#{companyCode}, '%')
                 </if>

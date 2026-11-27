@@ -36,13 +36,13 @@
         <!-- 按提交编码从投资分析主体表精确读取有效主体 -->
         WITH source_company AS (
             SELECT company.wind_code AS company_code
-                   , MAX(COALESCE(NULLIF(company.full_name, ''), NULLIF(company.short_names, ''))) AS company_name
+                   , MAX(COALESCE(company.full_name, company.short_names)) AS company_name
             FROM ais_inv_analysis.t_inv_company company
             WHERE company.wind_code IN
             <foreach collection="companyCodes" item="companyCode" open="(" separator="," close=")">
                 #{companyCode}
             </foreach>
-              AND COALESCE(NULLIF(company.full_name, ''), NULLIF(company.short_names, '')) IS NOT NULL
+              AND COALESCE(company.full_name, company.short_names) IS NOT NULL
             GROUP BY company.wind_code
         )
         <!-- 读取该主体的内评，并按更新时间倒序编号 -->
@@ -114,13 +114,13 @@
                , si.issuer_code AS company_code
                , 0 AS unconfirmed_identity
         FROM requested_security si
-        WHERE NULLIF(TRIM(si.issuer_code), '') IS NOT NULL
+        WHERE si.issuer_code IS NOT NULL
         UNION ALL
         SELECT si.wind_code
                , NULL
                , 1
         FROM requested_security si
-        WHERE NULLIF(TRIM(si.issuer_code), '') IS NULL
+        WHERE si.issuer_code IS NULL
           AND (
               EXISTS (
                   SELECT 1
@@ -147,7 +147,7 @@
         </foreach>
           AND log.audit_status IN ('00', '11')
           AND log.is_deleted = 0
-          AND (log.pool_type IS NULL OR log.pool_type != 'crmw' OR NULLIF(log.crmw_scode, '') IS NULL)
+          AND (log.pool_type IS NULL OR log.pool_type != 'crmw' OR log.crmw_scode IS NULL)
         UNION ALL
         SELECT log.security_code
                , snap.issuer_code
@@ -163,7 +163,7 @@
           AND log.audit_status IN ('00', '11')
           AND log.is_deleted = 0
           AND log.pool_type = 'crmw'
-          AND NULLIF(log.crmw_scode, '') IS NOT NULL
+          AND log.crmw_scode IS NOT NULL
     </select>
 
     <!-- 读取关联券主档及普通债跟随范围 -->
@@ -184,7 +184,6 @@
                       FROM rrs_temp_security_code ts
                       WHERE ts.temp_security_code = bond.wind_code
                         AND ts.security_code IS NOT NULL
-                        AND ts.security_code != ''
                         AND IFNULL(ts.is_deleted, 0) = 0
                         AND ts.status = 'updated'
                   )
@@ -217,8 +216,6 @@
         <foreach collection="securityCodes" item="code" open="(" separator="," close=")">
             #{code}
         </foreach>
-          AND current_code.S_INFO_ISINCODE IS NOT NULL
-          AND TRIM(current_code.S_INFO_ISINCODE) != ''
           AND current_code.EXCHMARKET IN
           <foreach collection="marketCodes" item="marketCode" open="(" separator="," close=")">
               #{marketCode}
@@ -232,8 +229,6 @@
               WHERE si.wind_code = current_code.S_INFO_WINDCODE AND si.security_source = 'temporary'
           )
           AND related.S_INFO_WINDCODE != current_code.S_INFO_WINDCODE
-          AND related.S_INFO_WINDCODE IS NOT NULL
-          AND TRIM(related.S_INFO_WINDCODE) != ''
         ORDER BY security_code
                  , related_code
     </select>
@@ -262,8 +257,6 @@
             <foreach collection="securityCodes" item="code" open="(" separator="," close=")">
             #{code}
         </foreach>
-              AND issuer.s_info_compcode IS NOT NULL
-              AND issuer.s_info_compcode != ''
               AND issuer.s_info_typecode IN (115004000, 115203000, 115200000, 115201000)
         )
         <!-- 同证券、同主体、同类型仅保留一条；兼多类关系的主体按类型各保留一行 -->
@@ -496,11 +489,9 @@
             #{code}
         </foreach>
           AND si.issuer_code IS NOT NULL
-          AND si.issuer_code != ''
           AND ips.pool_type = 'credit_bond'
           AND ips.adjust_mode = '调入'
           AND ips.flow_type IS NOT NULL
-          AND ips.flow_type != ''
           AND ips.flow_type != 'simpleInbound'
           AND ips.audit_status = '20'
           AND ips.entry_time >= DATE_SUB(NOW(), INTERVAL #{days} DAY)
@@ -522,7 +513,6 @@
             #{code}
         </foreach>
           AND si.issuer_code IS NOT NULL
-          AND si.issuer_code != ''
           AND ips.adjust_mode = '调入'
           AND ips.audit_status = '20'
           AND ips.entry_time >= DATE_SUB(NOW(), INTERVAL #{days} DAY)
@@ -551,7 +541,6 @@
             #{code}
         </foreach>
           AND si.issuer_code IS NOT NULL
-          AND si.issuer_code != ''
           AND l.adjust_mode = '调入'
           AND l.audit_status = '20'
           AND l.is_deleted = 0

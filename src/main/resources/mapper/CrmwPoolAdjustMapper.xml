@@ -311,7 +311,7 @@
         INNER JOIN ip_adjust_step s ON s.adjust_batch_no = al.adjust_batch_no
         WHERE al.security_code = #{securityCode}
           AND al.pool_type = 'crmw'
-          AND NULLIF(al.crmw_scode, '') IS NOT NULL
+          AND al.crmw_scode IS NOT NULL
           AND al.is_deleted = 0
           AND s.step_status = 'pending'
     </select>
@@ -323,7 +323,7 @@
         INNER JOIN ip_adjust_step s ON s.adjust_batch_no = al.adjust_batch_no
         WHERE al.security_code = #{securityCode}
           AND al.pool_type = 'crmw'
-          AND NULLIF(al.crmw_scode, '') IS NOT NULL
+          AND al.crmw_scode IS NOT NULL
           AND al.is_deleted = 0
           AND s.step_status = 'pending'
         ORDER BY s.sort_order ASC
@@ -368,7 +368,6 @@
             FROM rrs_securityinfo si
             WHERE si.wind_code = #{securityCode}
               AND si.issuer_code IS NOT NULL
-              AND si.issuer_code != ''
             LIMIT 1
         )
           AND p.pool_type = 'observe'
@@ -626,7 +625,7 @@
               WHERE al.id = s.adjust_log_id
                 AND al.is_deleted = 0
                 AND al.pool_type = 'crmw'
-                AND NULLIF(al.crmw_scode, '') IS NOT NULL
+                AND al.crmw_scode IS NOT NULL
           )
     </select>
 
@@ -744,7 +743,7 @@
         <where>
             is_deleted = 0
             AND pool_type = 'crmw'
-            AND NULLIF(crmw_scode, '') IS NOT NULL
+            AND crmw_scode IS NOT NULL
             <choose>
                 <when test="adjustBatchNo != null and adjustBatchNo != ''">
                     AND adjust_batch_no = #{adjustBatchNo}
@@ -771,7 +770,7 @@
             is_deleted = 0
             AND audit_status = '11'
             AND pool_type = 'crmw'
-            AND NULLIF(crmw_scode, '') IS NOT NULL
+            AND crmw_scode IS NOT NULL
             <choose>
                 <when test="adjustBatchNo != null and adjustBatchNo != ''">
                     AND adjust_batch_no = #{adjustBatchNo}
@@ -791,7 +790,7 @@
            , updt_time = NOW()
         WHERE is_deleted = 0
           AND pool_type = 'crmw'
-          AND NULLIF(crmw_scode, '') IS NOT NULL
+          AND crmw_scode IS NOT NULL
           <choose>
               <when test="adjustBatchNo != null and adjustBatchNo != ''">
                   AND adjust_batch_no = #{adjustBatchNo}
@@ -810,7 +809,7 @@
             , updt_time = NOW()
         WHERE audit_status IN ('00', '11')
           AND pool_type = 'crmw'
-          AND NULLIF(crmw_scode, '') IS NOT NULL
+          AND crmw_scode IS NOT NULL
           <choose>
               <when test="adjustBatchNo != null and adjustBatchNo != ''">
                   AND adjust_batch_no = #{adjustBatchNo}

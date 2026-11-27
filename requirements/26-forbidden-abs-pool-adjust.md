@@ -7,14 +7,14 @@
 
 ### 证券市场与历史展示
 
-证券主档仅保留当前 `wind_code`，主档保留独立外部 `sec_id`，末尾追加 `market VARCHAR(10) DEFAULT NULL`，与 Wind `EXCHMARKET` 原值一致。市场经统一服务直接读取 `rrs_securityinfo.market`（银行间使用 NIB），临时代码使用登记市场。详情返回 `marketCode`、只读 `relatedMarketCodes: [{ windCode, marketCode }]`，按 Wind 非空 ISIN 关联同券代码；空 ISIN 不关联，同市场多个代码完整展示。同券关联市场与投资池投资市场共用 `MarketCode` 集合（`SSE/SZSE/NIB/BSE/COMPANY/OTC/HKEX/QDII/JWCW/UNKNOWN/OTHER`），不另设白名单。先按 Wind `EXCHMARKET` 筛选主代码和关联代码，再查询本地主档；范围外代码不参与关联展示、关联校验和关联出入库，缺少主档不阻断，范围内缺少主档或市场仍报错。不按代码后缀或 `S_INFO_EXCHMARKET` 推断；目标池勾选的市场仍是逐券入池限制，不用于裁剪同券集合。证券池、ABS、CRMW、批量、Excel 及临时转正复用同一查询。旧市场字段不再提交、写主档或写证券/CRMW 快照。历史详情和审批在读快照后补查当前关联关系，其他业务信息保留原快照。每条实际代码按自身市场独立校验。
+证券主档仅保留当前 `wind_code`，主档保留独立外部 `sec_id`，末尾追加 `market VARCHAR(10) DEFAULT NULL`，与 Wind `EXCHMARKET` 原值一致。市场经统一服务直接读取 `rrs_securityinfo.market`（银行间使用 NIB），临时代码使用登记市场。详情返回 `marketCode`、只读 `relatedMarketCodes: [{ windCode, marketCode }]`，按 Wind ISIN 关联同券代码，同市场多个代码完整展示。同券关联市场与投资池投资市场共用 `MarketCode` 集合（`SSE/SZSE/NIB/BSE/COMPANY/OTC/HKEX/QDII/JWCW/UNKNOWN/OTHER`），不另设白名单。先按 Wind `EXCHMARKET` 筛选主代码和关联代码，再查询本地主档；范围外代码不参与关联展示、关联校验和关联出入库，缺少主档不阻断，范围内缺少主档或市场仍报错。不按代码后缀或 `S_INFO_EXCHMARKET` 推断；目标池勾选的市场仍是逐券入池限制，不用于裁剪同券集合。证券池、ABS、CRMW、批量、Excel 及临时转正复用同一查询。旧市场字段不再提交、写主档或写证券/CRMW 快照。历史详情和审批在读快照后补查当前关联关系，其他业务信息保留原快照。每条实际代码按自身市场独立校验。
 
 
 “是否特征”追加“是否标准信用债”（`bondYesFlags` 选项 `stdCredit`），勾选仅筛选证券主档 `std_credit_flag=1`，与其他特征按 AND 组合；不勾选时不限制该字段。对应列表追加 `stdCreditFlag` 列：1=是，其他值（含 NULL）按现有是否类标识显示否，接口保留原始数值，沿用是=`success`、否=`info` 的 Tag。仅使用上游维护的原始标志，不按其他特征或 `std_clause_flag` 推断；CRMW 按标的证券筛选及展示。
 
 ## 同券跨市场整组校验
 
-同一非空 ISIN 的主券与关联券逐码校验后，同一调库组（`adjustGroupKey`）任一项失败即整组不可调整；保留失败代码和具体原因，不允许跳过失败券而只提交其他市场。其他独立调库组不受影响。
+同一 ISIN 的主券与关联券逐码校验后，同一调库组（`adjustGroupKey`）任一项失败即整组不可调整；保留失败代码和具体原因，不允许跳过失败券而只提交其他市场。其他独立调库组不受影响。
 
 “放开规则”由主券传递给所有关联券，仅跳过既有主体债入库矩阵规则；在途流程、市场、品种、到期、容量及其他硬限制仍按每个实际代码校验。
 

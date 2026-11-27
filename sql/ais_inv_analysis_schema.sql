@@ -44,20 +44,20 @@ CREATE TABLE `t_inv_company`
     `country_id`     VARCHAR(100)  DEFAULT NULL COMMENT '国家 ID',
     `county_id`      VARCHAR(100)  DEFAULT NULL COMMENT '区县 ID',
     `description`    VARCHAR(2000) DEFAULT NULL COMMENT '主体描述',
-    `full_name`      VARCHAR(100)  DEFAULT NULL COMMENT '主体全称',
+    `full_name`      VARCHAR(100)  DEFAULT NULL COMMENT '主体全称，允许 NULL，不使用空字符串',
     `industry_id`    VARCHAR(100)  DEFAULT NULL COMMENT '行业 ID',
     `legaler`        VARCHAR(200)  DEFAULT NULL COMMENT '法定代表人',
     `province_id`    VARCHAR(100)  DEFAULT NULL COMMENT '省份 ID',
     `reg_address`    VARCHAR(100)  DEFAULT NULL COMMENT '注册地址',
     `reg_capital`    VARCHAR(100)  DEFAULT NULL COMMENT '注册资本',
-    `short_names`    VARCHAR(100)  DEFAULT NULL COMMENT '主体简称',
+    `short_names`    VARCHAR(100)  DEFAULT NULL COMMENT '主体简称，允许 NULL，不使用空字符串',
     `stock_sty`      VARCHAR(100)  DEFAULT NULL COMMENT '股票类型',
     `village_id`     VARCHAR(100)  DEFAULT NULL COMMENT '街道或乡镇 ID',
     `web_site`       VARCHAR(100)  DEFAULT NULL COMMENT '官方网站',
     `es_type`        VARCHAR(100)  DEFAULT NULL COMMENT 'ES 类型',
     `es_index`       VARCHAR(100)  DEFAULT NULL COMMENT 'ES 指标',
     `es_score`       VARCHAR(100)  DEFAULT NULL COMMENT 'ES 分数',
-    `wind_code`      VARCHAR(100)  DEFAULT NULL COMMENT 'Wind 主体代码',
+    `wind_code`      VARCHAR(100)  DEFAULT NULL COMMENT 'Wind 主体代码，允许 NULL，不使用空字符串',
     `industry`       VARCHAR(100)  DEFAULT NULL COMMENT '所属行业',
     `ts`             TIMESTAMP     DEFAULT NULL COMMENT '时间戳',
     `fundDate`       VARCHAR(100)  DEFAULT NULL COMMENT '成立日期',
@@ -201,7 +201,7 @@ CREATE TABLE `t_sys_permission` (
 -- ----------------------------------------------------------------------------
 CREATE TABLE `company_observer_view` (
     `company_id`    BIGINT       DEFAULT NULL COMMENT '主体 ID，对应 t_inv_company.id',
-    `company_code`  VARCHAR(100) DEFAULT NULL COMMENT '主体编码，对应 t_inv_company.wind_code 及发行人编码',
+    `company_code`  VARCHAR(100) DEFAULT NULL COMMENT '主体编码，对应 t_inv_company.wind_code 及发行人编码，允许 NULL，不使用空字符串',
     `observer_type` VARCHAR(100) DEFAULT NULL COMMENT '观察者类型：1=空 / 2=观察 / 3=重点观察',
     `isHo`          VARCHAR(1)   DEFAULT NULL COMMENT '是否总行'
 ) ENGINE = InnoDB

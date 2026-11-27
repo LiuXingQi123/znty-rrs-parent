@@ -126,13 +126,13 @@ public class WindCustomCodeDemoDataTest {
                         + " OR s.issuer_code <> w.S_INFO_COMPCODE OR s.short_name <> w.S_INFO_NAME"
                         + " OR s.crncy_code <> w.CRNCY_CODE"
                         + " OR s.market IS NULL OR s.market <> w.EXCHMARKET", Integer.class)).isZero();
+                assertThat(jdbc.queryForList("SELECT S_INFO_ISINCODE FROM ais_inv_ods.wind_windcustomcode", String.class))
+                        .allSatisfy(isin -> assertThat(isin).isNotBlank());
                 assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM (SELECT S_INFO_ISINCODE, EXCHMARKET"
-                        + " FROM ais_inv_ods.wind_windcustomcode WHERE S_INFO_ISINCODE IS NOT NULL AND TRIM(S_INFO_ISINCODE) <> ''"
+                        + " FROM ais_inv_ods.wind_windcustomcode"
                         + " GROUP BY S_INFO_ISINCODE, EXCHMARKET HAVING COUNT(*) > 1) duplicated_market", Integer.class)).isZero();
-                assertThat(jdbc.queryForList("SELECT S_INFO_WINDCODE FROM ais_inv_ods.wind_windcustomcode WHERE S_INFO_ISINCODE IS NULL", String.class))
-                        .containsExactlyInAnyOrder("TMP001.IB", "TMP003.IB", "WCTMP001.IB", "WCTMP002.IB", "102684582.IB");
                 assertThat(jdbc.queryForList("SELECT S_INFO_ISINCODE FROM ais_inv_ods.wind_windcustomcode"
-                        + " WHERE S_INFO_ISINCODE IS NOT NULL GROUP BY S_INFO_ISINCODE"
+                        + " GROUP BY S_INFO_ISINCODE"
                         + " HAVING COUNT(*) = 3 AND COUNT(DISTINCT EXCHMARKET) = 3", String.class))
                         .containsExactlyInAnyOrder("CNDEMO000293", "CNDEMO000301", "CNDEMO000319");
                 assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM znty_rrs.rrs_securityinfo WHERE sec_id IS NULL", Integer.class)).isZero();
@@ -195,11 +195,8 @@ public class WindCustomCodeDemoDataTest {
                 assertThat(service.queryMarketCode("WCTMP001.IB")).isEqualTo("NIB");
                 assertThat(service.queryRelatedMarketCodes("WCTMP001.IB")).isEmpty();
                 assertThat(service.queryRelatedMarketCodes("CB001.SH")).isEmpty();
-                connection.createStatement().execute("INSERT INTO ais_inv_ods.wind_windcustomcode (OBJECT_ID, S_INFO_WINDCODE, S_INFO_EXCHMARKET, S_INFO_ISINCODE) VALUES ('EMPTY1', 'EMPTY1.SH', 'SSE', ''), ('EMPTY2', 'EMPTY2.SH', 'SSE', ''), ('BLANK1', 'BLANK1.SH', 'SSE', '   '), ('BLANK2', 'BLANK2.SH', 'SSE', '   ')");
-                connection.createStatement().execute("INSERT INTO rrs_securityinfo (wind_code, security_source, market) VALUES ('EMPTY1.SH', 'official', 'SSE'), ('EMPTY2.SH', 'official', 'SSE'), ('BLANK1.SH', 'official', 'SSE'), ('BLANK2.SH', 'official', 'SSE')");
-                for (String code : Arrays.asList("EMPTY1.SH", "EMPTY2.SH", "BLANK1.SH", "BLANK2.SH")) {
-                    assertThat(service.queryRelatedMarketCodes(code)).isEmpty();
-                }
+                assertThat(service.queryRelatedMarketCodes("WCTMP002.IB")).isEmpty();
+                assertThat(service.queryRelatedMarketCodes("102684582.IB")).isEmpty();
                 BatchSecurityPoolAdjustMapper batch = session.getMapper(BatchSecurityPoolAdjustMapper.class);
                 BatchSecurityPoolAdjustReq filter = new BatchSecurityPoolAdjustReq();
                 filter.setMarketCodes(Arrays.asList("SSE")); filter.setSecurityCode("XYB001.IB");
