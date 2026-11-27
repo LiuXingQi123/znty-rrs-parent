@@ -18,7 +18,7 @@ public class SecurityPoolAdjustSubmitReq {
     /** 证券代码 */
     private String securityCode;
 
-    /** 前端已查询的同券关联代码，提交时直接复用，不重新查询关联关系 */
+    /** 批量或导入校验确认的同券调库代码，人工单笔由后端复核同券范围 */
     private List<SecurityMarketDto> relatedMarketCodes;
 
     /** 证券简称 */

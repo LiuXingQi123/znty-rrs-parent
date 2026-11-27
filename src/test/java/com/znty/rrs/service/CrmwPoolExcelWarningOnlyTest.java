@@ -92,6 +92,43 @@ public class CrmwPoolExcelWarningOnlyTest {
                 .allMatch(item -> !item.isCanAdjust());
     }
 
+    /** 已过摘牌日的关联券和明确录入的退市主券都保留三行，只在实际失败的行提示 */
+    @Test
+    public void expiredMarketsShouldKeepAllExcelRowsAndWarnOnTheActualMarket() {
+        Fixture f = new Fixture();
+        SecurityMarketDto shanghai = new SecurityMarketDto();
+        shanghai.setWindCode("A.SH");
+        SecurityMarketDto shenzhen = new SecurityMarketDto();
+        shenzhen.setWindCode("A.SZ");
+        when(f.markets.queryRelatedMarketCodes("A.IB")).thenReturn(Arrays.asList(shanghai, shenzhen));
+        SecurityInfoBo expired = new SecurityInfoBo();
+        expired.setWindCode("A.SH");
+        expired.setSecurityType("bond");
+        expired.setDelistDate("20000101");
+        when(f.mapper.querySecurityBoByCode("A.SH")).thenReturn(expired);
+        SecurityInfoBo active = new SecurityInfoBo();
+        active.setWindCode("A.SZ");
+        active.setSecurityType("bond");
+        when(f.mapper.querySecurityBoByCode("A.SZ")).thenReturn(active);
+        when(f.mapper.queryCategoryTypeBySecurityType("bond")).thenReturn("bond");
+
+        List<AdjustCheckDto.CheckResultItem> rows = f.service.checkExcelAdjust(f.request()).getItems();
+        assertThat(rows).extracting(AdjustCheckDto.CheckResultItem::getSecurityCode)
+                .containsExactly("A.IB", "A.SH", "A.SZ");
+        assertThat(rows).allMatch(AdjustCheckDto.CheckResultItem::isCanAdjust);
+        assertThat(rows.get(1).getFailReasons()).contains("债券已到期");
+        assertThat(rows.get(0).getFailReasons()).doesNotContain("债券已到期");
+        assertThat(rows.get(2).getFailReasons()).doesNotContain("债券已到期");
+
+        expired.setDelistDate(null);
+        f.security.setSecurityStatus("D");
+        rows = f.service.checkExcelAdjust(f.request()).getItems();
+        assertThat(rows).hasSize(3).allMatch(AdjustCheckDto.CheckResultItem::isCanAdjust);
+        assertThat(rows.get(0).getFailReasons()).contains("债券已到期");
+        assertThat(rows.get(1).getFailReasons()).doesNotContain("债券已到期");
+        assertThat(rows.get(2).getFailReasons()).doesNotContain("债券已到期");
+    }
+
     /** Excel 转换后仍执行 ABS 身份校验，不能用提示放行覆盖身份冲突 */
     @Test
     public void absIdentityConflictShouldRemainBlocking() {
@@ -149,6 +186,8 @@ public class CrmwPoolExcelWarningOnlyTest {
     @Test
     public void excelSubmitShouldReachPoolStatusWithRequiredReportsAndPendingProcess() {
         Fixture f = new Fixture();
+        f.security.setSecurityStatus("D");
+        when(f.mapper.queryCategoryTypeBySecurityType("bond")).thenReturn("bond");
         f.pool.setLockFlag(1);
         f.pool.setInReportRestriction("internal");
         when(f.mapper.queryCrmwComboInPool("C.IB", "crmw", "A.IB", 10L)).thenReturn(true);

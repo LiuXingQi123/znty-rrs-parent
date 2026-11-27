@@ -631,7 +631,7 @@ public class CrmwPoolAdjustService {
         SysAttachmentService.SubmissionFiles submissionFiles =
                 sysAttachmentService.createSubmissionFiles(files, req.getAdjusterId(), originalFileNameList);
         // 3. 建立本次提交的批次号上下文并提交申请
-        return submitAdjustLog(req, submissionFiles, new BatchNoContext());
+        return submitAdjustLog(req, submissionFiles, new BatchNoContext(), true);
     }
 
     /**
@@ -690,6 +690,28 @@ public class CrmwPoolAdjustService {
     public AdjustSubmitDto submitAdjustLog(CrmwPoolAdjustSubmitReq req,
                                            SysAttachmentService.SubmissionFiles submissionFiles,
                                            BatchNoContext batchNoContext) {
+        // 批量和 Excel 沿用各组校验已经确认的同券范围
+        return submitAdjustLog(req, submissionFiles, batchNoContext, false);
+    }
+
+    /**
+     * 提交调库并根据入口确定本次同券范围
+     *
+     * 执行顺序：
+     * 1. 校验请求，普通入口先检查近期重复申请，再加载组合主档和投资池数据
+     * 2. 核对 ABS 主体与同券调入清单，普通入口再检查在途流程和必需的互斥调出
+     * 3. 按所选流程提交调入和调出，汇总日志 ID 并保存证券快照
+     * 4. 最终复核直通项并落池，返回本次提交结果
+     *
+     * @param req 当前组合及其完整调库明细
+     * @param submissionFiles 本次附件上下文
+     * @param batchNoContext 本次批次号上下文
+     * @param single 是否为人工单笔提交
+     * @return 本次组合提交结果
+     */
+    private AdjustSubmitDto submitAdjustLog(CrmwPoolAdjustSubmitReq req,
+                                            SysAttachmentService.SubmissionFiles submissionFiles,
+                                            BatchNoContext batchNoContext, boolean single) {
         // 1. 校验请求，普通入口继续检查近期重复申请
         validateSubmitReq(req);
         if (!EXCEL_IMPORT_ADJUST_TYPE.equals(req.getAdjustType())) {
@@ -717,8 +739,8 @@ public class CrmwPoolAdjustService {
                 req.setSecurityInfo(shared.securityInfo);
             }
         }
-        // 同券跨市场调入必须完整提交，禁止跳过校验失败的关联券
-        validateRelatedInboundItemsOnSubmit(req);
+        // 核对每个目标池的同券调入清单，普通调库只提交仍可调入的代码
+        validateRelatedInboundItemsOnSubmit(req, shared.securityInfo, single);
         if (!EXCEL_IMPORT_ADJUST_TYPE.equals(req.getAdjustType())) {
             // 普通入口阻断活动流程，Excel 已在校验中保留提示
             checkSubmitPendingPoolGroups(req, shared.poolMap);
@@ -968,12 +990,14 @@ public class CrmwPoolAdjustService {
      *
      * 执行顺序：
      * 1. 按目标池汇总本次调入的标的代码
-     * 2. 整理请求中的同券代码与主标的代码
-     * 3. 逐个目标池核对是否齐全，缺项时列出遗漏代码
+     * 2. 普通单笔债券调入时重新查询同券代码，批量和 Excel 使用校验后的清单
+     * 3. 核对各池的代码是否齐全，普通调库还复核实际调入代码的退市和到期状态
      *
      * @param req 凭证与标的组合的调库提交请求
+     * @param main 主标的证券主档
+     * @param single 是否由人工单笔入口发起
      */
-    private void validateRelatedInboundItemsOnSubmit(CrmwPoolAdjustSubmitReq req) {
+    private void validateRelatedInboundItemsOnSubmit(CrmwPoolAdjustSubmitReq req, SecurityInfoBo main, boolean single) {
         Map<Long, Set<String>> inboundCodes = new LinkedHashMap<>();
         for (CrmwPoolAdjustSubmitReq.AdjustItem item : req.getItems()) {
             if (AdjustMode.IN.getCode().equals(item.getAdjustMode())) {
@@ -983,26 +1007,17 @@ public class CrmwPoolAdjustService {
                         .add(resolveItemSecurityCode(req, item));
             }
         }
-        if (inboundCodes.isEmpty()) {
-            return;
-        }
         List<SecurityMarketDto> relatedCodes = req.getRelatedMarketCodes();
-        if (relatedCodes == null || relatedCodes.isEmpty()) {
-            return;
+        boolean excelImport = EXCEL_IMPORT_ADJUST_TYPE.equals(req.getAdjustType());
+        if (!inboundCodes.isEmpty() && single && !excelImport
+                && CategoryType.BOND.getCode().equals(crmwPoolAdjustMapper.queryCategoryTypeBySecurityType(main.getSecurityType()))) {
+            // 单笔债券从服务端重新确认同券范围，批量和 Excel 沿用校验后的清单
+            relatedCodes = securityMarketService.queryRelatedMarketCodes(main.getWindCode());
         }
-        Set<String> requiredCodes = new HashSet<>();
-        requiredCodes.add(req.getSecurityCode());
-        for (SecurityMarketDto related : relatedCodes) {
-            requiredCodes.add(related.getWindCode());
-        }
-        for (Map.Entry<Long, Set<String>> entry : inboundCodes.entrySet()) {
-            if (!entry.getValue().containsAll(requiredCodes)) {
-                Set<String> missingCodes = new TreeSet<>(requiredCodes);
-                missingCodes.removeAll(entry.getValue());
-                throw new BizException("同券跨市场调入必须整组提交，目标池[" + entry.getKey()
-                        + "]缺少证券：" + String.join("、", missingCodes) + "，请重新校验");
-            }
-        }
+        // 确认同组调入代码齐全，普通申请另按当前主档复核到期
+        RelatedMarketAdjustHelper.validateInboundGroup(req.getSecurityCode(), relatedCodes, inboundCodes, excelImport,
+                code -> code.equals(main.getWindCode()) ? main : crmwPoolAdjustMapper.querySecurityBoByCode(code),
+                crmwPoolAdjustMapper::queryCategoryTypeBySecurityType);
     }
 
     /**
@@ -2137,7 +2152,7 @@ public class CrmwPoolAdjustService {
         fillCheckResultIdentity(req, shared, resultItems);
 
         // 按标的债券同 ISIN 代码扩批，凭证代码保持不变
-        expandRelatedMarketCodeItems(req, shared, resultItems);
+        expandRelatedMarketCodeItems(req, shared, resultItems, excelWarningsOnly);
 
         // 4. Excel 转换业务提示后，再检查 ABS 身份，身份冲突不能放行
         if (excelWarningsOnly) {
@@ -2148,6 +2163,10 @@ public class CrmwPoolAdjustService {
                     invalidGroups.add(item.getAdjustGroupKey());
                 }
             }
+            // 只有真正不可提交的组才在其他标的行显示整组失败原因
+            propagateRelatedMarketFailure(resultItems.stream()
+                    .filter(item -> invalidGroups.contains(item.getAdjustGroupKey()))
+                    .collect(Collectors.toList()));
             for (AdjustCheckDto.CheckResultItem item : resultItems) {
                 item.setCanAdjust(!invalidGroups.contains(item.getAdjustGroupKey()));
             }
@@ -3354,6 +3373,11 @@ public class CrmwPoolAdjustService {
                 // 抛出包含 CRMW 调库项上下文的复核异常
                 throwFinalRecheckFailure(log, "标的证券不存在");
             }
+            // 普通申请送审后可能摘牌，Excel 沿用业务提示放行口径
+            if (!excelImport && AdjustMode.IN.getCode().equals(log.getAdjustMode())
+                    && RelatedMarketAdjustHelper.isExpiredBond(security, crmwPoolAdjustMapper::queryCategoryTypeBySecurityType)) {
+                throwFinalRecheckFailure(log, RelatedMarketAdjustHelper.BOND_EXPIRED + "，请重新校验调入清单");
+            }
             if (log.getId() != null && CreditBondSpecialInboundRule.isAbs(security)) {
                 absIdentityService.restoreSnapshotSelection(security, log, true);
             }
@@ -3813,14 +3837,8 @@ public class CrmwPoolAdjustService {
      * @return 债券到期提示，未命中时为 null
      */
     private String inCheckBondMaturity(AdjustCheckContext ctx) {
-        String delistDate = ctx.getSecurityInfo().getDelistDate();
-        if (delistDate != null && !delistDate.isEmpty()) {
-            String today = new SimpleDateFormat("yyyyMMdd").format(new Date());
-            if (delistDate.compareTo(today) < 0) {
-                return "债券已到期";
-            }
-        }
-        return null;
+        return RelatedMarketAdjustHelper.isDelistedOrExpired(ctx.getSecurityInfo())
+                ? RelatedMarketAdjustHelper.BOND_EXPIRED : null;
     }
 
     /**
@@ -3853,14 +3871,8 @@ public class CrmwPoolAdjustService {
      * @return 债券到期提示，未命中时为 null
      */
     private String outCheckBondMaturity(AdjustCheckContext ctx) {
-        String delistDate = ctx.getSecurityInfo().getDelistDate();
-        if (delistDate != null && !delistDate.isEmpty()) {
-            String today = new SimpleDateFormat("yyyyMMdd").format(new Date());
-            if (delistDate.compareTo(today) < 0) {
-                return "债券已到期";
-            }
-        }
-        return null;
+        return RelatedMarketAdjustHelper.isDelistedOrExpired(ctx.getSecurityInfo())
+                ? RelatedMarketAdjustHelper.BOND_EXPIRED : null;
     }
 
     /**
@@ -5322,15 +5334,17 @@ public class CrmwPoolAdjustService {
      * 1. 查询标的同券代码，没有关联代码或待扩展项时结束
      * 2. 收集主券的手工、联动和互斥项，登记去重键及已通过调入项的容量占用
      * 3. 逐个读取关联标的主档，复用已加载池配置并查询该实际组合的当前状态
-     * 4. 按母项生成关联项，逐码执行原规则并累计通过项容量，主项失败时同步阻断关联项
-     * 5. 合并关联结果，任一市场失败时反向阻断同组；Excel 随后由共用出口统一转换业务提示
+     * 4. 按母项生成关联项，逐码执行原规则并累计通过项容量
+     * 5. 合并主券与关联券结果，普通调库对其余有效券判断整组失败，Excel 由外层处理提示和阻断
      *
      * @param req 当前凭证与标的的校验请求
      * @param mainShared 主券已加载的证券、池配置和组合状态
      * @param resultItems 待追加关联项的主券校验结果列表
+     * @param excelWarningsOnly 是否允许 Excel 将逐券业务失败转为提示
      */
     private void expandRelatedMarketCodeItems(AdjustCheckReq req, AdjustSharedData mainShared,
-                                              List<AdjustCheckDto.CheckResultItem> resultItems) {
+                                              List<AdjustCheckDto.CheckResultItem> resultItems,
+                                              boolean excelWarningsOnly) {
         // 1. 读取主券同 ISIN 代码，没有关联或待扩展项时结束
         SecurityInfoBo mainSec = mainShared.getSecurityInfo();
         if (mainSec == null || resultItems == null || resultItems.isEmpty()) {
@@ -5375,6 +5389,7 @@ public class CrmwPoolAdjustService {
         }
 
         List<AdjustCheckDto.CheckResultItem> relatedResults = new ArrayList<>();
+        List<AdjustCheckDto.CheckResultItem> inactiveRelatedResults = new ArrayList<>();
         // 3. 逐个读取关联标的主档，并查询其与原凭证组合的当前状态
         for (String relatedCode : relatedCodes) {
             SecurityInfoBo relatedSec = crmwPoolAdjustMapper.querySecurityBoByCode(relatedCode);
@@ -5427,6 +5442,16 @@ public class CrmwPoolAdjustService {
                     AdjustCheckContext ctx = buildCheckContext(fakeItem, effectiveCount, relatedShared);
                     List<String> failures = AdjustMode.IN.getCode().equals(mother.getAdjustMode())
                             ? checkInConditions(ctx) : checkOutConditions(ctx);
+                    // 普通申请保留到期或已出池的关联标的，但有效组合仍可组成可提交组
+                    String inactiveReason = excelWarningsOnly || ctx.getTargetPool() == null ? null
+                            : RelatedMarketAdjustHelper.inactiveBondReason(relatedSec, ctx.getCategoryType(),
+                            mother.getAdjustMode(), relatedShared.getCurrentPoolIds().contains(mother.getTargetPoolId()));
+                    if (inactiveReason != null) {
+                        inactiveRelatedResults.add(relatedItem);
+                        if (failures.isEmpty()) {
+                            failures = Collections.singletonList(inactiveReason);
+                        }
+                    }
                     relatedItem.setCanAdjust(failures.isEmpty());
                     relatedItem.setFailReasons(failures);
                     relatedItem.setWarnings(ctx.getWarnings());
@@ -5436,17 +5461,21 @@ public class CrmwPoolAdjustService {
                 }
 
                 AdjustCheckDto.CheckResultItem manualItem = manualByGroup.get(mother.getAdjustGroupKey());
-                if (manualItem != null) {
+                if (manualItem != null && !excelWarningsOnly) {
                     // 同组手工项失败时阻断关联项
                     inheritManualItemFailure(relatedItem, manualItem);
                 }
                 relatedResults.add(relatedItem);
             }
         }
-        // 5. 合并关联项，任一市场失败时反向阻断整个调库组
+        // 5. 合并主券和关联券的结果，保留每个代码的校验行
         resultItems.addAll(relatedResults);
-        // 任一市场失败反向阻断整个调库组，避免只提交部分市场
-        propagateRelatedMarketFailure(resultItems);
+        if (!excelWarningsOnly) {
+            // 到期或已出池的关联券保留自己的失败原因，其余有效券按组判断失败
+            propagateRelatedMarketFailure(resultItems.stream()
+                    .filter(item -> !inactiveRelatedResults.contains(item))
+                    .collect(Collectors.toList()));
+        }
     }
 
     /**

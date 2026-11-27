@@ -507,7 +507,7 @@ class SecurityPoolCheckRules {
      * 原规则全部执行后，统一将 Excel 业务失败作为可提交提示
      *
      * 执行顺序：
-     * 1. 用本次已加载数据识别没有实际证券或目标池的组，这类数据仍无法落库
+     * 1. 用本次已加载数据识别主档、目标池无效或命中硬限制的组
      * 2. 其余组统一允许提交，保留 failReasons 供页面显示和导入快照留存
      *
      * @param shared 本次已经加载的主券、关联券和投资池
@@ -524,6 +524,10 @@ class SecurityPoolCheckRules {
                 invalidGroups.add(item.getAdjustGroupKey());
             }
         }
+        // 只有真正不可提交的组才在其他证券行显示整组失败原因
+        propagateRelatedMarketFailure(items.stream()
+                .filter(item -> invalidGroups.contains(item.getAdjustGroupKey()))
+                .collect(Collectors.toList()));
         for (AdjustCheckDto.CheckResultItem item : items) {
             item.setCanAdjust(!invalidGroups.contains(item.getAdjustGroupKey()));
         }
@@ -3205,7 +3209,7 @@ class SecurityPoolCheckRules {
     /**
      * 规则：债券到期（delist_date）
      *
-     * 债券摘牌日早于今日则禁止调入。对应老项目 checkInPool:544（ptype=4000 债券分支）
+     * 债券已退市或摘牌日早于今日时禁止调入
      *
      * 执行顺序：
      * 1. 读取债券摘牌日，有值且早于当天时返回到期调入提示
@@ -3214,14 +3218,8 @@ class SecurityPoolCheckRules {
      * @return 债券到期提示，未命中时为 null
      */
     private String inCheckBondMaturity(AdjustCheckContext ctx) {
-        String delistDate = ctx.getSecurityInfo().getDelistDate();
-        if (delistDate != null && !delistDate.isEmpty()) {
-            String today = new SimpleDateFormat("yyyyMMdd").format(new Date());
-            if (delistDate.compareTo(today) < 0) {
-                return "债券已到期";
-            }
-        }
-        return null;
+        return RelatedMarketAdjustHelper.isDelistedOrExpired(ctx.getSecurityInfo())
+                ? RelatedMarketAdjustHelper.BOND_EXPIRED : null;
     }
 
     /**
@@ -3249,7 +3247,7 @@ class SecurityPoolCheckRules {
     /**
      * 规则：债券到期（delist_date，调出）
      *
-     * 债券摘牌日早于今日则禁止调出。对应老项目 checkOutPool 到期校验
+     * 债券已退市或摘牌日早于今日时禁止普通调出
      *
      * 执行顺序：
      * 1. 将债券摘牌日与当天比较，已过摘牌日时返回调出校验提示
@@ -3258,14 +3256,8 @@ class SecurityPoolCheckRules {
      * @return 债券到期提示，未命中时为 null
      */
     private String outCheckBondMaturity(AdjustCheckContext ctx) {
-        String delistDate = ctx.getSecurityInfo().getDelistDate();
-        if (delistDate != null && !delistDate.isEmpty()) {
-            String today = new SimpleDateFormat("yyyyMMdd").format(new Date());
-            if (delistDate.compareTo(today) < 0) {
-                return "债券已到期";
-            }
-        }
-        return null;
+        return RelatedMarketAdjustHelper.isDelistedOrExpired(ctx.getSecurityInfo())
+                ? RelatedMarketAdjustHelper.BOND_EXPIRED : null;
     }
 
     /**
@@ -4265,14 +4257,15 @@ class SecurityPoolCheckRules {
      * 1. 回填主券证券信息到已有结果项
      * 2. 仅对主券母项扩批（manual/linkage/mutex）
      * 3. 已通过的调入项占用 projected 容量，避免主+关联同池全部通过却超容
-     * 4. 保留仍需执行的关联券，整组校验前跳过主券已满足的联动调入
+     * 4. 返回逐券校验结果，自动补债任务只保留仍需执行的调整项
      *
      * @param req 调库校验请求
      * @param mainShared 主标的的校验共用数据
      * @param resultItems 前四阶段的校验结果
+     * @param excelWarningsOnly 是否允许 Excel 将逐券业务失败转为提示
      */
     void expandRelatedMarketCodeItems(AdjustCheckReq req, AdjustSharedData mainShared,
-                                              List<AdjustCheckDto.CheckResultItem> resultItems) {
+                                      List<AdjustCheckDto.CheckResultItem> resultItems, boolean excelWarningsOnly) {
         SecurityInfoBo mainSec = mainShared.getSecurityInfo();
         if (mainSec == null || resultItems == null || resultItems.isEmpty()) {
             return;
@@ -4325,6 +4318,14 @@ class SecurityPoolCheckRules {
                 manualByGroup.put(item.getAdjustGroupKey(), item);
             }
         }
+        if (scheduled) {
+            // 自动补债只为仍需补入的主券展开关联调整
+            motherItems.removeIf(item -> {
+                AdjustCheckDto.CheckResultItem manual = manualByGroup.get(item.getAdjustGroupKey());
+                return manual != null && RelatedMarketAdjustHelper.isExpiredInbound(
+                        manual.getAdjustMode(), manual.getFailReasons());
+            });
+        }
         if (motherItems.isEmpty()) {
             return;
         }
@@ -4342,6 +4343,7 @@ class SecurityPoolCheckRules {
         }
 
         List<AdjustCheckDto.CheckResultItem> relatedResults = new ArrayList<>();
+        List<AdjustCheckDto.CheckResultItem> inactiveRelatedResults = new ArrayList<>();
         for (String relatedCode : relatedCodes) {
             SecurityInfoBo relatedSec;
             if (mainShared.getBatchData() == null) {
@@ -4396,9 +4398,28 @@ class SecurityPoolCheckRules {
                     fakeItem.setPoolType(mother.getPoolType());
                     // 构建关联券校验上下文
                     AdjustCheckContext ctx = buildCheckContext(fakeItem, effectiveCount, relatedShared);
+                    // 普通申请中到期或已出池的关联券保留失败行，由其余有效代码组成可提交组
+                    String inactiveReason = (excelWarningsOnly && !scheduled) || ctx.getTargetPool() == null ? null
+                            : RelatedMarketAdjustHelper.inactiveBondReason(relatedSec, ctx.getCategoryType(),
+                            mother.getAdjustMode(), relatedShared.getCurrentPoolIds().contains(mother.getTargetPoolId()));
+                    if (scheduled && inactiveReason != null) {
+                        AdjustCheckDto.CheckResultItem noteTarget = manualByGroup.getOrDefault(
+                                mother.getAdjustGroupKey(), mother);
+                        // 将自动补债的跳过原因记在来源调整项上
+                        noteTarget.setWarnings(RelatedMarketAdjustHelper.withSkipWarning(
+                                noteTarget.getWarnings(), relatedCode, mother.getPoolName(), inactiveReason,
+                                mother.getAdjustMode()));
+                        continue;
+                    }
                     ctx.setExcelCompanyFollow(mainShared.isExcelCompanyFollow());
                     List<String> failures = AdjustMode.IN.getCode().equals(mother.getAdjustMode())
                             ? checkInConditions(ctx) : checkOutConditions(ctx);
+                    if (inactiveReason != null) {
+                        inactiveRelatedResults.add(relatedItem);
+                        if (failures.isEmpty()) {
+                            failures = Collections.singletonList(inactiveReason);
+                        }
+                    }
                     relatedItem.setCanAdjust(failures.isEmpty());
                     relatedItem.setFailReasons(failures);
                     relatedItem.setWarnings(ctx.getWarnings());
@@ -4408,7 +4429,7 @@ class SecurityPoolCheckRules {
                 }
 
                 AdjustCheckDto.CheckResultItem manualItem = manualByGroup.get(mother.getAdjustGroupKey());
-                if (manualItem != null) {
+                if (manualItem != null && !excelWarningsOnly) {
                     // 同组手工项失败时阻断关联项
                     inheritManualItemFailure(relatedItem, manualItem);
                 }
@@ -4424,8 +4445,12 @@ class SecurityPoolCheckRules {
             resultItems.removeIf(item -> isSatisfiedLinkedInbound(item.getItemTag(), item));
         }
         resultItems.addAll(relatedResults);
-        // 汇总跨市场失败原因后统一阻断同组，保留原始失败项的具体原因
-        propagateRelatedMarketFailure(resultItems);
+        if (!excelWarningsOnly) {
+            // 其余有效市场仍按整组校验
+            propagateRelatedMarketFailure(resultItems.stream()
+                    .filter(item -> !inactiveRelatedResults.contains(item))
+                    .collect(Collectors.toList()));
+        }
     }
 
     /**
@@ -4537,7 +4562,7 @@ class SecurityPoolCheckRules {
 
 
         // 4. 回填主券信息，按 Wind ISIN 展开同池同向的关联市场证券
-        expandRelatedMarketCodeItems(req, shared, resultItems);
+        expandRelatedMarketCodeItems(req, shared, resultItems, excelWarningsOnly);
 
         // 5. 按 Excel 入口处理已达到目标状态的配套项和可转为提示的校验结果
         if (shared.isExcelCompanyFollow()) {

@@ -848,7 +848,7 @@ public class ForbiddenAbsPoolAdjustService {
             absIdentityService.validateIdentity(identityCode, shared.securityInfo.getIssuerCode());
         }
         // 4. 检查关联市场调入、顶级池组在途流程和必需的互斥调出项
-        validateRelatedInboundItemsOnSubmit(req);
+        validateRelatedInboundItemsOnSubmit(req, shared.securityInfo);
         // 检查本次涉及的顶级池组是否已有活动流程
         checkSubmitPendingPoolGroups(req, shared.poolMap);
         // 调入须同步调出互斥池：缺失或调出不可行则整单拒绝，防止双池
@@ -1058,14 +1058,17 @@ public class ForbiddenAbsPoolAdjustService {
     }
 
     /**
-     * 同券各市场代码须同池同向调入，防止客户端仅提交部分通过项
+     * 核对 ABS 债各市场代码在同一目标池的调入清单
      *
      * 执行顺序：
-     * 1. 逐项解析调库项实际证券代码：item 级优先，否则回退请求级主券代码
+     * 1. 按目标池汇总实际调入代码，明细未传代码时使用请求中的主券代码
+     * 2. 债券单笔调入时重新查询同券范围
+     * 3. 复核退市和到期状态，并核对各池的调入清单是否齐全
      *
      * @param req 调库提交请求
+     * @param main 主券证券主档
      */
-    private void validateRelatedInboundItemsOnSubmit(ForbiddenAbsPoolAdjustSubmitReq req) {
+    private void validateRelatedInboundItemsOnSubmit(ForbiddenAbsPoolAdjustSubmitReq req, SecurityInfoBo main) {
         Map<Long, Set<String>> inboundCodes = new LinkedHashMap<>();
         for (ForbiddenAbsPoolAdjustSubmitReq.AdjustItem item : req.getItems()) {
             if (AdjustMode.IN.getCode().equals(item.getAdjustMode())) {
@@ -1075,26 +1078,16 @@ public class ForbiddenAbsPoolAdjustService {
                         .add(resolveItemSecurityCode(req, item));
             }
         }
-        if (inboundCodes.isEmpty()) {
-            return;
-        }
         List<SecurityMarketDto> relatedCodes = req.getRelatedMarketCodes();
-        if (relatedCodes == null || relatedCodes.isEmpty()) {
-            return;
+        if (!inboundCodes.isEmpty()
+                && CategoryType.BOND.getCode().equals(forbiddenAbsPoolAdjustMapper.queryCategoryTypeBySecurityType(main.getSecurityType()))) {
+            // 单笔 ABS 债券从服务端重新确认同券范围
+            relatedCodes = securityMarketService.queryRelatedMarketCodes(main.getWindCode());
         }
-        Set<String> requiredCodes = new HashSet<>();
-        requiredCodes.add(req.getSecurityCode());
-        for (SecurityMarketDto related : relatedCodes) {
-            requiredCodes.add(related.getWindCode());
-        }
-        for (Map.Entry<Long, Set<String>> entry : inboundCodes.entrySet()) {
-            if (!entry.getValue().containsAll(requiredCodes)) {
-                Set<String> missingCodes = new TreeSet<>(requiredCodes);
-                missingCodes.removeAll(entry.getValue());
-                throw new BizException("同券跨市场调入必须整组提交，目标池[" + entry.getKey()
-                        + "]缺少证券：" + String.join("、", missingCodes) + "，请重新校验");
-            }
-        }
+        // 确认整组调入代码齐全，并复核每个代码当前是否到期
+        RelatedMarketAdjustHelper.validateInboundGroup(req.getSecurityCode(), relatedCodes, inboundCodes, false,
+                code -> code.equals(main.getWindCode()) ? main : forbiddenAbsPoolAdjustMapper.querySecurityBoByCode(code),
+                forbiddenAbsPoolAdjustMapper::queryCategoryTypeBySecurityType);
     }
 
     /**
@@ -3576,6 +3569,11 @@ public class ForbiddenAbsPoolAdjustService {
                 // 抛出包含调库项上下文的最终审批复核异常
                 throwApprovalRecheckFailure(log, "证券不存在");
             }
+            // 送审后实际代码可能摘牌，仍按原申请清单整组复核
+            if (AdjustMode.IN.getCode().equals(log.getAdjustMode())
+                    && RelatedMarketAdjustHelper.isExpiredBond(security, forbiddenAbsPoolAdjustMapper::queryCategoryTypeBySecurityType)) {
+                throwApprovalRecheckFailure(log, RelatedMarketAdjustHelper.BOND_EXPIRED + "，请重新校验调入清单");
+            }
             if (log.getId() != null && CreditBondSpecialInboundRule.isAbs(security)) {
                 absIdentityService.restoreSnapshotSelection(security, log, false);
             }
@@ -4108,7 +4106,7 @@ public class ForbiddenAbsPoolAdjustService {
     /**
      * 规则：债券到期（delist_date）
      *
-     * 债券摘牌日早于今日则禁止调入。对应老项目 checkInPool:544（ptype=4000 债券分支）
+     * 债券已退市或摘牌日早于今日时禁止调入
      *
      * 执行顺序：
      * 1. 读取债券摘牌日，有值且早于当天时返回到期调入提示
@@ -4117,14 +4115,8 @@ public class ForbiddenAbsPoolAdjustService {
      * @return 债券到期提示，未命中时为 null
      */
     private String inCheckBondMaturity(AdjustCheckContext ctx) {
-        String delistDate = ctx.getSecurityInfo().getDelistDate();
-        if (delistDate != null && !delistDate.isEmpty()) {
-            String today = new SimpleDateFormat("yyyyMMdd").format(new Date());
-            if (delistDate.compareTo(today) < 0) {
-                return "债券已到期";
-            }
-        }
-        return null;
+        return RelatedMarketAdjustHelper.isDelistedOrExpired(ctx.getSecurityInfo())
+                ? RelatedMarketAdjustHelper.BOND_EXPIRED : null;
     }
 
     /**
@@ -4152,7 +4144,7 @@ public class ForbiddenAbsPoolAdjustService {
     /**
      * 规则：债券到期（delist_date，调出）
      *
-     * 债券摘牌日早于今日则禁止调出。对应老项目 checkOutPool 到期校验
+     * 债券已退市或摘牌日早于今日时禁止普通调出
      *
      * 执行顺序：
      * 1. 将债券摘牌日与当天比较，已过摘牌日时返回调出校验提示
@@ -4161,14 +4153,8 @@ public class ForbiddenAbsPoolAdjustService {
      * @return 债券到期提示，未命中时为 null
      */
     private String outCheckBondMaturity(AdjustCheckContext ctx) {
-        String delistDate = ctx.getSecurityInfo().getDelistDate();
-        if (delistDate != null && !delistDate.isEmpty()) {
-            String today = new SimpleDateFormat("yyyyMMdd").format(new Date());
-            if (delistDate.compareTo(today) < 0) {
-                return "债券已到期";
-            }
-        }
-        return null;
+        return RelatedMarketAdjustHelper.isDelistedOrExpired(ctx.getSecurityInfo())
+                ? RelatedMarketAdjustHelper.BOND_EXPIRED : null;
     }
 
     /**
@@ -5734,7 +5720,8 @@ public class ForbiddenAbsPoolAdjustService {
      * 1. 回填主券证券信息到已有结果项
      * 2. 仅对主券母项扩批（manual/linkage/mutex）
      * 3. 已通过的调入项占用 projected 容量，避免主+关联同池全部通过却超容
-     * 4. 任一市场失败反向阻断整个调库组，避免只提交部分市场
+     * 4. 逐券校验并记录到期或已出池的关联券
+     * 5. 合并各市场结果，到期或已出池的关联券单独显示失败，其余有效券按组校验
      *
      * @param req 调库校验请求
      * @param mainShared 主标的的校验共用数据
@@ -5792,7 +5779,9 @@ public class ForbiddenAbsPoolAdjustService {
             }
         }
 
+        // 4. 逐券校验并记录到期或已出池的关联券
         List<AdjustCheckDto.CheckResultItem> relatedResults = new ArrayList<>();
+        List<AdjustCheckDto.CheckResultItem> inactiveRelatedResults = new ArrayList<>();
         for (String relatedCode : relatedCodes) {
             SecurityInfoBo relatedSec = forbiddenAbsPoolAdjustMapper.querySecurityBoByCode(relatedCode);
             AdjustSharedData relatedShared = relatedSec == null ? null
@@ -5836,6 +5825,16 @@ public class ForbiddenAbsPoolAdjustService {
                     AdjustCheckContext ctx = buildCheckContext(fakeItem, effectiveCount, relatedShared);
                     List<String> failures = AdjustMode.IN.getCode().equals(mother.getAdjustMode())
                             ? checkInConditions(ctx) : checkOutConditions(ctx);
+                    // 保留到期或已出池的关联券，由其余有效代码组成可提交组
+                    String inactiveReason = ctx.getTargetPool() == null ? null
+                            : RelatedMarketAdjustHelper.inactiveBondReason(relatedSec, ctx.getCategoryType(),
+                            mother.getAdjustMode(), relatedShared.getCurrentPoolIds().contains(mother.getTargetPoolId()));
+                    if (inactiveReason != null) {
+                        inactiveRelatedResults.add(relatedItem);
+                        if (failures.isEmpty()) {
+                            failures = Collections.singletonList(inactiveReason);
+                        }
+                    }
                     relatedItem.setCanAdjust(failures.isEmpty());
                     relatedItem.setFailReasons(failures);
                     relatedItem.setWarnings(ctx.getWarnings());
@@ -5852,9 +5851,12 @@ public class ForbiddenAbsPoolAdjustService {
                 relatedResults.add(relatedItem);
             }
         }
+        // 5. 合并主券和关联券的结果，保留每个代码的校验行
         resultItems.addAll(relatedResults);
-        // 4. 任一市场失败反向阻断整个调库组，避免只提交部分市场
-        propagateRelatedMarketFailure(resultItems);
+        // 到期或已出池的关联券保留自己的失败原因，其余有效券按组判断失败
+        propagateRelatedMarketFailure(resultItems.stream()
+                .filter(item -> !inactiveRelatedResults.contains(item))
+                .collect(Collectors.toList()));
     }
 
     /**

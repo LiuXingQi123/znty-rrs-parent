@@ -53,6 +53,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -1209,6 +1210,12 @@ public class CrmwPoolExcelImportService {
         dto.setAdjustType(resolveAdjustTypeLabel(dto.getItemTag()));
         if (dto.isCanAdjust()) {
             dto.setAdjustNote(dto.getAdjustType() + (dto.getAdjustMode() == null ? "" : dto.getAdjustMode()));
+            if (ri.getWarnings() != null) {
+                // 合并原校验原因和其他提示，去重后在 Excel 调整说明中展示
+                Set<String> tips = new LinkedHashSet<>(dto.getFailReasons());
+                tips.addAll(ri.getWarnings());
+                dto.setFailReasons(new ArrayList<>(tips));
+            }
         }
         // 4. 转换流程候选并设置默认选择
         List<CrmwPoolExcelImportCheckItemDto.FlowOptionDto> flowOptions = new ArrayList<>();

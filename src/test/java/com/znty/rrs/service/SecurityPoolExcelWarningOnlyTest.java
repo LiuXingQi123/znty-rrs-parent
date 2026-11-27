@@ -51,6 +51,8 @@ public class SecurityPoolExcelWarningOnlyTest {
         ReflectionTestUtils.setField(f.service, "batchSecurityCheckMapper", batch);
         ReflectionTestUtils.setField(f.service, "sysAttachmentService", attachments);
         f.pool.setStatus("disabled");
+        f.security.setDelistDate("20000101");
+        when(f.mapper.queryCategoryTypeBySecurityType("bond")).thenReturn("bond");
         List<String> codes = Collections.singletonList("BOND.IB");
         when(batch.querySecurities(codes)).thenReturn(Collections.singletonList(f.security));
         when(f.mapper.addPoolStatus(any())).thenReturn(1);
@@ -222,17 +224,23 @@ public class SecurityPoolExcelWarningOnlyTest {
     }
 
     @Test
-    public void actualRelatedMarketExpansionShouldAlsoKeepFailedItemsSubmittable() {
+    public void expiredRelatedMarketShouldKeepAllThreeRowsAndOnlyItsOwnWarning() {
         Fixture f = new Fixture();
-        SecurityMarketDto related = new SecurityMarketDto();
-        related.setWindCode("RELATED.SH");
-        when(f.markets.queryRelatedMarketCodes("BOND.IB")).thenReturn(Collections.singletonList(related));
-        SecurityInfoBo security = new SecurityInfoBo();
-        security.setWindCode("RELATED.SH");
-        security.setSecurityType("bond");
-        when(f.mapper.querySecurityBoByCode("RELATED.SH")).thenReturn(security);
-        when(f.mapper.querySecurityInForbiddenPool("BOND.IB")).thenReturn(true);
-        when(f.mapper.querySecurityInForbiddenPool("RELATED.SH")).thenReturn(true);
+        SecurityMarketDto shanghai = new SecurityMarketDto();
+        shanghai.setWindCode("BOND.SH");
+        SecurityMarketDto shenzhen = new SecurityMarketDto();
+        shenzhen.setWindCode("BOND.SZ");
+        when(f.markets.queryRelatedMarketCodes("BOND.IB")).thenReturn(Arrays.asList(shanghai, shenzhen));
+        for (String code : Arrays.asList("BOND.SH", "BOND.SZ")) {
+            SecurityInfoBo security = new SecurityInfoBo();
+            security.setWindCode(code);
+            security.setSecurityType("bond");
+            if ("BOND.SH".equals(code)) {
+                security.setDelistDate("20000101");
+            }
+            when(f.mapper.querySecurityBoByCode(code)).thenReturn(security);
+        }
+        when(f.mapper.queryCategoryTypeBySecurityType("bond")).thenReturn("bond");
         AdjustCheckReq req = new AdjustCheckReq();
         req.setSecurityCode("BOND.IB");
         AdjustCheckReq.CheckItem item = new AdjustCheckReq.CheckItem();
@@ -242,9 +250,12 @@ public class SecurityPoolExcelWarningOnlyTest {
 
         AdjustCheckDto result = f.service.checkExcelAdjust(req);
 
-        assertThat(result.getItems()).hasSize(2);
+        assertThat(result.getItems()).extracting(AdjustCheckDto.CheckResultItem::getSecurityCode)
+                .containsExactly("BOND.IB", "BOND.SH", "BOND.SZ");
         assertThat(result.getItems()).allMatch(AdjustCheckDto.CheckResultItem::isCanAdjust);
-        assertThat(result.getItems()).allSatisfy(row -> assertThat(row.getFailReasons()).isNotEmpty());
+        assertThat(result.getItems().get(1).getFailReasons()).contains("债券已到期");
+        assertThat(result.getItems().get(0).getFailReasons()).doesNotContain("债券已到期");
+        assertThat(result.getItems().get(2).getFailReasons()).doesNotContain("债券已到期");
     }
 
     @Test
@@ -266,6 +277,13 @@ public class SecurityPoolExcelWarningOnlyTest {
             f.pool.setLockFlag(1);
             when(f.mapper.querySecurityInForbiddenPool("BOND.IB")).thenReturn(true);
             List<IpAdjustLogBo> logs = Arrays.asList(log(type, "E1", "调入"), log("关联调整", "E1", "调入"));
+            SecurityInfoBo expired = new SecurityInfoBo();
+            expired.setWindCode("BOND.SH");
+            expired.setSecurityType("bond");
+            expired.setSecurityStatus("D");
+            logs.get(1).setSecurityCode("BOND.SH");
+            when(f.mapper.querySecurityBoByCode("BOND.SH")).thenReturn(expired);
+            when(f.mapper.queryCategoryTypeBySecurityType("bond")).thenReturn("bond");
             f.service.recheckBeforeFinalApproval(logs);
             verify(f.mapper, never()).querySecurityInForbiddenPool("BOND.IB");
         }
@@ -336,6 +354,7 @@ public class SecurityPoolExcelWarningOnlyTest {
 
     private static AdjustCheckDto.CheckResultItem result(String code, String group, String tag) {
         AdjustCheckDto.CheckResultItem item = new AdjustCheckDto.CheckResultItem();
+        item.setFailReasons(Collections.emptyList());
         item.setSecurityCode(code);
         item.setTargetPoolId(100L);
         item.setAdjustGroupKey(group);

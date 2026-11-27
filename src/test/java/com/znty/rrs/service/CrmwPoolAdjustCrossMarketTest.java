@@ -79,6 +79,28 @@ public class CrmwPoolAdjustCrossMarketTest {
         assertThat(items.get(0).getFailReasons()).anyMatch(reason -> reason.contains("A.SH"));
     }
 
+    /** 关联标的单独摘牌时保留失败行，其余有效市场仍按组校验 */
+    @Test
+    public void expiredUnderlyingShouldRemainVisibleAndOnlyPendingShouldBlockActiveMarkets() {
+        // 沪市标的已过摘牌日，其他有效市场继续调入
+        SecurityInfoBo expired = security("A.SH");
+        expired.setDelistDate("20000101");
+        when(mapper.querySecurityBoByCode("A.SH")).thenReturn(expired);
+        List<AdjustCheckDto.CheckResultItem> items = expand();
+        assertThat(items).extracting(AdjustCheckDto.CheckResultItem::getSecurityCode)
+                .containsExactly("A.IB", "A.SH", "A.SZ");
+        assertThat(items).extracting(AdjustCheckDto.CheckResultItem::isCanAdjust)
+                .containsExactly(true, false, true);
+        assertThat(items.get(1).getFailReasons()).contains("债券已到期");
+
+        // 深市标的在途时，有效市场一同失败，过期券依旧保留
+        when(mapper.queryPendingManualTargetPoolIdList("A.SZ", "C.IB", "crmw", null))
+                .thenReturn(Collections.singletonList(10L));
+        items = expand();
+        assertThat(items).hasSize(3).allMatch(item -> !item.isCanAdjust());
+        assertThat(items.get(2).getFailReasons()).anyMatch(reason -> reason.contains("进行中"));
+    }
+
     /** 容量不足以容纳三个市场时不能只入部分组合。 */
     @Test
     public void insufficientCapacityShouldBlockWholeGroup() {
@@ -99,7 +121,7 @@ public class CrmwPoolAdjustCrossMarketTest {
     @Test
     public void submitShouldRejectMissingPassedMarketWithoutQuery() {
         CrmwPoolAdjustSubmitReq req = submitRequest("A.IB", "A.SZ");
-        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(service, "validateRelatedInboundItemsOnSubmit", req))
+        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(service, "validateRelatedInboundItemsOnSubmit", req, shared.getSecurityInfo(), false))
                 .isInstanceOf(BizException.class).hasMessageContaining("A.SH");
         verify(markets, never()).queryRelatedMarketCodes(anyString());
     }
@@ -110,7 +132,7 @@ public class CrmwPoolAdjustCrossMarketTest {
         CrmwPoolAdjustSubmitReq req = submitRequest("A.IB", "A.SH", "A.SZ");
         when(mapper.queryPendingManualTargetPoolIdList("A.SH", "C.IB", "crmw", null))
                 .thenReturn(Collections.singletonList(10L));
-        ReflectionTestUtils.invokeMethod(service, "validateRelatedInboundItemsOnSubmit", req);
+        ReflectionTestUtils.invokeMethod(service, "validateRelatedInboundItemsOnSubmit", req, shared.getSecurityInfo(), false);
         assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(service, "checkSubmitPendingPoolGroups", req, shared.getPoolMap()))
                 .isInstanceOf(BizException.class).hasMessageContaining("C.IB/A.SH");
         verify(markets, never()).queryRelatedMarketCodes(anyString());
@@ -134,7 +156,7 @@ public class CrmwPoolAdjustCrossMarketTest {
         req.setSecurityCode("A.IB");
         req.setCrmwScode("C.IB");
         req.setCrmwStype("crmw");
-        ReflectionTestUtils.invokeMethod(service, "expandRelatedMarketCodeItems", req, shared, items);
+        ReflectionTestUtils.invokeMethod(service, "expandRelatedMarketCodeItems", req, shared, items, false);
         return items;
     }
 

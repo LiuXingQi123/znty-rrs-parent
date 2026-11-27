@@ -1779,8 +1779,8 @@ public class SecurityPoolAdjustService {
                 req.setSecurityInfo(shared.securityInfo);
             }
         }
-        // 4. 同券跨市场调入必须完整提交，禁止跳过校验失败的关联券
-        validateRelatedInboundItemsOnSubmit(req);
+        // 4. 核对每个目标池的同券调入清单，普通调库只提交仍可调入的代码
+        validateRelatedInboundItemsOnSubmit(req, shared.securityInfo, batch);
         // 5. 普通入口检查在途，Excel 在原校验中保留在途提示后放行
         if (!isExcelAdjustType(req.getAdjustType())) {
             // 检查正式提交涉及的池组是否已有活动流程（按每条调库项的证券代码独立判断）
@@ -2069,14 +2069,19 @@ public class SecurityPoolAdjustService {
     }
 
     /**
-     * 同券各市场代码须同池同向调入，防止客户端仅提交部分通过项
+     * 核对同券各市场代码在同一目标池的调入清单
      *
      * 执行顺序：
-     * 1. 逐项解析调库项实际证券代码：item 级优先，否则回退请求级主券代码
+     * 1. 按目标池汇总实际调入代码，明细未传代码时使用请求中的主券代码
+     * 2. 普通单笔债券调入时重新查询同券代码，批量和 Excel 使用校验后的清单
+     * 3. 核对各池的代码是否齐全，普通调库还复核实际调入代码的退市和到期状态
      *
      * @param req 调库提交请求
+     * @param main 主券证券主档
+     * @param batch 批量提交已加载的数据，未使用批量数据时为 null
      */
-    private void validateRelatedInboundItemsOnSubmit(SecurityPoolAdjustSubmitReq req) {
+    private void validateRelatedInboundItemsOnSubmit(SecurityPoolAdjustSubmitReq req, SecurityInfoBo main,
+                                                        BatchSubmitData batch) {
         Map<Long, Set<String>> inboundCodes = new LinkedHashMap<>();
         for (SecurityPoolAdjustSubmitReq.AdjustItem item : req.getItems()) {
             if (AdjustMode.IN.getCode().equals(item.getAdjustMode())) {
@@ -2086,26 +2091,23 @@ public class SecurityPoolAdjustService {
                         .add(resolveItemSecurityCode(req, item));
             }
         }
-        if (inboundCodes.isEmpty()) {
-            return;
-        }
         List<SecurityMarketDto> relatedCodes = req.getRelatedMarketCodes();
-        if (relatedCodes == null || relatedCodes.isEmpty()) {
-            return;
+        boolean excelImport = isExcelAdjustType(req.getAdjustType());
+        if (!inboundCodes.isEmpty() && batch == null && !excelImport
+                && CategoryType.BOND.getCode().equals(securityPoolAdjustMapper.queryCategoryTypeBySecurityType(main.getSecurityType()))) {
+            // 单笔债券从服务端重新确认同券范围，批量和 Excel 沿用校验后的清单
+            relatedCodes = securityMarketService.queryRelatedMarketCodes(main.getWindCode());
         }
-        Set<String> requiredCodes = new HashSet<>();
-        requiredCodes.add(req.getSecurityCode());
-        for (SecurityMarketDto related : relatedCodes) {
-            requiredCodes.add(related.getWindCode());
-        }
-        for (Map.Entry<Long, Set<String>> entry : inboundCodes.entrySet()) {
-            if (!entry.getValue().containsAll(requiredCodes)) {
-                Set<String> missingCodes = new TreeSet<>(requiredCodes);
-                missingCodes.removeAll(entry.getValue());
-                throw new BizException("同券跨市场调入必须整组提交，目标池[" + entry.getKey()
-                        + "]缺少证券：" + String.join("、", missingCodes) + "，请重新校验");
-            }
-        }
+        // 确认同组调入代码齐全，普通申请另按当前主档复核到期
+        RelatedMarketAdjustHelper.validateInboundGroup(req.getSecurityCode(), relatedCodes, inboundCodes, excelImport,
+                code -> {
+                    if (code.equals(main.getWindCode())) {
+                        return main;
+                    }
+                    SecurityInfoBo security = batch == null ? null : batch.data.securities.get(code);
+                    return security == null ? securityPoolAdjustMapper.querySecurityBoByCode(code) : security;
+                },
+                securityPoolAdjustMapper::queryCategoryTypeBySecurityType);
     }
 
     /**
@@ -4108,6 +4110,11 @@ public class SecurityPoolAdjustService {
                 // 抛出包含调库项上下文的最终审批复核异常
                 throwApprovalRecheckFailure(log, "证券不存在");
             }
+            // 普通申请送审后可能摘牌，Excel 沿用业务提示放行口径
+            if (!excelImport && AdjustMode.IN.getCode().equals(log.getAdjustMode())
+                    && RelatedMarketAdjustHelper.isExpiredBond(security, securityPoolAdjustMapper::queryCategoryTypeBySecurityType)) {
+                throwApprovalRecheckFailure(log, RelatedMarketAdjustHelper.BOND_EXPIRED + "，请重新校验调入清单");
+            }
             if (log.getId() != null && CreditBondSpecialInboundRule.isAbs(security)) {
                 absIdentityService.restoreSnapshotSelection(security, log, false);
             }
@@ -5668,7 +5675,7 @@ public class SecurityPoolAdjustService {
     private void expandRelatedMarketCodeItems(AdjustCheckReq req, AdjustSharedData mainShared,
                                               List<AdjustCheckDto.CheckResultItem> resultItems) {
         // 获取规则组件，直接构造服务时沿用显式注入的依赖
-        checkRules().expandRelatedMarketCodeItems(req, mainShared, resultItems);
+        checkRules().expandRelatedMarketCodeItems(req, mainShared, resultItems, false);
     }
 
     /**

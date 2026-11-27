@@ -21,7 +21,7 @@ public class ForbiddenAbsPoolAdjustSubmitReq {
     /** 证券代码 */
     private String securityCode;
 
-    /** 前端已查询的同券关联代码，提交时直接复用，不重新查询关联关系 */
+    /** 请求中的同券调库代码，债券单笔调入时由后端复核同券范围 */
     private List<SecurityMarketDto> relatedMarketCodes;
 
     /** 证券简称 */

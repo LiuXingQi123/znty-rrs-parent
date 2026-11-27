@@ -1,6 +1,7 @@
 package com.znty.rrs.service;
 
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
+import com.znty.rrs.entity.bo.IpAdjustLogBo;
 import com.znty.rrs.entity.bo.SecurityInfoBo;
 import com.znty.rrs.entity.common.SecurityMarketDto;
 import com.znty.rrs.entity.forbiddenabspooladjust.ForbiddenAbsPoolAdjustCheckReq;
@@ -11,6 +12,7 @@ import com.znty.rrs.entity.securitypooladjust.AdjustSharedData;
 import com.znty.rrs.entity.securitypooladjust.SecurityPoolAdjustSubmitReq;
 import com.znty.rrs.exception.BizException;
 import com.znty.rrs.mapper.ForbiddenAbsPoolAdjustMapper;
+import com.znty.rrs.mapper.InvestmentPoolMapper;
 import com.znty.rrs.mapper.SecurityPoolAdjustMapper;
 import org.junit.Before;
 import org.junit.Test;
@@ -29,9 +31,7 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -104,6 +104,71 @@ public class SecurityPoolAdjustCrossMarketTest {
         assertThat(items).hasSize(3).allMatch(item -> !item.isCanAdjust());
         assertThat(items.get(0).getFailReasons()).anyMatch(reason -> reason.contains("A.SH"));
         assertThat(items.get(1).getFailReasons()).anyMatch(reason -> reason.contains("进行中"));
+    }
+
+    /** 同券沪市已过摘牌日，普通调库保留该行失败并允许另外两个市场调整 */
+    @Test
+    public void expiredRelatedBondShouldRemainVisibleWithoutBlockingActiveMarkets() {
+        // 模拟沪市代码单独摘牌
+        SecurityInfoBo expired = security("A.SH");
+        expired.setDelistDate("20000101");
+        stub("querySecurityBoByCode", expired, "A.SH");
+        List<AdjustCheckDto.CheckResultItem> items = expand();
+        assertThat(items).extracting(AdjustCheckDto.CheckResultItem::getSecurityCode)
+                .containsExactly("A.IB", "A.SH", "A.SZ");
+        assertThat(items).extracting(AdjustCheckDto.CheckResultItem::isCanAdjust)
+                .containsExactly(true, false, true);
+        assertThat(items.get(1).getFailReasons()).contains("债券已到期");
+    }
+
+    /** 同券退市和在途分别保留在各自结果行 */
+    @Test
+    public void pendingAndDelistedMarketsShouldBothReportFailure() {
+        // 沪市已退市，深市尚有在途审批
+        SecurityInfoBo delisted = security("A.SH");
+        delisted.setSecurityStatus("D");
+        stub("querySecurityBoByCode", delisted, "A.SH");
+        stub("queryPendingManualTargetPoolIdList", Collections.singletonList(4L), "A.SZ", null);
+        List<AdjustCheckDto.CheckResultItem> items = expand();
+        assertThat(items).extracting(AdjustCheckDto.CheckResultItem::getSecurityCode)
+                .containsExactly("A.IB", "A.SH", "A.SZ");
+        assertThat(items).allMatch(item -> !item.isCanAdjust());
+        assertThat(items.get(1).getFailReasons()).contains("债券已到期");
+        assertThat(items.get(2).getFailReasons()).anyMatch(reason -> reason.contains("进行中"));
+        assertThat(items.get(0).getFailReasons()).anyMatch(reason -> reason.contains("A.SZ"));
+    }
+
+    /** 调出保留未在池的代码及仍在池但已到期的代码 */
+    @Test
+    public void outboundShouldKeepAbsentAndExpiredRelatedMarkets() {
+        // 沪市已出池，深市仍在池但已过摘牌日
+        SecurityInfoBo expired = security("A.SZ");
+        expired.setDelistDate("20000101");
+        stub("querySecurityBoByCode", expired, "A.SZ");
+        stub("querySecurityCurrentPoolIdList", Collections.singletonList(4L), "A.SZ");
+        AdjustCheckDto.CheckResultItem main = manual(4L);
+        main.setAdjustMode("调出");
+        List<AdjustCheckDto.CheckResultItem> items = new ArrayList<>(Collections.singletonList(main));
+        expand(items);
+        assertThat(items).extracting(AdjustCheckDto.CheckResultItem::isCanAdjust)
+                .containsExactly(true, false, false);
+        assertThat(items.get(1).getFailReasons()).anyMatch(reason -> reason.contains("不在目标"));
+        assertThat(items.get(2).getFailReasons()).contains("债券已到期");
+    }
+
+    /** 主券到期也保留同券各市场结果 */
+    @Test
+    public void expiredMainShouldKeepAllMarketsInFailedGroup() {
+        // 模拟主券已经命中到期调入校验
+        AdjustCheckDto.CheckResultItem main = manual(4L);
+        main.setCanAdjust(false);
+        main.setFailReasons(Collections.singletonList("债券已到期"));
+        List<AdjustCheckDto.CheckResultItem> items = new ArrayList<>(Collections.singletonList(main));
+        expand(items);
+        assertThat(items).extracting(AdjustCheckDto.CheckResultItem::getSecurityCode)
+                .containsExactly("A.IB", "A.SH", "A.SZ");
+        assertThat(items).allMatch(item -> !item.isCanAdjust());
+        assertThat(main.getFailReasons()).containsExactly("债券已到期");
     }
 
     /** 最后一个关联券失败也须反向阻断先前已通过的关联券。 */
@@ -193,9 +258,43 @@ public class SecurityPoolAdjustCrossMarketTest {
     @Test
     public void submitShouldRejectOmittedRelatedMarket() {
         Object req = submitRequest("A.IB", "A.SZ");
-        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(service, "validateRelatedInboundItemsOnSubmit", req))
+        assertThatThrownBy(() -> validateInbound(req))
                 .isInstanceOf(BizException.class).hasMessageContaining("整组提交").hasMessageContaining("A.SH");
-        verify(markets, never()).queryRelatedMarketCodes(anyString());
+        verify(markets).queryRelatedMarketCodes("A.IB");
+    }
+
+    /** 普通调库只提交有效市场，已退市的关联码保留在结果中 */
+    @Test
+    public void submitShouldRequireOnlyCurrentInboundMarkets() {
+        // 详情仍包含沪市，但它已退市，服务端按实际主档判断
+        SecurityInfoBo delisted = security("A.SH");
+        delisted.setSecurityStatus("D");
+        stub("querySecurityBoByCode", delisted, "A.SH");
+        validateInbound(submitRequest("A.IB", "A.SZ"));
+        assertThatThrownBy(() -> validateInbound(submitRequest("A.IB")))
+                .isInstanceOf(BizException.class).hasMessageContaining("A.SZ");
+        assertThatThrownBy(() -> validateInbound(submitRequest("A.IB", "A.SH", "A.SZ")))
+                .isInstanceOf(BizException.class).hasMessageContaining("A.SH").hasMessageContaining("重新校验");
+    }
+
+    /** 送审清单中的有效码在终审前摘牌时，整组须重新校验 */
+    @Test
+    public void approvalShouldRejectMarketExpiredAfterSubmission() {
+        // 准备有效目标池及送审后才过期的标的主档
+        pool.setStatus("enabled");
+        InvestmentPoolMapper investmentPoolMapper = mock(InvestmentPoolMapper.class);
+        when(investmentPoolMapper.queryPoolList()).thenReturn(Collections.singletonList(pool));
+        ReflectionTestUtils.setField(service, "investmentPoolMapper", investmentPoolMapper);
+        SecurityInfoBo expired = security("A.SZ");
+        expired.setDelistDate("20000101");
+        stub("querySecurityBoByCode", expired, "A.SZ");
+        IpAdjustLogBo log = new IpAdjustLogBo();
+        log.setSecurityCode("A.SZ");
+        log.setTargetPoolId(4L);
+        log.setAdjustMode("调入");
+        List<IpAdjustLogBo> logs = Collections.singletonList(log);
+        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(service, "recheckBeforeFinalApproval", logs))
+                .isInstanceOf(BizException.class).hasMessageContaining("A.SZ").hasMessageContaining("重新校验");
     }
 
     /** 四池之外的目标池也进入证券主档检查 */
@@ -217,7 +316,7 @@ public class SecurityPoolAdjustCrossMarketTest {
     public void submitShouldAcceptCompleteRelatedMarkets() {
         Object req = submitRequest("A.IB", "A.SH", "A.SZ");
         ReflectionTestUtils.invokeMethod(service, "validateSubmitReq", req);
-        ReflectionTestUtils.invokeMethod(service, "validateRelatedInboundItemsOnSubmit", req);
+        validateInbound(req);
     }
 
     /** 其他池的同券代码不能冒充本次目标池缺失的关联项。 */
@@ -226,8 +325,18 @@ public class SecurityPoolAdjustCrossMarketTest {
         Object req = submitRequest("A.IB", "A.SH", "A.SZ");
         List<?> items = (List<?>) ReflectionTestUtils.getField(req, "items");
         ReflectionTestUtils.setField(items.get(1), "targetPoolId", 8L);
-        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(service, "validateRelatedInboundItemsOnSubmit", req))
+        assertThatThrownBy(() -> validateInbound(req))
                 .isInstanceOf(BizException.class).hasMessageContaining("A.SH");
+    }
+
+    /** 用已加载主档运行各链路的单笔调入复核 */
+    private void validateInbound(Object req) {
+        if (abs) {
+            ReflectionTestUtils.invokeMethod(service, "validateRelatedInboundItemsOnSubmit", req, shared.getSecurityInfo());
+        } else {
+            ReflectionTestUtils.invokeMethod(service, "validateRelatedInboundItemsOnSubmit",
+                    req, shared.getSecurityInfo(), null);
+        }
     }
 
     /** 使用单券入口的既有展开阶段，关联券执行真实业务规则。 */
