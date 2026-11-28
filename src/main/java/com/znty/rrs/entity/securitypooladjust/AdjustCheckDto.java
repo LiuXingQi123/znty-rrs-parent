@@ -1,5 +1,7 @@
 package com.znty.rrs.entity.securitypooladjust;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.znty.rrs.entity.bo.SecurityInfoBo;
 import lombok.Data;
 
 import java.util.List;
@@ -12,6 +14,10 @@ public class AdjustCheckDto {
 
     /** 各目标池校验结果列表（顺序与请求 items 一致） */
     private List<CheckResultItem> items;
+
+    /** 自动补债写快照使用的证券资料，已带入本次校验的担保人及内评 */
+    @JsonIgnore
+    private SecurityInfoBo checkedSecurityInfo;
 
     /** 本次调库可选流程列表 */
     private List<FlowOption> flowOptions;

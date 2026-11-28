@@ -15,12 +15,14 @@ import com.znty.rrs.entity.batchsecuritypooladjust.BatchSecurityInboundAdjustDto
 import com.znty.rrs.entity.batchsecuritypooladjust.BatchSecurityInboundAdjustReq;
 import com.znty.rrs.entity.batchsecuritypooladjust.BatchSecurityPoolAdjustReq;
 import com.znty.rrs.entity.batchsecuritypooladjust.BatchSecurityPoolDto;
+import com.znty.rrs.entity.bo.AdjustSecuritySnapshotBo;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
 import com.znty.rrs.entity.bo.PoolRelationBo;
 import com.znty.rrs.entity.bo.SecurityInfoBo;
 import com.znty.rrs.entity.securitypooladjust.AdjustCheckReq;
 import com.znty.rrs.entity.securitypooladjust.AdjustCheckDto;
+import com.znty.rrs.entity.securitypooladjust.RelatedRatingCompanyDto;
 import com.znty.rrs.entity.securitypooladjust.SecurityPoolAdjustSubmitReq;
 import org.junit.Test;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -262,7 +264,7 @@ public class BatchSecurityPoolAdjustServiceTest {
         assertThat(captor.getAllValues().get(1).getAdjustBatchNo()).matches("BOND\\d{17}1002");
     }
 
-    /** 独立直通调入按批取数，整批容量和逐券在途规则都继续生效 */
+    /** 验证普通债直通调入按批取数，保留容量和在途检查并跳过快照写入 */
     @Test
     public void directSubmitShouldBatchQueriesAndKeepCapacityAndPendingChecks() {
         SecurityPoolAdjustService submit = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
@@ -358,12 +360,13 @@ public class BatchSecurityPoolAdjustServiceTest {
         verify(adjust, never()).querySecurityCurrentPoolIdList(anyString());
         verify(adjust, never()).queryPoolCurrentCount(anyLong());
         verify(adjust, times(1000)).addPoolStatus(any());
+        verify(adjust, never()).addAdjustSecuritySnapshot(any());
         verify(reports, never()).addInternalReportsOnFinish(anyList());
     }
 
-    /** 验证批量提交同一证券的手工调入和互斥调出时写入两条调库记录（委托单券服务）。 */
+    /** 验证担保债批量调入及互斥调出分别保存本次选择的担保人和内评 */
     @Test
-    public void addAdjustLogShouldInsertManualInboundAndMutexOutboundForSameSecurity() {
+    public void addAdjustLogShouldSaveSelectedGuarantorForInboundAndMutexOutbound() {
         BatchSecurityPoolAdjustMapper mapper = mock(BatchSecurityPoolAdjustMapper.class);
         SecurityPoolAdjustMapper adjustMapper = mock(SecurityPoolAdjustMapper.class);
         InvestmentPoolMapper investmentPoolMapper = mock(InvestmentPoolMapper.class);
@@ -389,7 +392,18 @@ public class BatchSecurityPoolAdjustServiceTest {
         when(attachmentService.createSubmissionFiles(
                 anyList(), eq("1")))
                 .thenReturn(submissionFiles);
-        when(adjustMapper.querySecurityBoByCode("106006789")).thenReturn(new SecurityInfoBo());
+        SecurityInfoBo security = new SecurityInfoBo();
+        security.setWindCode("106006789");
+        security.setGuarantFlag(1);
+        security.setGuarantorId("C10010,C10008");
+        security.setInnerGuarantorRating("1,1");
+        when(adjustMapper.querySecurityBoByCode("106006789")).thenReturn(security);
+        RelatedRatingCompanyDto guarantor = new RelatedRatingCompanyDto();
+        guarantor.setSecurityCode("106006789");
+        guarantor.setCompanyCode("C10008");
+        guarantor.setCompanyName("某资产管理股份有限公司");
+        guarantor.setInnerRating("2+");
+        when(submitMapper.queryRatingCompanies(anyList())).thenReturn(Collections.singletonList(guarantor));
         when(investmentPoolMapper.queryPoolList()).thenReturn(Arrays.asList(
                 buildPool(1L, null, "信用债大库", "credit_bond"),
                 buildPool(2L, 1L, "一级库", "credit_bond"),
@@ -417,8 +431,11 @@ public class BatchSecurityPoolAdjustServiceTest {
         req.setAdjusterId("1");
         req.setAdjusterName("管理员");
         req.setPoolId(3L);
+        BatchSecurityInboundAdjustReq.AdjustItem inbound =
+                buildBatchSubmitItem("106006789", 3L, "二级库", "调入", "manual", groupKey);
+        inbound.setGuarantorCode("C10008");
         req.setItems(Arrays.asList(
-                buildBatchSubmitItem("106006789", 3L, "二级库", "调入", "manual", groupKey),
+                inbound,
                 buildBatchSubmitItem("106006789", 2L, "一级库", "调出", "mutex", groupKey)));
 
         service.addAdjustLog(req, Collections.<MultipartFile>emptyList());
@@ -433,6 +450,17 @@ public class BatchSecurityPoolAdjustServiceTest {
                 .containsExactly("手动批量调整", "互斥调整");
         assertThat(captor.getAllValues()).extracting(IpAdjustLogBo::getAdjustBatchNo)
                 .containsOnly(captor.getAllValues().get(0).getAdjustBatchNo());
+
+        ArgumentCaptor<AdjustSecuritySnapshotBo> snapshots = ArgumentCaptor.forClass(AdjustSecuritySnapshotBo.class);
+        verify(adjustMapper, times(2)).addAdjustSecuritySnapshot(snapshots.capture());
+        assertThat(snapshots.getAllValues()).extracting(AdjustSecuritySnapshotBo::getAdjustLogId)
+                .containsExactlyInAnyOrder(captor.getAllValues().get(0).getId(), captor.getAllValues().get(1).getId());
+        assertThat(snapshots.getAllValues()).extracting(AdjustSecuritySnapshotBo::getWindCode).containsOnly("106006789");
+        assertThat(snapshots.getAllValues()).extracting(AdjustSecuritySnapshotBo::getGuarantorId).containsOnly("C10008");
+        assertThat(snapshots.getAllValues()).extracting(AdjustSecuritySnapshotBo::getGuarantor)
+                .containsOnly("某资产管理股份有限公司");
+        assertThat(snapshots.getAllValues()).extracting(AdjustSecuritySnapshotBo::getInnerGuarantorRating)
+                .containsOnly("2+");
     }
 
     /** 验证批量调入时保留同证券当前所在互斥池的自动调出项。 */

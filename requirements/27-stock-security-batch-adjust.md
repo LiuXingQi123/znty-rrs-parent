@@ -41,6 +41,8 @@
 
 **校验 / 提交与证券池批量一致**（编排细节见 [12](12-batch-security-pool-adjust.md) §3.2～§3.5）：`checkAdjust` 调用 `BatchSecurityCheckService` 一次，集中读取证券、池关系、容量、在途状态、主体名单等数据，再逐券执行共用规则，返回完整单笔候选及推荐。`addAdjustLog` 分组后委托 `submitAdjustLogBatch`（共享附件、批次号、池配置和流程快照，普通债独立直通调入从数据库按批读取证券、评级主体、在途、在池和容量），直通用 `isDirectAdjustFlow` + `recheckBeforeFinalApproval`；手工项 `adjustType=手动批量调整`。ABS 默认主体使用本次从数据库集中读取的候选。本类只编排产品库与调入来源池差异，不新建业务表。
 
+批量提交时，担保债按每条调库日志的实际证券代码保存快照，记录提交时复核的担保人和内评。ABS 另按主体身份规则保存权益人快照。普通非担保债无需保存快照。
+
 ---
 
 ## 2. 来源池与候选证券范围

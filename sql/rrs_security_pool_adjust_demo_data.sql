@@ -9,8 +9,9 @@
 --   代码均对齐 rrs_securityinfo / t_inv_company；evt 表不灌演示数据
 --   已在库 ABS 与主档、申请快照使用同一生效身份；其他 ABS 初始身份留空
 --   ABS 首次成功入库后永久固定主体，全部出库也不解除；从未成功的驳回或撤回申请不绑定
---   快照 guarantor / guarantor_id / inner_guarantor_rating 保存本次实际选定的单一权益人或担保人，不能照搬主档候选列表
---   明确选择：108008901.IB=C10008；DBB001.IB/DBB003.IB=C10010；DBB002.IB=C10008
+--   ABS 快照的 issuer_code 记录审批采用的权益人，担保债快照的 guarantor_id 记录本笔所选担保人
+--   108008901.IB 的权益人为 C10008，DBB002.IB 和 DBB003.IB 的担保人分别为 C10008 和 C10010
+--   DBB001.IB 批量调入一级库时选 C10008，调入产品库时选 C10010
 --   观察池主体同步旗下已确定主体的证券；产品库1预置标的和 CRMW 凭证，供跨子库组合
 -- ============================================================
 USE `znty_rrs`;
@@ -31,7 +32,7 @@ TRUNCATE TABLE `ip_pool_status`;
 TRUNCATE TABLE `ip_adjust_step`;
 
 -- ----------------------------------------------------------------------------
--- 投资池当前状态样例（40 条）
+-- 投资池当前状态样例（41 条）
 -- ----------------------------------------------------------------------------
 INSERT INTO `ip_pool_status` (
     `security_code`, `security_short_name`, `security_type`, `adjust_type`, `adjust_mode`,
@@ -79,10 +80,11 @@ INSERT INTO `ip_pool_status` (
 ('MTN001.IB', '24交投MTN', 'mtn', '手工调整', '调入', 'BOND20260320001', 40, 163, '产品库1标的证券', 'bond_product', 105, 'bond:fast-inbound', 'normalInbound', '20', '1', '管理员', '债券产品库1来源样本，供 CRMW 跨子库组合调入', '2026-03-20 09:00:00', '2026-03-20 14:00:00', '2026-03-20 14:00:00', 0, NOW(), NOW()),
 ('DBB001.IB', '24基建担保', 'company_bond', '手工调整', '调入', 'BOND20260320002', 41, 163, '产品库1标的证券', 'bond_product', 105, 'bond:fast-inbound', 'normalInbound', '20', '1', '管理员', '债券产品库1来源样本，供 CRMW 跨子库组合调入', '2026-03-20 09:00:00', '2026-03-20 14:00:00', '2026-03-20 14:00:00', 0, NOW(), NOW()),
 ('CRMW001.IB', 'CRMW-A', 'crmw', 'Excel导入', '调入', 'BOND20260320003', 42, 164, '产品库1凭证', 'bond_product', 105, 'bond:fast-inbound', 'normalInbound', '20', '1', '管理员', '债券产品库1来源样本，供 CRMW 跨子库组合调入', '2026-03-20 09:00:00', '2026-03-20 14:00:00', '2026-03-20 14:00:00', 0, NOW(), NOW()),
-('CRMW004.IB', 'CRMW-D', 'crmw', 'Excel导入', '调入', 'BOND20260320004', 43, 164, '产品库1凭证', 'bond_product', 105, 'bond:fast-inbound', 'normalInbound', '20', '1', '管理员', '债券产品库1来源样本，供 CRMW 跨子库组合调入', '2026-03-20 09:00:00', '2026-03-20 14:00:00', '2026-03-20 14:00:00', 0, NOW(), NOW());
+('CRMW004.IB', 'CRMW-D', 'crmw', 'Excel导入', '调入', 'BOND20260320004', 43, 164, '产品库1凭证', 'bond_product', 105, 'bond:fast-inbound', 'normalInbound', '20', '1', '管理员', '债券产品库1来源样本，供 CRMW 跨子库组合调入', '2026-03-20 09:00:00', '2026-03-20 14:00:00', '2026-03-20 14:00:00', 0, NOW(), NOW()),
+('DBB001.IB', '24基建担保', 'company_bond', '手动批量调整', '调入', 'BOND20260323001', 44, 2, '一级库', 'credit_bond', 105, 'bond:fast-inbound', 'normalInbound', '20', '1', '管理员', '担保债批量调入一级库', '2026-03-23 09:00:00', '2026-03-23 14:00:00', '2026-03-23 14:00:00', 0, NOW(), NOW());
 
 -- ----------------------------------------------------------------------------
--- 证券池调库记录样例（43 条）
+-- 证券池调库记录样例（44 条）
 -- ----------------------------------------------------------------------------
 INSERT INTO `ip_adjust_log` (
     `id`, `security_code`, `security_short_name`, `security_type`, `crmw_name`, `crmw_scode`,
@@ -133,10 +135,11 @@ INSERT INTO `ip_adjust_log` (
 (40, 'MTN001.IB', '24交投MTN', 'mtn', NULL, NULL, NULL, NULL, '手工调整', '调入', 'BOND20260320001', 163, '产品库1标的证券', 'bond_product', 105, 'bond:fast-inbound', 'normalInbound', '20', '1', '管理员', '债券产品库1来源样本，供 CRMW 跨子库组合调入', '2026-03-20 09:00:00', '2026-03-20 14:00:00', '2026-03-20 14:00:00', 0, NOW(), NOW()),
 (41, 'DBB001.IB', '24基建担保', 'company_bond', NULL, NULL, NULL, NULL, '手工调整', '调入', 'BOND20260320002', 163, '产品库1标的证券', 'bond_product', 105, 'bond:fast-inbound', 'normalInbound', '20', '1', '管理员', '债券产品库1来源样本，供 CRMW 跨子库组合调入', '2026-03-20 09:00:00', '2026-03-20 14:00:00', '2026-03-20 14:00:00', 0, NOW(), NOW()),
 (42, 'CRMW001.IB', 'CRMW-A', 'crmw', NULL, NULL, NULL, NULL, 'Excel导入', '调入', 'BOND20260320003', 164, '产品库1凭证', 'bond_product', 105, 'bond:fast-inbound', 'normalInbound', '20', '1', '管理员', '债券产品库1来源样本，供 CRMW 跨子库组合调入', '2026-03-20 09:00:00', '2026-03-20 14:00:00', '2026-03-20 14:00:00', 0, NOW(), NOW()),
-(43, 'CRMW004.IB', 'CRMW-D', 'crmw', NULL, NULL, NULL, NULL, 'Excel导入', '调入', 'BOND20260320004', 164, '产品库1凭证', 'bond_product', 105, 'bond:fast-inbound', 'normalInbound', '20', '1', '管理员', '债券产品库1来源样本，供 CRMW 跨子库组合调入', '2026-03-20 09:00:00', '2026-03-20 14:00:00', '2026-03-20 14:00:00', 0, NOW(), NOW());
+(43, 'CRMW004.IB', 'CRMW-D', 'crmw', NULL, NULL, NULL, NULL, 'Excel导入', '调入', 'BOND20260320004', 164, '产品库1凭证', 'bond_product', 105, 'bond:fast-inbound', 'normalInbound', '20', '1', '管理员', '债券产品库1来源样本，供 CRMW 跨子库组合调入', '2026-03-20 09:00:00', '2026-03-20 14:00:00', '2026-03-20 14:00:00', 0, NOW(), NOW()),
+(44, 'DBB001.IB', '24基建担保', 'company_bond', NULL, NULL, NULL, NULL, '手动批量调整', '调入', 'BOND20260323001', 2, '一级库', 'credit_bond', 105, 'bond:fast-inbound', 'normalInbound', '20', '1', '管理员', '担保债批量调入一级库', '2026-03-23 09:00:00', '2026-03-23 14:00:00', '2026-03-23 14:00:00', 0, NOW(), NOW());
 
 -- ----------------------------------------------------------------------------
--- 证券池调库-流程步骤记录样例（36 条）
+-- 证券池调库-流程步骤记录样例（51 条）
 -- ----------------------------------------------------------------------------
 INSERT INTO `ip_adjust_step` (
     `adjust_log_id`, `adjust_batch_no`, `flow_node_id`, `node_code`, `node_label`, `node_type`,
@@ -190,11 +193,14 @@ INSERT INTO `ip_adjust_step` (
 (42, 'BOND20260320003', 10503, 'n103', '结束', 'end', NULL, 3, 'auto_process', NULL, NULL, 'auto_process', '2026-03-20 09:00:00', '2026-03-20 14:00:00', NOW(), NOW()),
 (43, 'BOND20260320004', 10501, 'n101', '开始', 'start', NULL, 1, 'auto_process', NULL, NULL, 'auto_process', '2026-03-20 09:00:00', '2026-03-20 14:00:00', NOW(), NOW()),
 (43, 'BOND20260320004', 10502, 'n102', '研究员A发起', 'approval', 'initiator', 2, 'submit', '1', '管理员', 'submit', '2026-03-20 09:00:00', '2026-03-20 14:00:00', NOW(), NOW()),
-(43, 'BOND20260320004', 10503, 'n103', '结束', 'end', NULL, 3, 'auto_process', NULL, NULL, 'auto_process', '2026-03-20 09:00:00', '2026-03-20 14:00:00', NOW(), NOW());
+(43, 'BOND20260320004', 10503, 'n103', '结束', 'end', NULL, 3, 'auto_process', NULL, NULL, 'auto_process', '2026-03-20 09:00:00', '2026-03-20 14:00:00', NOW(), NOW()),
+(44, 'BOND20260323001', 10501, 'n101', '开始', 'start', NULL, 1, 'auto_process', NULL, NULL, 'auto_process', '2026-03-23 09:00:00', '2026-03-23 14:00:00', NOW(), NOW()),
+(44, 'BOND20260323001', 10502, 'n102', '研究员A发起', 'approval', 'initiator', 2, 'submit', '1', '管理员', 'submit', '2026-03-23 09:00:00', '2026-03-23 14:00:00', NOW(), NOW()),
+(44, 'BOND20260323001', 10503, 'n103', '结束', 'end', NULL, 3, 'auto_process', NULL, NULL, 'auto_process', '2026-03-23 09:00:00', '2026-03-23 14:00:00', NOW(), NOW());
 
 
 -- ----------------------------------------------------------------------------
--- 证券申请快照（37 条，逐笔关联申请）
+-- 证券申请快照（38 条，逐笔关联申请）
 -- ----------------------------------------------------------------------------
 INSERT INTO `ip_adjust_security_snapshot` (
     `adjust_log_id`, `submitter_id`, `submit_time`, `wind_code`, `full_name`, `short_name`,
@@ -246,7 +252,8 @@ INSERT INTO `ip_adjust_security_snapshot` (
 (40, '1', '2026-03-20 09:00:00', 'MTN001.IB', '24交投MTN001', '24交投MTN', '某省交通投资集团有限公司', 'C10001', 10, '3.5', NULL, '20240318', '20290318', 0, '中诚信', 'AAA', 'AAA', '稳定', NULL, NULL, NULL, '1', 'mtn', '中期票据', NULL, NULL, 1095.0000, '3年', NULL, NULL, NULL, 3, 1095.0000, NULL, '国有企业', NULL, NULL, 0, 0, NULL, '中诚信', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, '2026-03-20 09:00:00', '2026-03-20 09:00:00'),
 (41, '1', '2026-03-20 09:00:00', 'DBB001.IB', '24基建担保债01', '24基建担保', '某基础设施建设有限公司', 'C10004', 10, '3.5', NULL, '20240318', '20290318', 0, '中诚信', 'AA', 'AA', '稳定', '某金融控股有限公司', 'C10010', NULL, '2', 'company_bond', '公司债', NULL, '1', 1095.0000, '3年', NULL, NULL, NULL, 3, 1095.0000, NULL, '国有企业', NULL, NULL, 0, 1, '连带责任保证', '中诚信', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, '2026-03-20 09:00:00', '2026-03-20 09:00:00'),
 (42, '1', '2026-03-20 09:00:00', 'CRMW001.IB', '某CRMW凭证A', 'CRMW-A', '某省交通投资集团有限公司', 'C10001', 10, '3.5', NULL, '20240318', '20290318', 0, '中诚信', 'AAA', 'AAA', '稳定', NULL, NULL, NULL, '1', 'crmw', '信用风险缓释凭证', NULL, NULL, 730.0000, '2年', NULL, NULL, NULL, 2, 730.0000, NULL, '国有企业', NULL, NULL, 0, 0, NULL, '中诚信', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, '2026-03-20 09:00:00', '2026-03-20 09:00:00'),
-(43, '1', '2026-03-20 09:00:00', 'CRMW004.IB', '某CRMW凭证D', 'CRMW-D', '某基础设施建设有限公司', 'C10004', 10, '3.5', NULL, '20240318', '20290318', 0, '中诚信', 'AA', 'AA', '稳定', NULL, NULL, NULL, '2', 'crmw', '信用风险缓释凭证', NULL, NULL, 548.0000, '1年6个月', NULL, NULL, NULL, 1.5, 548.0000, NULL, '国有企业', NULL, NULL, 0, 0, NULL, '中诚信', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, '2026-03-20 09:00:00', '2026-03-20 09:00:00');
+(43, '1', '2026-03-20 09:00:00', 'CRMW004.IB', '某CRMW凭证D', 'CRMW-D', '某基础设施建设有限公司', 'C10004', 10, '3.5', NULL, '20240318', '20290318', 0, '中诚信', 'AA', 'AA', '稳定', NULL, NULL, NULL, '2', 'crmw', '信用风险缓释凭证', NULL, NULL, 548.0000, '1年6个月', NULL, NULL, NULL, 1.5, 548.0000, NULL, '国有企业', NULL, NULL, 0, 0, NULL, '中诚信', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, '2026-03-20 09:00:00', '2026-03-20 09:00:00'),
+(44, '1', '2026-03-23 09:00:00', 'DBB001.IB', '24基建担保债01', '24基建担保', '某基础设施建设有限公司', 'C10004', 10, '3.5', NULL, '20240318', '20290318', 0, '中诚信', 'AA', 'AA', '稳定', '某资产管理股份有限公司', 'C10008', NULL, '2', 'company_bond', '公司债', NULL, '1', 1095.0000, '3年', NULL, NULL, NULL, 3, 1095.0000, NULL, '国有企业', NULL, NULL, 0, 1, '连带责任保证', '中诚信', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, '2026-03-23 09:00:00', '2026-03-23 09:00:00');
 
 
 -- ----------------------------------------------------------------------------

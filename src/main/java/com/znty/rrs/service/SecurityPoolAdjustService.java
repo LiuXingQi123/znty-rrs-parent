@@ -1486,8 +1486,9 @@ public class SecurityPoolAdjustService {
      * 按原顺序校验并保存各提交组
      *
      * 执行顺序：
-     * 1. 按原规则校验一组提交，批量入口复用本批已读取的数据
-     * 2. 保存本组提交，独立调入共用本批落池数据
+     * 1. 复用本批已读取的数据，复核本组证券、评级主体和调库明细
+     * 2. 用本次复核后的证券和担保人资料作为担保债的快照来源
+     * 3. 提交本组调库，按需保存快照并处理直通落池
      *
      * @param requests 本批调库请求
      * @param submissionFiles 已创建的附件上下文（可为整批共享）
@@ -1500,9 +1501,13 @@ public class SecurityPoolAdjustService {
         List<AdjustSubmitDto> results = new ArrayList<>();
         BatchNoContext batchNoContext = new BatchNoContext();
         for (SecurityPoolAdjustSubmitReq req : requests) {
-            // 按原顺序执行各组的前置校验、写入和直通落池
+            // 1. 复核本组证券、评级主体和调库明细
             SubmitSharedData shared = prepareSubmitSharedData(req, batchNoContext, batch);
-            // 保存本组提交，独立调入共用本批落池数据
+            // 2. 担保债快照使用本次复核的担保人和内评
+            if (CreditBondSpecialInboundRule.isGuaranteed(shared.securityInfo)) {
+                req.setSecurityInfo(shared.securityInfo);
+            }
+            // 3. 提交本组调库，按需保存快照并处理直通落池
             results.add(submitPreparedAdjustLog(req, shared, submissionFiles, batch));
         }
         return results;
@@ -2877,21 +2882,24 @@ public class SecurityPoolAdjustService {
     }
 
     /**
-     * 构建调库证券信息快照实体
+     * 根据本次调库使用的证券资料构建快照
      *
      * 执行顺序：
-     * 1. 依次设置调库日志ID、提交人ID、提交时间等字段
+     * 1. 复制证券资料和本次采用的评级字段
+     * 2. 关联调库日志，填写提交人、时间和有效状态
      *
-     * @param securityInfo 当前证券信息
-     * @param adjustLogId 本笔申请的调库记录 ID
-     * @param submitterId 提交人
+     * @param securityInfo 本次调库使用的证券资料和评级字段
+     * @param adjustLogId 本次调库日志 ID
+     * @param submitterId 提交人 ID
      * @param submitTime 提交时间
-     * @return 调库证券快照
+     * @return 待写入的证券快照
      */
-    private AdjustSecuritySnapshotBo buildAdjustSecuritySnapshot(SecurityInfoBo securityInfo, Long adjustLogId,
+    static AdjustSecuritySnapshotBo buildAdjustSecuritySnapshot(SecurityInfoBo securityInfo, Long adjustLogId,
                                                                  String submitterId, Date submitTime) {
+        // 1. 保留本次调库使用的证券资料和评级字段
         AdjustSecuritySnapshotBo snapshot = new AdjustSecuritySnapshotBo();
         BeanUtils.copyProperties(securityInfo, snapshot);
+        // 2. 填写快照对应的调库日志和提交信息
         snapshot.setAdjustLogId(adjustLogId);
         snapshot.setSubmitterId(submitterId);
         snapshot.setSubmitTime(submitTime);

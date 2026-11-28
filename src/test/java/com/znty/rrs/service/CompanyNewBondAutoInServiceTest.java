@@ -2,9 +2,11 @@ package com.znty.rrs.service;
 
 import com.znty.rrs.common.enums.AdjustMode;
 import com.znty.rrs.common.enums.AuditStatus;
+import com.znty.rrs.entity.bo.AdjustSecuritySnapshotBo;
 import com.znty.rrs.entity.bo.CompanyBondTypeScopeBo;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
+import com.znty.rrs.entity.bo.SecurityInfoBo;
 import com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto;
 import com.znty.rrs.entity.bo.SysScheduledTaskBo;
 import com.znty.rrs.entity.securitypooladjust.AdjustCheckDto;
@@ -78,7 +80,7 @@ public class CompanyNewBondAutoInServiceTest {
         verify(mapper, never()).queryCompanyNewBondForAutoIn(any(), eq(17L), any());
     }
 
-    /** 批量读取所在池，跳过已有记录，入池成功后调出互斥池 */
+    /** 验证自动补入担保债时保存担保人和内评，并调出互斥池 */
     @Test
     public void executeShouldInsertNewBonds() {
         AutoAdjustMapper autoAdjustMapper = mock(AutoAdjustMapper.class);
@@ -129,8 +131,15 @@ public class CompanyNewBondAutoInServiceTest {
         AdjustCheckDto.CheckResultItem existing = checkedItem("BOND002.IB", 15L, "债券禁止库", "调入");
         existing.setCanAdjust(false);
         existing.setFailReasons(Collections.singletonList("证券已在目标投资池中"));
+        AdjustCheckDto inboundResult = checkResult(inbound, mutex);
+        SecurityInfoBo checkedSecurity = new SecurityInfoBo();
+        checkedSecurity.setGuarantFlag(1);
+        checkedSecurity.setGuarantorId("C10008");
+        checkedSecurity.setGuarantor("某资产管理股份有限公司");
+        checkedSecurity.setInnerGuarantorRating("2+");
+        inboundResult.setCheckedSecurityInfo(checkedSecurity);
         when(checks.checkCompanyFollowBatch(anyList(), eq("20261119"), any()))
-                .thenReturn(Arrays.asList(checkResult(inbound, mutex), checkResult(existing)));
+                .thenReturn(Arrays.asList(inboundResult, checkResult(existing)));
         when(securityPoolAdjustMapper.addAdjustLog(any(IpAdjustLogBo.class))).thenAnswer(invocation -> {
             IpAdjustLogBo log = (IpAdjustLogBo) invocation.getArguments()[0];
             log.setId(9001L);
@@ -153,6 +162,12 @@ public class CompanyNewBondAutoInServiceTest {
                 .isEqualTo("【任务名称：在池主体旗下债券自动入池（已排除ABS债）（仅债券）】【主体跟随】（发行主体：测试集团/C001；依据池ID：15；主体所在池：债券禁止库）");
         assertThat(adjustLog.getAdjustAdvice()).isNull();
         assertThat(adjustLog.getAdjustBatchNo()).matches("BOND\\d{17}1001");
+        ArgumentCaptor<AdjustSecuritySnapshotBo> snapshot = ArgumentCaptor.forClass(AdjustSecuritySnapshotBo.class);
+        verify(securityPoolAdjustMapper).addAdjustSecuritySnapshot(snapshot.capture());
+        assertThat(snapshot.getValue().getAdjustLogId()).isEqualTo(adjustLog.getAdjustLogId());
+        assertThat(snapshot.getValue().getWindCode()).isEqualTo(adjustLog.getSecurityCode());
+        assertThat(snapshot.getValue().getGuarantorId()).isEqualTo("C10008");
+        assertThat(snapshot.getValue().getInnerGuarantorRating()).isEqualTo("2+");
         assertThat(autoOutLog.getAdjustType()).isEqualTo("互斥调整");
         assertThat(autoOutLog.getAdjustMode()).isEqualTo(AdjustMode.OUT.getCode());
         assertThat(autoOutLog.getTargetPoolId()).isEqualTo(3L);

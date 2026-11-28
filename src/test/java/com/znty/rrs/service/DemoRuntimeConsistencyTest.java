@@ -2,9 +2,12 @@ package com.znty.rrs.service;
 
 import com.znty.rrs.entity.bo.SecurityInfoBo;
 import com.znty.rrs.entity.batchcrmwpooladjust.BatchCrmwPoolAdjustReq;
+import com.znty.rrs.entity.graderulealert.GradeRuleAlertScanDto;
+import com.znty.rrs.entity.securitypooladjust.SecurityInfoDetailDto;
 import com.znty.rrs.mapper.AbsIdentityMapper;
 import com.znty.rrs.mapper.BatchCrmwPoolAdjustMapper;
 import com.znty.rrs.mapper.CreditBondGradeRuleMapper;
+import com.znty.rrs.mapper.ExcelPoolExclusionMapper;
 import com.znty.rrs.mapper.GradeRuleAlertMapper;
 import com.znty.rrs.mapper.InvestmentPoolMapper;
 import com.znty.rrs.mapper.SecurityPoolAdjustMapper;
@@ -73,7 +76,7 @@ public class DemoRuntimeConsistencyTest {
         Configuration config = new Configuration(new Environment("demo-runtime", new JdbcTransactionFactory(), source));
         config.setMapUnderscoreToCamelCase(true);
         for (String name : new String[]{"AbsIdentityMapper", "BatchCrmwPoolAdjustMapper", "SecurityPoolAdjustMapper",
-                "InvestmentPoolMapper", "CreditBondGradeRuleMapper", "GradeRuleAlertMapper"}) {
+                "InvestmentPoolMapper", "CreditBondGradeRuleMapper", "GradeRuleAlertMapper", "ExcelPoolExclusionMapper"}) {
             String resource = "mapper/" + name + ".xml";
             try (InputStream input = getClass().getClassLoader().getResourceAsStream(resource)) {
                 new XMLMapperBuilder(input, config, resource, config.getSqlFragments()).parse();
@@ -149,10 +152,22 @@ public class DemoRuntimeConsistencyTest {
                 .as("失败后原申请的待办仍然保留").isEqualTo(1);
     }
 
-    /** 从真实入库记录执行分级提醒，不能只检查主体主档而遗漏快照中的实际评级主体 */
+    /** 验证分级提醒能按 Demo 的入库记录读取本次选定的担保人快照 */
     @Test
     public void demoGradingScanShouldUseActualSelectedCompany() {
-        // 直接执行当前任务，复现缺少实际评级主体代码或快照仍含多个候选代码的问题
+        // 1. 从一级库入库记录定位快照，核对担保人和入库时的内评
+        try (SqlSession session = factory.openSession()) {
+            GradeRuleAlertScanDto entry = session.getMapper(GradeRuleAlertMapper.class).queryGradedBondInPoolList()
+                    .stream().filter(row -> "DBB001.IB".equals(row.getSecurityCode()) && Long.valueOf(2).equals(row.getCurrentPoolId()))
+                    .findFirst().orElseThrow(() -> new AssertionError("缺少 DBB001.IB 一级库样例"));
+            SecurityPoolAdjustMapper mapper = session.getMapper(SecurityPoolAdjustMapper.class);
+            SecurityInfoDetailDto snapshot = mapper.querySecuritySnapshotDetailByAdjustLogId(
+                    entry.getAdjustLogId(), entry.getSecurityCode());
+            assertThat(snapshot).isNotNull();
+            assertThat(snapshot.getGuarantorId()).isEqualTo("C10008");
+            assertThat(snapshot.getInnerGuarantorRating()).isEqualTo("1");
+        }
+        // 2. 执行分级提醒任务，验证 Demo 的入库记录能正常完成复核
         verifyGradingScan();
     }
 
@@ -315,8 +330,12 @@ public class DemoRuntimeConsistencyTest {
             ReflectionTestUtils.setField(security, "investmentPoolMapper", session.getMapper(InvestmentPoolMapper.class));
             ReflectionTestUtils.setField(security, "creditBondGradeRuleMapper", session.getMapper(CreditBondGradeRuleMapper.class));
             ReflectionTestUtils.setField(security, "absIdentityService", identity);
+            ExcelPoolExclusionService excelExclusion = new ExcelPoolExclusionService();
+            ReflectionTestUtils.setField(excelExclusion, "excelPoolExclusionMapper",
+                    session.getMapper(ExcelPoolExclusionMapper.class));
             GradeRuleAlertService alerts = new GradeRuleAlertService();
             ReflectionTestUtils.setField(alerts, "gradeRuleAlertMapper", session.getMapper(GradeRuleAlertMapper.class));
+            ReflectionTestUtils.setField(alerts, "excelPoolExclusionService", excelExclusion);
             ReflectionTestUtils.setField(alerts, "securityPoolAdjustMapper", securityMapper);
             ReflectionTestUtils.setField(alerts, "securityPoolAdjustService", security);
             assertThat(alerts.execute().isSuccess()).as("Demo 分级提醒任务正常完成").isTrue();

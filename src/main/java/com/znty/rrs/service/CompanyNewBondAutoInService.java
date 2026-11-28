@@ -7,7 +7,10 @@ import com.znty.rrs.common.enums.AdjustType;
 import com.znty.rrs.common.enums.AuditStatus;
 import com.znty.rrs.common.enums.PoolStatus;
 import com.znty.rrs.common.enums.RuleType;
+import com.znty.rrs.common.util.CreditBondSpecialInboundRule;
+import com.znty.rrs.entity.bo.AdjustSecuritySnapshotBo;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
+import com.znty.rrs.entity.bo.SecurityInfoBo;
 import com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto;
 import com.znty.rrs.entity.bo.SysScheduledTaskBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
@@ -51,7 +54,7 @@ import java.util.Set;
  * 1. 合并扩展参数、关系配置和已有主体所在池的映射
  * 2. 查询尚未在目标池生效且符合到期日和证券类型要求的旗下债券
  * 3. 共用手工批量规则校验候选债券及配套出入池
- * 4. 整组通过后由系统直接写入生效的出入池记录
+ * 4. 整组通过后由系统直接写入生效的出入池记录及担保债入库快照
  * 5. 返回映射、实际入池和未处理数量
  */
 @Slf4j
@@ -345,7 +348,8 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
         for (InboundCandidate candidate : candidates) {
             InboundMapping mapping = candidate.mapping;
             ScheduledAdjustCandidateDto bond = candidate.bond;
-            List<AdjustCheckDto.CheckResultItem> items = results.get(resultIndex++).getItems();
+            AdjustCheckDto result = results.get(resultIndex++);
+            List<AdjustCheckDto.CheckResultItem> items = result.getItems();
             if (items.isEmpty()) {
                 // 已由本轮配套调整实际入池的候选无需重复处理
                 if (!appliedInbounds.getOrDefault(mapping.targetPool.getId(), Collections.emptySet())
@@ -378,8 +382,8 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
                             "证券【" + item.getSecurityCode() + "】池【" + item.getPoolName() + "】：" + warning));
                 }
             }
-            // 6. 同组联动调入、关联码和互斥调出共用一条业务批次
-            mapping.inboundCount += applyInboundGroup(bond, items, mapping, taskName, batchNoContext, appliedInbounds);
+            // 6. 按同一批次保存本组调库日志、担保债入库快照和池状态
+            mapping.inboundCount += applyInboundGroup(bond, result, mapping, taskName, batchNoContext, appliedInbounds);
         }
         for (InboundMapping mapping : mappings) {
             summary.addMapping(mapping.sourcePoolId, mapping.sourcePool == null ? null : mapping.sourcePool.getPoolName(),
@@ -399,18 +403,18 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
      * 执行顺序：
      * 1. 生成主体跟随调整原因，按候选来源补上 Excel 跟随标识和触发主体
      * 2. 为本组调入和配套调出取得共用批次号
-     * 3. 逐项写入已通过的自动调库日志，调入写生效状态，配套调出删除可调出的在池状态
+     * 3. 逐项写入调库日志并应用池状态，担保债调入先保存快照再落池
      * 4. 返回本组实际调入数量
      *
      * @param bond 触发补债候选
-     * @param items 已校验的调库项
+     * @param result 已校验的调库项及本次使用的证券资料
      * @param mapping 触发本次入池的主体池至目标池映射
      * @param taskName 任务展示名称
      * @param batchContext 当前任务批次号上下文
      * @param appliedInbounds 按目标池记录本轮已实际写入且仍在池的证券
      * @return 实际新增的入池状态数量
      */
-    private int applyInboundGroup(ScheduledAdjustCandidateDto bond, List<AdjustCheckDto.CheckResultItem> items,
+    private int applyInboundGroup(ScheduledAdjustCandidateDto bond, AdjustCheckDto result,
                                   InboundMapping mapping, String taskName, ScheduledAdjustBatchNoContext batchContext,
                                   Map<Long, Set<String>> appliedInbounds) {
         // 1. 生成主体跟随调整原因，按候选来源补上 Excel 跟随标识和触发主体
@@ -427,8 +431,9 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
         String batchNo = batchContext.resolveBondBatchNo(bond.getSecurityCode(), mapping.targetPool.getId(),
                 AdjustMode.IN.getCode());
         int count = 0;
-        // 3. 逐项写入已通过的自动调库日志，调入写生效状态，配套调出删除可调出的在池状态
-        for (AdjustCheckDto.CheckResultItem item : items) {
+        SecurityInfoBo checkedSecurity = result.getCheckedSecurityInfo();
+        // 3. 逐项写入调库日志并应用池状态，担保债调入先保存快照再落池
+        for (AdjustCheckDto.CheckResultItem item : result.getItems()) {
             boolean inbound = AdjustMode.IN.getCode().equals(item.getAdjustMode());
             IpAdjustLogBo log = new IpAdjustLogBo();
             BeanUtils.copyProperties(bond, log, "id", "adjustLogId");
@@ -452,6 +457,15 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
             }
             log.setAdjustLogId(log.getId());
             if (inbound) {
+                if (CreditBondSpecialInboundRule.isGuaranteed(checkedSecurity)) {
+                    // 用本轮校验时采用的担保人和内评生成快照
+                    AdjustSecuritySnapshotBo snapshot = SecurityPoolAdjustService.buildAdjustSecuritySnapshot(
+                            checkedSecurity, log.getId(), AUTO_ADJUSTER_ID, log.getSubmitTime());
+                    snapshot.setWindCode(log.getSecurityCode());
+                    snapshot.setShortName(log.getSecurityShortName());
+                    snapshot.setSecurityType(log.getSecurityType());
+                    securityPoolAdjustMapper.addAdjustSecuritySnapshot(snapshot);
+                }
                 if (securityPoolAdjustMapper.addPoolStatus(log) != 1) {
                     throw new BizException("证券[" + item.getSecurityCode() + "]自动调入池状态写入失败");
                 }

@@ -4534,12 +4534,13 @@ class SecurityPoolCheckRules {
      * 5. 按 Excel 入口处理已达到目标状态的配套项和可转为提示的校验结果
      * 6. 标记 ABS 主体身份冲突，身份冲突的项仍不能提交
      * 7. 匹配流程候选及推荐项，Excel 主体联动返回空候选
+     * 8. 整理校验结果，保留本次使用的证券资料供自动补债写快照
      *
      * @param req 调库校验请求
      * @param shared 本次校验的共享数据
      * @param includeBatchFlows 是否追加目标池已配置的批量流程
      * @param excelWarningsOnly 是否将 Excel 原业务失败保留为可提交提示
-     * @return 调库校验结果及流程候选
+     * @return 调库校验结果、流程候选及本次使用的证券资料
      */
     AdjustCheckDto checkPreparedAdjust(AdjustCheckReq req, AdjustSharedData shared, boolean includeBatchFlows,
                                          boolean excelWarningsOnly) {
@@ -4591,8 +4592,10 @@ class SecurityPoolCheckRules {
         List<AdjustCheckDto.FlowOption> flowOptions = shared.isExcelCompanyFollow()
                 ? Collections.emptyList() : resolveAdjustFlowOptions(req, shared, resultItems);
 
+        // 8. 整理校验结果，保留本次使用的证券资料供自动补债写快照
         AdjustCheckDto dto = new AdjustCheckDto();
         dto.setItems(resultItems);
+        dto.setCheckedSecurityInfo(shared.getSecurityInfo());
         dto.setFlowOptions(flowOptions);
         for (AdjustCheckDto.FlowOption option : flowOptions) {
             if (option.isRecommended()) {
