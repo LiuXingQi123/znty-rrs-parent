@@ -34,6 +34,7 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -97,48 +98,55 @@ public class BatchSecurityCheckService {
      * 批量页面沿用单券规则校验本批调库项
      *
      * 执行顺序：
-     * 1. 按批量页面口径复用证券调库校验，摘牌日截止日期留空，Excel 主体决定集合使用空集合
+     * 1. 按批量页面口径合并同券主项，再复用证券调库校验
      *
      * @param requests 本批调库请求
-     * @return 调库校验结果及流程候选列表
+     * @return 按原请求顺序返回校验结果，被合并的请求用空明细占位
      */
     List<AdjustCheckDto> checkSecurityBatch(List<AdjustCheckReq> requests) {
-        // 校验本批证券调库请求并保留逐券结果
-        return checkSecurityBatch(requests, null, Collections.emptySet());
+        // 由同券主项展开各市场代码，并保留原请求的结果位置
+        return checkSecurityBatch(requests, null, Collections.emptySet(), true);
     }
 
     /**
-     * 按主体的 Excel 决定批量校验其跟随债券
+     * 校验本轮自动补债请求
      *
      * 执行顺序：
-     * 1. 校验本批证券调库请求并保留逐券结果
+     * 1. 按本轮摘牌日截止日期逐条校验，并区分是否跟随 Excel 主体决定
      *
      * @param requests 同轮待处理的调库请求
      * @param maturityCutoff 本轮初筛使用的摘牌日截止日期
      * @param excelCompanyRequests 随已生效 Excel 主体决定处理的请求
-     * @return 各请求的可执行调库项
+     * @return 按原请求顺序返回的校验结果，包含通过项和失败项
      */
     List<AdjustCheckDto> checkCompanyFollowBatch(List<AdjustCheckReq> requests, String maturityCutoff,
                                                 Set<AdjustCheckReq> excelCompanyRequests) {
-        // 校验本批证券调库请求并保留逐券结果
-        return checkSecurityBatch(requests, maturityCutoff, excelCompanyRequests);
+        // 自动补债按原请求逐条校验，累计本轮预计容量
+        return checkSecurityBatch(requests, maturityCutoff, excelCompanyRequests, false);
     }
 
     /**
      * 校验本批证券调库请求并保留逐券结果
      *
+     * 批量页面按下标将返回结果和原请求配对，已合并的请求用空明细占位
+     *
      * 执行顺序：
-     * 1. 集中读取本批校验所需的事实
-     * 2. 识别同一 ABS 在本批请求中的不同主体选择
+     * 1. 请求为空时直接返回，逐条检查证券代码和调库项是否齐全
+     * 2. 批量读取本次校验所需的证券、投资池及在池和在途状态
+     * 3. 识别同一 ABS 的主体冲突，批量页面同时确定同券主项和组内冲突
+     * 4. 按顺序校验各请求并写入已发现的冲突，自动补债记录单项异常并为通过的组预留容量
      *
      * @param requests 本批调库请求
-     * @param maturityCutoff 本轮初筛使用的摘牌日截止日期
+     * @param maturityCutoff 自动补债的摘牌日截止日期，批量页面传 null
      * @param excelCompanyRequests 随已生效 Excel 主体决定处理的请求
-     * @return 调库校验结果及流程候选列表，请求列表为空时返回空列表
+     * @param mergeRelatedSelections 是否合并批量页面中同时勾选的同券代码
+     * @return 与请求顺序对应的校验结果，被合并的请求返回空明细，请求列表为空时返回空列表
      */
     private List<AdjustCheckDto> checkSecurityBatch(List<AdjustCheckReq> requests, String maturityCutoff,
-                                                    Set<AdjustCheckReq> excelCompanyRequests) {
+                                                    Set<AdjustCheckReq> excelCompanyRequests,
+                                                    boolean mergeRelatedSelections) {
         boolean scheduled = maturityCutoff != null;
+        // 1. 检查本批请求的证券代码和调库项
         if (requests.isEmpty()) {
             return Collections.emptyList();
         }
@@ -150,13 +158,27 @@ public class BatchSecurityCheckService {
                 throw new BizException("调库项不能为空");
             }
         }
-        // 1. 集中读取本批校验所需的事实
+        // 2. 批量读取本次校验共用的数据
         BatchSecurityCheckData data = loadBatchCheckData(requests, maturityCutoff, false, false);
-        // 2. 识别同一 ABS 在本批请求中的不同主体选择
+        // 3. 检查本批 ABS 主体冲突，并确认批量页面的同券主项和主体选择
         Set<String> conflictingAbsCodes = findConflictingAbsCodes(requests, data);
+        // 批量页面用已加载的同券关系选主项，自动补债按原请求逐条校验
+        Map<Integer, Integer> mergedSelections = mergeRelatedSelections
+                ? findMergedRelatedSelections(requests, data) : Collections.emptyMap();
+        // 比较本组已勾选的主体，避免由主项的选择覆盖其他行
+        Map<Integer, String> relatedSelectionFailures = findRelatedSelectionFailures(requests, mergedSelections);
+        // 4. 按原请求顺序生成校验结果
         List<AdjustCheckDto> results = new ArrayList<>(requests.size());
-        for (AdjustCheckReq request : requests) {
-            // 复用单券准入和材料豁免规则，自动任务整组通过后直接生效
+        for (int index = 0; index < requests.size(); index++) {
+            if (mergedSelections.containsKey(index)) {
+                // 用空明细保留已合并请求的位置，供调用方按下标回填
+                AdjustCheckDto merged = new AdjustCheckDto();
+                merged.setItems(Collections.emptyList());
+                results.add(merged);
+                continue;
+            }
+            AdjustCheckReq request = requests.get(index);
+            // 区分普通单券校验和跟随 Excel 主体决定的校验
             boolean excelCompany = excelCompanyRequests.contains(request);
             AdjustCheckDto result;
             try {
@@ -166,6 +188,7 @@ public class BatchSecurityCheckService {
                 if (!scheduled) {
                     throw e;
                 }
+                // 自动补债记录当前请求失败，继续校验后面的请求
                 AdjustCheckDto.CheckResultItem failure = new AdjustCheckDto.CheckResultItem();
                 failure.setSecurityCode(request.getSecurityCode());
                 failure.setTargetPoolId(request.getItems().get(0).getTargetPoolId());
@@ -173,18 +196,99 @@ public class BatchSecurityCheckService {
                 result = new AdjustCheckDto();
                 result.setItems(Collections.singletonList(failure));
             }
+            // 将同码 ABS 的主体冲突和同券组的选择冲突写入各条校验明细
             if (conflictingAbsCodes.contains(request.getSecurityCode())) {
                 String failure = "同一 ABS[" + request.getSecurityCode()
                         + "]在同批申请中选择了不同主体，请统一后重新校验";
                 result.getItems().forEach(item -> absIdentityService.applyCheckFailure(item, failure));
             }
+            String relatedSelectionFailure = relatedSelectionFailures.get(index);
+            if (relatedSelectionFailure != null) {
+                result.getItems().forEach(item -> absIdentityService.applyCheckFailure(item, relatedSelectionFailure));
+            }
             if (scheduled) {
-                // 校验自动落池条件并累计本轮已通过的容量
+                // 复核自动补债条件，只为通过的组更新本轮预计容量
                 prepareScheduledInbound(result, data, excelCompany);
             }
             results.add(result);
         }
         return results;
+    }
+
+    /**
+     * 找出可以由同券主项展开的批量请求
+     *
+     * 执行顺序：
+     * 1. 按请求顺序处理仅有一条调库项的请求，在相同目标池和方向下查找已登记的同券主项
+     * 2. 被覆盖的请求记录对应主项，未被覆盖的请求登记它能展开的关联代码
+     *
+     * @param requests 本批调库请求
+     * @param data 批量加载的校验数据
+     * @return 被合并请求的位置及对应主项位置，没有重复勾选时返回空映射
+     */
+    private Map<Integer, Integer> findMergedRelatedSelections(List<AdjustCheckReq> requests,
+                                                              BatchSecurityCheckData data) {
+        Map<String, Integer> sourceByRelatedCode = new HashMap<>();
+        Map<Integer, Integer> mergedSelections = new LinkedHashMap<>();
+        for (int index = 0; index < requests.size(); index++) {
+            AdjustCheckReq request = requests.get(index);
+            if (request.getItems().size() != 1) {
+                continue;
+            }
+            AdjustCheckReq.CheckItem item = request.getItems().get(0);
+            String scope = item.getTargetPoolId() + "|" + item.getAdjustMode() + "|";
+            Integer sourceIndex = sourceByRelatedCode.get(scope + request.getSecurityCode());
+            if (sourceIndex != null) {
+                mergedSelections.put(index, sourceIndex);
+                continue;
+            }
+            for (String relatedCode : data.relatedCodes.getOrDefault(request.getSecurityCode(), Collections.emptyList())) {
+                sourceByRelatedCode.putIfAbsent(scope + relatedCode, index);
+            }
+        }
+        return mergedSelections;
+    }
+
+    /**
+     * 检查同券组的担保人、权益人和自选权益人选择是否一致
+     *
+     * 执行顺序：
+     * 1. 按请求顺序将每个被合并请求的主体选择与主项比较
+     * 2. 为主体选择不同的组记录第一个冲突，提示用户统一选项
+     *
+     * @param requests 本批调库请求
+     * @param mergedSelections 被合并请求的位置及对应主项位置
+     * @return 主项位置及冲突说明，没有冲突时返回空映射
+     */
+    private Map<Integer, String> findRelatedSelectionFailures(List<AdjustCheckReq> requests,
+                                                               Map<Integer, Integer> mergedSelections) {
+        Map<Integer, String> failures = new HashMap<>();
+        for (Map.Entry<Integer, Integer> entry : mergedSelections.entrySet()) {
+            AdjustCheckReq selected = requests.get(entry.getKey());
+            AdjustCheckReq source = requests.get(entry.getValue());
+            // 空值和空白都表示未选择，比较页面实际提交的三个主体选项
+            if (!sameCompanyCode(source.getGuarantorCode(), selected.getGuarantorCode())
+                    || !sameCompanyCode(source.getRightsHolderCode(), selected.getRightsHolderCode())
+                    || !sameCompanyCode(source.getSelfSelectedRightsHolderCode(), selected.getSelfSelectedRightsHolderCode())) {
+                failures.putIfAbsent(entry.getValue(), "同券证券[" + source.getSecurityCode() + "、"
+                        + selected.getSecurityCode() + "]选择的担保人或权益人不一致，请统一后重新校验");
+            }
+        }
+        return failures;
+    }
+
+    /**
+     * 比较两项主体代码选择
+     *
+     * 执行顺序：
+     * 1. 将 null 视为空串，去掉首尾空白后比较代码
+     *
+     * @param first 主项选择的主体代码
+     * @param second 关联项选择的主体代码
+     * @return true=主体选择相同，false=主体选择不同
+     */
+    private boolean sameCompanyCode(String first, String second) {
+        return Objects.toString(first, "").trim().equals(Objects.toString(second, "").trim());
     }
 
     /**

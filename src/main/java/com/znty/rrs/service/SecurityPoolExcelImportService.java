@@ -740,40 +740,41 @@ public class SecurityPoolExcelImportService {
     }
 
     /**
-     * 证券导入校验：编排对齐 {@link BatchSecurityPoolAdjustService#checkAdjust}
+     * 校验证券 Excel 导入并保留实际调库结果
      *
-     * 每行 Excel 对应「一券 + 一目标池 + 方向」→ 调用
-     * {@link SecurityPoolAdjustService#checkAdjust}（批量内部也是此路径），
-     * 再注入目标池批量流程候选；未勾选联动互斥时仅保留手工项
+     * 每行对应一只证券和一个目标池，调整方向由批次统一选择
+     * 开启联动与互斥调整时，同池已展开的关联券沿用同券组结果，原始行保留并入说明
      *
      * 执行顺序：
-     * 1. 确定调入/调出方向，并初始化本次校验结果和父子池名称查询缓存
-     * 2. 按 Excel 行序检查必填项和重复行，解析启用叶子池并检查导入权限；前置失败时回写原因
-     * 3. 使用本行已保存的权益人/担保人或 ABS 自选权益人构建单券校验请求，复核主体资格后执行完整调库校验；业务校验异常按当前行失败处理
-     * 4. 根据联动互斥选项保留完整展开结果或仅保留手工项，再映射来源明细、主体信息和流程候选
-     * 5. 以手工主项判断本行是否通过，通过时回写通过状态；失败时汇总原因，同时禁止该行的联动、互斥和关联项单独提交
-     * 6. 返回所有行的校验结果，非 ABS 各行独立选择，ABS 同码不同主体作为不可调整原因返回
+     * 1. 确定本批调整方向，准备校验结果和投资池查询缓存
+     * 2. 按 Excel 行序检查必填项和重复行，解析目标池并核对导入权限
+     * 3. 批量加载证券、池状态和评级主体数据，检查同批 ABS 主体冲突
+     * 4. 回写前置失败，已展开的同池关联券沿用校验结果，其余行复核主体资格后执行调库校验
+     * 5. 按联动与互斥选项保留结果，补充流程候选，并按手工主项回写导入行的状态和原因
      *
-     * @param items 本批有效导入明细，每行包含一只证券、一个目标池及独立主体选择
+     * @param items 本批导入明细，每行包含一只证券、一个目标池及已保存的主体选择
      * @param inbound 是否调入，false 表示调出
      * @param allowLinkMutex 是否保留联动、互斥和关联展开项
      * @param opterId 执行导入校验的用户 ID
      * @param now 回写行级校验结果使用的统一时间
-     * @return 各行校验结果及首屏可复用的批量数据
+     * @return 实际调库校验结果及首屏可复用的批量数据
      */
     private SecurityImportCheckResult checkSecurityImport(
             List<SysImpTmpDetlBo> items, boolean inbound, boolean allowLinkMutex,
             String opterId, Date now) {
+        // 1. 确定本批方向，准备校验结果和目标池查询缓存
         List<SecurityImportCheckRow> rows = new ArrayList<>();
         List<AdjustCheckReq> requests = new ArrayList<>();
         List<AdjustCheckReq> selections = new ArrayList<>();
         List<SecurityPoolExcelImportCheckItemDto> checkItems = new ArrayList<>();
+        Map<String, SecurityPoolExcelImportCheckItemDto> expandedRelatedItems = new HashMap<>();
         Map<String, InvestmentPoolBo> poolNameCache = new HashMap<>();
         Map<Long, String> permissionErrors = new HashMap<>();
         Set<String> seenKeys = new HashSet<>();
         String adjustMode = inbound ? AdjustMode.IN.getCode() : AdjustMode.OUT.getCode();
         String direction = inbound ? "in" : "out";
 
+        // 2. 检查原始行，解析目标池并记录前置错误
         for (SysImpTmpDetlBo item : items) {
             List<String> preReasons = new ArrayList<>();
             // null 安全 trim，空白返回空串
@@ -844,9 +845,10 @@ public class SecurityPoolExcelImportService {
             rows.add(new SecurityImportCheckRow(item, pool, request, preReasons));
         }
 
-        // 证券、池关系、状态与评级主体候选在回写行结果前批量读取
+        // 3. 批量加载证券、池状态和评级主体，并检查同批 ABS 主体冲突
         BatchSecurityCheckData data = batchSecurityCheckService.loadExcelCheckData(requests, false);
         Set<String> identityConflicts = batchSecurityCheckService.findConflictingAbsCodes(selections, data);
+        // 4. 按原行顺序复用同券结果或执行调库校验
         for (SecurityImportCheckRow row : rows) {
             SysImpTmpDetlBo item = row.item;
             InvestmentPoolBo pool = row.pool;
@@ -861,10 +863,20 @@ public class SecurityPoolExcelImportService {
 
             // 将主档代码写回来源行，提交时与校验结果使用同一代码
             item.setFld001(code);
+            // 同一目标池已展开的关联码沿用已有结果，已有主体冲突的行仍按原规则处理
+            String poolKey = pool.getId() + "|";
+            SecurityPoolExcelImportCheckItemDto expanded = expandedRelatedItems.get(poolKey + code);
+            if (expanded != null && !identityConflicts.contains(code)) {
+                item.setChkRslt(expanded.isCanAdjust() ? "1" : "2");
+                item.setChkDscr("已并入第" + expanded.getSourceRowNo() + "行同券组");
+                item.setUpdtTime(now);
+                continue;
+            }
             AdjustCheckDto checkDto;
             try {
                 // 复核并使用页面保存的权益人或担保人，不覆盖手动选择
                 applyImportedRatingCompany(row.request, item, data);
+                // 执行证券 Excel 调库校验并保留逐券结果
                 checkDto = batchSecurityCheckService.checkExcelItem(row.request, data);
             } catch (BizException e) {
                 List<String> reasons = Collections.singletonList(e.getMessage());
@@ -885,7 +897,7 @@ public class SecurityPoolExcelImportService {
                     absIdentityService.applyCheckFailure(resultItem, reason);
                 }
             }
-            // 未勾选联动与互斥：只保留手工项（批量勾选后才完整展开；Excel 用选项控制）
+            // 5. 按联动与互斥选项保留结果，并映射流程和导入行状态
             if (!allowLinkMutex) {
                 List<AdjustCheckDto.CheckResultItem> manuals = new ArrayList<>();
                 for (AdjustCheckDto.CheckResultItem ri : resultItems) {
@@ -900,15 +912,18 @@ public class SecurityPoolExcelImportService {
             int rowStart = checkItems.size();
             boolean manualPass = false;
             for (AdjustCheckDto.CheckResultItem ri : resultItems) {
-                // 映射证券校验结果并注入批量流程
                 SecurityPoolExcelImportCheckItemDto mapped =
-                        // 映射证券校验结果，并对可调整手工项注入目标池「批量」流程（对齐批量 buildBatchCheckResult）
+                        // 映射校验结果，为可调整的手工项补充目标池的批量流程
                         mapSecurityCheckResult(item, ri, code, pool, direction);
                 // 判断手工主项是否可调整
                 if (isManualTag(mapped.getItemTag()) && mapped.isCanAdjust()) {
                     manualPass = true;
                 }
                 checkItems.add(mapped);
+                // 后续导入行只复用主目标池的同券结果
+                if (ItemType.RELATED.getCode().equals(mapped.getItemTag()) && pool.getId().equals(mapped.getTargetPoolId())) {
+                    expandedRelatedItems.putIfAbsent(poolKey + mapped.getSecurityCode(), mapped);
+                }
             }
 
             if (manualPass) {

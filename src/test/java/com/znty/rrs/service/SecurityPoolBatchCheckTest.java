@@ -62,6 +62,97 @@ public class SecurityPoolBatchCheckTest {
                 .isInstanceOf(BizException.class).hasMessage("调库项不能为空");
     }
 
+    /** 同池同方向只保留首个主项，展开各市场一次并保留其他请求的位置 */
+    @Test
+    public void pageMergesThreeRelatedSelectionsInRequestOrder() {
+        Fixture fixture = new Fixture();
+        fixture.relateMarkets("A.IB", "A.SH", "A.SZ");
+        List<AdjustCheckDto> results = fixture.service.checkSecurityBatch(Arrays.asList(
+                request("A.SH"), request("OTHER.IB"), request("A.SZ"), request("A.IB")));
+
+        assertThat(results).hasSize(4);
+        List<AdjustCheckDto.CheckResultItem> group = results.get(0).getItems();
+        assertThat(group).extracting(AdjustCheckDto.CheckResultItem::getSecurityCode)
+                .containsExactly("A.SH", "A.IB", "A.SZ");
+        assertThat(group).extracting(AdjustCheckDto.CheckResultItem::getItemTag)
+                .containsExactly("manual", "related", "related");
+        assertThat(group).allMatch(item -> item.isCanAdjust() && "A.SH".equals(item.getSourceSecurityCode())
+                && group.get(0).getAdjustGroupKey().equals(item.getAdjustGroupKey()));
+        assertThat(results.get(1).getItems()).extracting(AdjustCheckDto.CheckResultItem::getSecurityCode)
+                .containsExactly("OTHER.IB");
+        assertThat(results.get(2).getItems()).isEmpty();
+        assertThat(results.get(3).getItems()).isEmpty();
+        verify(fixture.batch).queryRelatedCodes(anyList(), anyList());
+    }
+
+    /** 合并后仍显示未勾选的到期关联券，其他市场可调整 */
+    @Test
+    public void pageKeepsExpiredRelatedMarketAsAnOwnFailedRow() {
+        Fixture fixture = new Fixture();
+        fixture.relateMarkets("A.IB", "A.SH", "A.SZ");
+        SecurityInfoBo expired = bond("A.IB");
+        expired.setDelistDate("20000101");
+        when(fixture.batch.querySecurities(anyList()))
+                .thenReturn(Arrays.asList(expired, bond("A.SH"), bond("A.SZ")));
+
+        List<AdjustCheckDto> results = fixture.service.checkSecurityBatch(
+                Arrays.asList(request("A.SH"), request("A.SZ")));
+
+        List<AdjustCheckDto.CheckResultItem> group = results.get(0).getItems();
+        assertThat(group).extracting(AdjustCheckDto.CheckResultItem::getSecurityCode)
+                .containsExactly("A.SH", "A.IB", "A.SZ");
+        assertThat(group).extracting(AdjustCheckDto.CheckResultItem::isCanAdjust)
+                .containsExactly(true, false, true);
+        assertThat(group.get(1).getFailReasons()).contains("债券已到期");
+        assertThat(results.get(1).getItems()).isEmpty();
+    }
+
+    /** 主体选择不一致只阻断本组，空值与空白采用同一口径 */
+    @Test
+    public void pageBlocksOnlyTheMergedGroupWithDifferentCompanySelections() {
+        Fixture fixture = new Fixture();
+        fixture.relateMarkets("A.IB", "A.SH", "A.SZ");
+        AdjustCheckReq shanghai = request("A.SH");
+        shanghai.setGuarantorCode("C200");
+        AdjustCheckReq shenzhen = request("A.SZ");
+        shenzhen.setGuarantorCode(" ");
+        List<AdjustCheckDto> results = fixture.service.checkSecurityBatch(
+                Arrays.asList(request("A.IB"), shanghai, shenzhen, request("OTHER.IB")));
+
+        assertThat(results.get(0).getItems()).hasSize(3).allSatisfy(item -> {
+            assertThat(item.isCanAdjust()).isFalse();
+            assertThat(item.getFailReasons()).contains("同券证券[A.IB、A.SH]选择的担保人或权益人不一致，请统一后重新校验");
+        });
+        assertThat(results.get(1).getItems()).isEmpty();
+        assertThat(results.get(2).getItems()).isEmpty();
+        assertThat(results.get(3).getItems()).singleElement()
+                .satisfies(item -> assertThat(item.isCanAdjust()).isTrue());
+
+        results = fixture.service.checkSecurityBatch(Arrays.asList(request("A.IB"), shenzhen));
+        assertThat(results.get(0).getItems()).hasSize(3).allMatch(AdjustCheckDto.CheckResultItem::isCanAdjust);
+    }
+
+    /** 同券在不同池或不同方向的请求分别校验 */
+    @Test
+    public void pageKeepsOtherPoolsAndDirectionsAsSeparateRequests() {
+        Fixture fixture = new Fixture();
+        fixture.relateMarkets("A.IB", "A.SH", "A.SZ");
+        InvestmentPoolBo otherPool = new InvestmentPoolBo();
+        otherPool.setId(10L);
+        otherPool.setStatus("enabled");
+        otherPool.setPoolType("observe");
+        when(fixture.pools.queryPoolList()).thenReturn(Arrays.asList(fixture.target, otherPool));
+        AdjustCheckReq otherDirection = request("A.SH");
+        otherDirection.getItems().get(0).setAdjustMode(AdjustMode.OUT.getCode());
+        AdjustCheckReq otherTarget = request("A.SZ");
+        otherTarget.getItems().get(0).setTargetPoolId(10L);
+
+        List<AdjustCheckDto> results = fixture.service.checkSecurityBatch(
+                Arrays.asList(request("A.IB"), otherDirection, otherTarget));
+
+        assertThat(results).hasSize(3).allSatisfy(result -> assertThat(result.getItems()).hasSize(3));
+    }
+
     /** 1000 只券同池检查，每类证券查询只分成两批 */
     @Test
     public void loadsOneThousandBondsInTwoChunks() {
@@ -541,6 +632,15 @@ public class SecurityPoolBatchCheckTest {
         return request;
     }
 
+    /** 创建普通债主档 */
+    private static SecurityInfoBo bond(String code) {
+        SecurityInfoBo security = new SecurityInfoBo();
+        security.setWindCode(code);
+        security.setSecurityType("mtn");
+        security.setIssuerCode("ISSUER");
+        return security;
+    }
+
     /** 使用实际规则服务和可计数的 Mapper 模拟数据 */
     private static final class Fixture {
         private final BatchSecurityCheckService service = new BatchSecurityCheckService();
@@ -573,13 +673,7 @@ public class SecurityPoolBatchCheckTest {
             when(batch.queryCategories()).thenReturn(Collections.singletonList(category));
             when(batch.querySecurities(anyList())).thenAnswer(call -> {
                 List<String> codes = call.getArgument(0);
-                return codes.stream().map(code -> {
-                    SecurityInfoBo security = new SecurityInfoBo();
-                    security.setWindCode(code);
-                    security.setSecurityType("mtn");
-                    security.setIssuerCode("ISSUER");
-                    return security;
-                }).collect(Collectors.toList());
+                return codes.stream().map(SecurityPoolBatchCheckTest::bond).collect(Collectors.toList());
             });
             when(market.queryMarketMappingList(anyList())).thenAnswer(call -> {
                 List<String> codes = call.getArgument(0);
@@ -600,6 +694,22 @@ public class SecurityPoolBatchCheckTest {
                     security.setEligibleForFollow(true);
                     return security;
                 }).collect(Collectors.toList());
+            });
+        }
+
+        /** 模拟一组债券各市场代码之间的同券关系 */
+        private void relateMarkets(String... codes) {
+            when(batch.queryRelatedCodes(anyList(), anyList())).thenAnswer(call -> {
+                List<String> requested = call.getArgument(0);
+                return Arrays.stream(codes).filter(requested::contains)
+                        .flatMap(source -> Arrays.stream(codes).filter(related -> !source.equals(related))
+                                .map(related -> {
+                                    Row row = new Row();
+                                    row.setSecurityCode(source);
+                                    row.setRelatedCode(related);
+                                    return row;
+                                }))
+                        .collect(Collectors.toList());
             });
         }
 

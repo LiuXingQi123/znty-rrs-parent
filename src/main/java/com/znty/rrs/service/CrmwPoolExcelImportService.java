@@ -594,12 +594,12 @@ public class CrmwPoolExcelImportService {
     /**
      * 校验 CRMW Excel 批次，保存逐行结果和完整调整提示
      *
-     * 可调整项仍可有 failReasons；数据错误和 ABS 主体身份冲突继续阻断，不清空原始原因
+     * 可调整项保留原校验提示，主档错误和 ABS 主体身份冲突仍阻断调库
      *
      * 执行顺序：
      * 1. 检查批次未提交、明细非空，并校验目标池和当前用户导入权限
-     * 2. 逐行回填凭证与标的主档，代码缺失、类型错误等数据问题记为失败行
-     * 3. 对有效数据调用 Excel 专用校验，执行原规则并将业务失败保留为提示
+     * 2. 检查本批 ABS 主体冲突，逐行回填凭证和标的主档，数据错误记为失败
+     * 3. 同凭证已展开的关联标的沿用校验结果，其余行执行 Excel 调库校验，保留业务提示
      * 4. 映射主项及联动、互斥、关联项，回写来源明细的校验状态
      * 5. 按实际组合、目标池和方向去重，显式手工项优先，再汇总可提交和失败条数
      * 6. 保存批次汇总与校验快照，返回本批任务及当前页明细
@@ -634,7 +634,9 @@ public class CrmwPoolExcelImportService {
         Date now = new Date();
         Map<String, SecurityInfoDetailDto> infoCache = new HashMap<>();
         List<CrmwPoolExcelImportCheckItemDto> checkItems = new ArrayList<>();
+        Map<String, CrmwPoolExcelImportCheckItemDto> expandedRelatedItems = new HashMap<>();
 
+        // 2. 检查同批 ABS 主体选择，随后核对逐行凭证与标的主档
         Map<String, Set<String>> selections = new HashMap<>();
         for (SysImpTmpDetlBo item : items) {
             // 判断文本是否未填写，再清理文本并将空值统一为空字符串
@@ -648,7 +650,7 @@ public class CrmwPoolExcelImportService {
                 // 同一标的可搭配不同凭证，校验前检查同批 ABS 主体一致性
                 ? absIdentityService.queryBatchIdentityFailures(selections) : Collections.emptyMap();
 
-        // 2. 逐行回填主档并识别代码缺失、类型错误等数据问题
+        // 回填主档并记录凭证或标的的数据错误
         for (SysImpTmpDetlBo item : items) {
             List<String> preReasons = new ArrayList<>();
             // 统一导入代码的空值和首尾空格，供必填检查及主档匹配使用
@@ -678,6 +680,17 @@ public class CrmwPoolExcelImportService {
                 continue;
             }
 
+            // 3. 复用同凭证已展开的关联项，其余行进入调库校验
+            String certificateKey = crmwScode + "|";
+            CrmwPoolExcelImportCheckItemDto expanded = expandedRelatedItems.get(certificateKey + securityCode);
+            if (expanded != null && !identityFailures.containsKey(securityCode)) {
+                item.setChkRslt(expanded.isCanAdjust() ? "1" : "2");
+                item.setChkDscr("已并入第" + expanded.getSourceRowNo() + "行同券组");
+                item.setUpdtTime(now);
+                crmwPoolExcelImportMapper.editItemCheckResult(item);
+                continue;
+            }
+
             AdjustCheckReq checkReq = new AdjustCheckReq();
             checkReq.setSecurityCode(securityCode);
             // 解析标的简称
@@ -696,7 +709,6 @@ public class CrmwPoolExcelImportService {
             checkItem.setAdjustMode(adjustMode);
             checkReq.setItems(Collections.singletonList(checkItem));
 
-            // 3. 执行完整规则，Excel 业务失败保留为可提交提示
             AdjustCheckDto checkDto;
             RatingCompany company;
             try {
@@ -750,6 +762,10 @@ public class CrmwPoolExcelImportService {
                 }
                 tips.addAll(mapped.getFailReasons());
                 checkItems.add(mapped);
+                // 后续导入行只复用本批目标池的同券结果
+                if (ItemType.RELATED.getCode().equals(mapped.getItemTag()) && pool.getId().equals(mapped.getTargetPoolId())) {
+                    expandedRelatedItems.putIfAbsent(certificateKey + mapped.getSecurityCode(), mapped);
+                }
             }
             if (manualPass) {
                 item.setChkRslt("1");

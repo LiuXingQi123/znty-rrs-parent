@@ -1142,6 +1142,60 @@ public class SecurityPoolExcelImportServiceTest {
         assertEquals("Excel 内相同证券代码与子池重复", rows.get(1).getChkDscr());
     }
 
+    /** 证券导入复用同池关联结果，不占用其他目标池的明细 */
+    @Test
+    public void securityImportReusesExpandedMarketsOnlyWithinTargetPool() {
+        InvestmentPoolBo firstPool = new InvestmentPoolBo();
+        firstPool.setId(101L);
+        InvestmentPoolBo secondPool = new InvestmentPoolBo();
+        secondPool.setId(102L);
+        when(importMapper.queryEnabledLeafPoolByParentAndChildName("父池", "子池", true)).thenReturn(firstPool);
+        when(importMapper.queryEnabledLeafPoolByParentAndChildName("父池", "另一子池", true)).thenReturn(secondPool);
+        when(batchSecurityCheckService.loadExcelCheckData(anyList(), eq(false))).thenReturn(new BatchSecurityCheckData());
+        List<String> codes = Arrays.asList("A.IB", "A.SH", "A.SZ");
+        List<SysImpTmpDetlBo> rows = new ArrayList<>();
+        for (String code : Arrays.asList("A.IB", "A.SH", "A.SZ", "A.SH")) {
+            SysImpTmpDetlBo row = new SysImpTmpDetlBo();
+            row.setId(rows.size() + 1L);
+            row.setRowNo(rows.size() + 2);
+            row.setFld001(code);
+            row.setFld003("父池");
+            row.setFld004(rows.size() == 3 ? "另一子池" : "子池");
+            rows.add(row);
+        }
+        when(batchSecurityCheckService.checkExcelItem(any(), any())).thenAnswer(call -> {
+            AdjustCheckReq request = call.getArgument(0);
+            List<AdjustCheckDto.CheckResultItem> resultItems = new ArrayList<>();
+            for (String code : codes) {
+                AdjustCheckDto.CheckResultItem resultItem = new AdjustCheckDto.CheckResultItem();
+                resultItem.setSecurityCode(code);
+                resultItem.setTargetPoolId(request.getItems().get(0).getTargetPoolId());
+                resultItem.setAdjustMode("调入");
+                resultItem.setItemTag(code.equals(request.getSecurityCode()) ? "manual" : "related");
+                resultItem.setCanAdjust(true);
+                resultItem.setFailReasons("A.SZ".equals(code) ? Collections.singletonList("债券已到期") : Collections.emptyList());
+                resultItems.add(resultItem);
+            }
+            AdjustCheckDto result = new AdjustCheckDto();
+            result.setItems(resultItems);
+            return result;
+        });
+
+        SecurityPoolExcelImportService.SecurityImportCheckResult expanded = ReflectionTestUtils.invokeMethod(service,
+                "checkSecurityImport", rows, true, true, "1", new Date());
+        assertEquals(6, expanded.items.size());
+        assertTrue(expanded.items.subList(0, 3).stream().allMatch(item -> item.getSourceItemId() == 1L));
+        assertEquals(Collections.singletonList("债券已到期"), expanded.items.get(2).getFailReasons());
+        assertEquals("已并入第2行同券组", rows.get(2).getChkDscr());
+        assertEquals(Long.valueOf(102L), expanded.items.get(3).getTargetPoolId());
+        verify(batchSecurityCheckService, times(2)).checkExcelItem(any(), any());
+
+        SecurityPoolExcelImportService.SecurityImportCheckResult manual = ReflectionTestUtils.invokeMethod(service,
+                "checkSecurityImport", rows, true, false, "1", new Date());
+        assertEquals(4, manual.items.size());
+        assertTrue(manual.items.stream().allMatch(item -> "manual".equals(item.getItemTag())));
+    }
+
     /** 使用真实导入编排验证来源明细、校验快照和提交参数保持一致 */
     private void assertSecurityImportWithTips(List<String> tips, String inputCode) {
         SysImpTmpBo batch = new SysImpTmpBo();
