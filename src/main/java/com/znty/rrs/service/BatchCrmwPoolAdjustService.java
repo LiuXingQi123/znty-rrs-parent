@@ -193,8 +193,28 @@ public class BatchCrmwPoolAdjustService {
         validateAdjustPoolPermission(req.getCurrentUserId(), req.getPoolId());
 
         BatchCrmwAdjustDto dto = new BatchCrmwAdjustDto();
-        // 2. 逐组合复用完整单笔规则，并追加已配置的批量流程
+        Map<String, BatchCrmwAdjustDto.CheckResultItem> expandedRelatedItems = new HashMap<>();
+        Map<String, BatchCrmwAdjustReq.SecurityItem> sourceSelections = new HashMap<>();
+        Map<String, String> groupFailures = new HashMap<>();
+        // 确定本批目标池使用的调整方向
+        String adjustMode = resolveAdjustMode(req);
+        // 2. 同一凭证已展开的标的沿用来源组，其余组合执行单笔校验
         for (BatchCrmwAdjustReq.SecurityItem security : req.getSecurities()) {
+            String combination = buildCombinationKey(security.getCrmwScode(), security.getSecurityCode());
+            BatchCrmwAdjustDto.CheckResultItem expanded = expandedRelatedItems.get(combination);
+            if (expanded != null) {
+                BatchCrmwAdjustReq.SecurityItem source = sourceSelections.get(expanded.getSourceSecurityCode());
+                if (!sameRatingSelection(source, security)) {
+                    groupFailures.putIfAbsent(expanded.getAdjustGroupKey(),
+                            "同券标的[" + source.getSecurityCode() + "、" + security.getSecurityCode()
+                                    + "]选择的评级主体不同，请统一后重新校验");
+                } else if (!expanded.isCanAdjust()) {
+                    groupFailures.putIfAbsent(expanded.getAdjustGroupKey(),
+                            "已选同券标的[" + security.getSecurityCode() + "]未通过校验");
+                }
+                continue;
+            }
+            sourceSelections.put(combination, security);
             // 构建单组合调库校验请求
             AdjustCheckDto checkDto = checkSingleAdjust(buildSingleCheckReq(req, security));
             if (checkDto == null || checkDto.getItems() == null) {
@@ -202,12 +222,28 @@ public class BatchCrmwPoolAdjustService {
             }
             for (AdjustCheckDto.CheckResultItem item : checkDto.getItems()) {
                 // 3. 映射实际组合身份、失败原因和已生成的流程候选
-                dto.getItems().add(buildBatchCheckResult(security, item));
+                BatchCrmwAdjustDto.CheckResultItem result = buildBatchCheckResult(security, item);
+                dto.getItems().add(result);
+                if (ItemType.RELATED.getCode().equals(result.getItemTag())
+                        && req.getPoolId().equals(result.getTargetPoolId())
+                        && adjustMode.equals(result.getAdjustMode())) {
+                    // 用本批目标池的关联项识别后续同券组合
+                    expandedRelatedItems.putIfAbsent(
+                            buildCombinationKey(result.getCrmwScode(), result.getSecurityCode()), result);
+                }
             }
         }
         // 4. 按实际组合、目标池和方向去重，显式手工项优先
         Map<String, BatchCrmwAdjustDto.CheckResultItem> uniqueItems = new LinkedHashMap<>();
         for (BatchCrmwAdjustDto.CheckResultItem item : dto.getItems()) {
+            String failure = groupFailures.get(item.getAdjustGroupKey());
+            if (failure != null) {
+                List<String> reasons = new ArrayList<>(item.getFailReasons());
+                reasons.add(failure);
+                item.setFailReasons(reasons);
+                item.setCanAdjust(false);
+                item.setFlowOptions(Collections.emptyList());
+            }
             String key = item.getCrmwScode() + "|" + item.getSecurityCode() + "|"
                     + item.getTargetPoolId() + "|" + item.getAdjustMode();
             BatchCrmwAdjustDto.CheckResultItem existing = uniqueItems.get(key);
@@ -217,6 +253,24 @@ public class BatchCrmwPoolAdjustService {
         }
         dto.setItems(new ArrayList<>(uniqueItems.values()));
         return dto;
+    }
+
+    /**
+     * 检查同券合并前的评级主体选择
+     *
+     * 执行顺序：
+     * 1. 忽略代码两端的空白，逐项比较双方的选择
+     *
+     * @param first 同券组的发起组合
+     * @param selected 后续勾选的同券组合
+     * @return 担保人、权益人和自选权益人均一致时返回 true
+     */
+    private boolean sameRatingSelection(BatchCrmwAdjustReq.SecurityItem first,
+                                        BatchCrmwAdjustReq.SecurityItem selected) {
+        return Objects.equals(normalizeDuplicateText(first.getGuarantorCode()), normalizeDuplicateText(selected.getGuarantorCode()))
+                && Objects.equals(normalizeDuplicateText(first.getRightsHolderCode()), normalizeDuplicateText(selected.getRightsHolderCode()))
+                && Objects.equals(normalizeDuplicateText(first.getSelfSelectedRightsHolderCode()),
+                        normalizeDuplicateText(selected.getSelfSelectedRightsHolderCode()));
     }
 
     /**

@@ -23,14 +23,16 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /** 验证批量和 Excel 入口保留关联标的身份及展示字段。 */
 public class CrmwRelatedEntryPointTest {
 
-    /** 批量选中同券两个主组合时，关联展开不重复提交同一个组合。 */
+    /** 同一凭证的同券标的共用主项，不同凭证各自校验 */
     @Test
-    public void batchCheckShouldPreferExplicitManualOverOverlappingRelated() {
+    public void batchCheckShouldMergeSameBondWithinCertificate() {
         BatchCrmwPoolAdjustService service = new BatchCrmwPoolAdjustService();
         BatchCrmwPoolAdjustMapper mapper = mock(BatchCrmwPoolAdjustMapper.class);
         CrmwPoolAdjustService single = mock(CrmwPoolAdjustService.class);
@@ -66,10 +68,25 @@ public class CrmwRelatedEntryPointTest {
             security.setCrmwScode("C.IB");
             securities.add(security);
         }
+        BatchCrmwAdjustReq.SecurityItem otherCertificate = new BatchCrmwAdjustReq.SecurityItem();
+        otherCertificate.setCrmwScode("D.IB");
+        otherCertificate.setSecurityCode("A.SH");
+        securities.add(otherCertificate);
         req.setSecurities(securities);
         BatchCrmwAdjustDto result = service.checkAdjust(req);
-        assertThat(result.getItems()).hasSize(2);
-        assertThat(result.getItems()).extracting(BatchCrmwAdjustDto.CheckResultItem::getItemTag).containsOnly("manual");
+        assertThat(result.getItems()).hasSize(4);
+        assertThat(result.getItems().subList(0, 2))
+                .extracting(BatchCrmwAdjustDto.CheckResultItem::getItemTag).containsExactly("manual", "related");
+        assertThat(result.getItems().subList(0, 2))
+                .extracting(BatchCrmwAdjustDto.CheckResultItem::getAdjustGroupKey).containsOnly("C.IB|A.IB_null");
+        assertThat(result.getItems().subList(2, 4))
+                .extracting(BatchCrmwAdjustDto.CheckResultItem::getSourceSecurityCode).containsOnly("D.IB|A.SH");
+        verify(single, times(2)).checkBatchAdjust(any());
+
+        securities.get(1).setGuarantorCode("OTHER");
+        BatchCrmwAdjustDto conflicting = service.checkAdjust(req);
+        assertThat(conflicting.getItems().subList(0, 2)).noneMatch(BatchCrmwAdjustDto.CheckResultItem::isCanAdjust);
+        assertThat(conflicting.getItems().subList(2, 4)).allMatch(BatchCrmwAdjustDto.CheckResultItem::isCanAdjust);
     }
 
     /** 同一批量主组合的关联项转换为单笔提交时必须保留实际证券代码。 */
@@ -112,7 +129,7 @@ public class CrmwRelatedEntryPointTest {
             items.add(item);
         }
         CrmwPoolAdjustSubmitReq req = ReflectionTestUtils.invokeMethod(new CrmwPoolExcelImportService(),
-                "buildSubmitReq", items, items.get(0), new SysImpTmpBo(), "1", "测试用户", new InvestmentPoolBo());
+                "buildSubmitReq", items, items.get(0), items.get(0), new SysImpTmpBo(), "1", "测试用户", new InvestmentPoolBo());
         assertThat(req.getCrmwScode()).isEqualTo("C.IB");
         assertThat(req.getItems()).extracting(CrmwPoolAdjustSubmitReq.AdjustItem::getSecurityCode)
                 .containsExactly("A.IB", "A.SH");

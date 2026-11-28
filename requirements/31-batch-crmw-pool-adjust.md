@@ -21,7 +21,7 @@
 - 人工单笔调入由后端按当前同券关系重新核对各目标池应提交的代码。普通批量和 Excel 复用本次校验结果中的实际代码集合。普通调库提交及终审逐码复核调入，实际提交的代码到期时要求重新校验整组。Excel 提交及终审沿用到期作为调整提示的口径。逐券活动流程检查继续执行。
 - 关联项保持同一个 `crmwScode/crmwStype`，`sourceSecurityCode` 为触发主组合键 `crmwScode|securityCode`，共用原主项的 `adjustGroupKey`、流程与 CRMW 批次号，仅手工项创建流程步骤；关联项的报告要求由同组手工项承担。
 - 提交 `items[]` 新增 `securityCode/securityShortName/securityType`，记录、快照与最终落池使用实际标的身份。未传明细代码的旧单组合请求继续使用请求级主券代码。直通即时生效，人工审批仅最终 `20` 同批落池；出池精确匹配原凭证、实际标的和目标池，保留其他凭证的组合。
-- 批量及 Excel 导入透传实际代码；同批显式选择多个同券代码时按凭证+标的+目标池+方向去重，手工主项优先。Excel 关联项的全称、市场、类型来自自身主档。
+- 批量同时勾选同一凭证下的同券标的时，同一目标池和方向只校验一组。首个组合为手工主项，其余同券代码保留为关联项；评级主体选择冲突时本组不可调整。不同凭证各自校验。Excel 关联项的全称、市场、类型来自自身主档。
 - 活动流程通过同批任一组合定位，关联码审批中不能在相同池组重复申请。`queryCrmwAdjustLogList` 返回当前组合全部历史及同批关联项，不按请求批次或终态过滤；返回项增加 `securityCode/securityShortName`，申请校验表和审核/详情记录表展示实际标的代码与名称。
 - 自动到期调出继续逐条扫描实际在池组合，不再二次按 ISIN 扩批；本次不调整定时任务规则，不迁移历史数据，不变更表结构。
 
@@ -61,6 +61,7 @@
 编排层 `BatchCrmwPoolAdjustService`：
 
 - `checkAdjust` 逐组合组装与单笔相同的 `AdjustCheckReq`，调用 `CrmwPoolAdjustService.checkBatchAdjust`，完整复用单笔校验并追加批量候选；结果项身份、流程候选与 `warnings` 透传单笔返回，不在批量侧重写规则。调入「已在池」按凭证+标的组合判断。
+- 校验结果把可调整项放在前面，不可调整项放在末尾，两类各自保留校验顺序，同组明细使用同一底色。支持逐行勾选和表头全选，默认勾选全部可调整项。提交只包含已勾选项。选中一组中的任意一行时，该组的其他可调整项须一并勾选，审批流程只确认已勾选的手工主项。
 - CRMW 单笔 `AdjustCheckReq` 和 `CrmwPoolAdjustSubmitReq` 均接收 `guarantorCode`、`rightsHolderCode`、`selfSelectedRightsHolderCode`；批量编排层按标的类型透传实际选中的评级主体。ABS 自选权益人优先，两者均未选时阻断。目标池仍不是信用债大库，不走主体债矩阵；`releaseRules=yes` 仅在提交时把说明追加到调整意见/调整说明，**不改变**单笔校验结果。
 - `addAdjustLog` 按组合分组后委托 `submitAdjustLog`，整批共享附件与 `BatchNoContext`。
 - 手工项 `adjustType=手动批量调整`；批次号前缀仍为 `CRMW`。

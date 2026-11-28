@@ -360,7 +360,7 @@ public class CrmwPoolExcelImportServiceTest {
         assertEquals("SELF", submit.getValue().getSelfSelectedRightsHolderCode());
         assertEquals(Long.valueOf(12L), submit.getValue().getItems().get(0).getFlowId());
         assertEquals(Long.valueOf(12L), submitted.getCheckItems().get(0).getFlowId());
-        assertEquals("0_crmw:normal_1", submitted.getCheckItems().get(0).getSelectedFlowKey());
+        assertEquals("normalInbound_12_crmw:normal", submitted.getCheckItems().get(0).getSelectedFlowKey());
         assertEquals(Long.valueOf(11L), service.queryTask(req).getCheckItems().get(0).getFlowId());
         assertEquals("联动池未开放", submitted.getCheckItems().get(1).getFailReasons().get(0));
     }
@@ -378,6 +378,9 @@ public class CrmwPoolExcelImportServiceTest {
         main.setTargetPoolId(18L);
         main.setCanAdjust(true);
         main.setSelectedRatingCompany(new RatingCompanySelectionReq());
+        CrmwPoolExcelImportCheckItemDto.FlowOptionDto flow = new CrmwPoolExcelImportCheckItemDto.FlowOptionDto();
+        flow.setSelectable(true);
+        main.setFlowOptions(Collections.singletonList(flow));
         CrmwPoolExcelImportCheckItemDto expanded = new CrmwPoolExcelImportCheckItemDto();
         expanded.setItemTag("linkage");
         expanded.setTargetPoolId(19L);
@@ -400,6 +403,7 @@ public class CrmwPoolExcelImportServiceTest {
         CrmwPoolExcelImportReq req = new CrmwPoolExcelImportReq();
         req.setImpId(batch.getImpId());
         req.setCurrentUserId("2");
+        req.setCheckItems(Arrays.asList(main, expanded));
         try {
             service.submitImport(req);
             fail();
@@ -486,7 +490,7 @@ public class CrmwPoolExcelImportServiceTest {
         assertEquals("2", items.get(1).getChkRslt());
     }
 
-    /** CRMW 导入只在同一凭证和目标池中复用已展开的关联结果 */
+    /** 同券组保留各标的，完全重复的组合不可调整，关联项可单独提交 */
     @Test
     public void checkImportReusesRelatedMarketsWithinCertificate() {
         SysImpTmpBo batch = new SysImpTmpBo();
@@ -507,11 +511,11 @@ public class CrmwPoolExcelImportServiceTest {
             when(securityPoolAdjustMapper.querySecurityBoByCode(code)).thenReturn(security);
         }
         List<SysImpTmpDetlBo> rows = new ArrayList<>();
-        for (String code : Arrays.asList("A.IB", "A.SH", "A.SZ", "A.SH")) {
+        for (String code : Arrays.asList("A.IB", "A.SH", "A.SZ", "A.SH", " a.sh ")) {
             SysImpTmpDetlBo row = new SysImpTmpDetlBo();
             row.setId(rows.size() + 1L);
             row.setRowNo(rows.size() + 2);
-            row.setFld001(rows.size() == 3 ? "CERT2.IB" : "CERT1.IB");
+            row.setFld001(rows.size() == 3 ? "CERT2.IB" : rows.size() == 4 ? "cert1.ib" : "CERT1.IB");
             row.setFld004(code);
             rows.add(row);
         }
@@ -528,6 +532,13 @@ public class CrmwPoolExcelImportServiceTest {
                 item.setItemTag(code.equals(request.getSecurityCode()) ? "manual" : "related");
                 item.setCanAdjust(true);
                 item.setFailReasons("A.SZ".equals(code) ? Collections.singletonList("债券已到期") : Collections.emptyList());
+                if ("manual".equals(item.getItemTag())) {
+                    AdjustCheckDto.FlowOption flow = new AdjustCheckDto.FlowOption();
+                    flow.setFlowId(11L);
+                    flow.setFlowType("batchInbound");
+                    flow.setSelectable(true);
+                    item.setFlowOptions(Collections.singletonList(flow));
+                }
                 resultItems.add(item);
             }
             AdjustCheckDto result = new AdjustCheckDto();
@@ -539,13 +550,44 @@ public class CrmwPoolExcelImportServiceTest {
         req.setCurrentUserId("1");
 
         CrmwPoolExcelImportDto result = service.checkImport(req);
-        assertEquals(6, result.getCheckItems().size());
+        assertEquals(7, result.getCheckItems().size());
         assertTrue(result.getCheckItems().subList(0, 3).stream()
                 .allMatch(item -> item.getSourceItemId() == 1L && item.isCanAdjust()));
         assertEquals(Collections.singletonList("债券已到期"), result.getCheckItems().get(2).getFailReasons());
         assertEquals("已并入第2行同券组", rows.get(2).getChkDscr());
         assertEquals("CERT2.IB", result.getCheckItems().get(3).getCrmwScode());
+        assertFalse(result.getCheckItems().get(6).isCanAdjust());
+        assertEquals("Excel 内相同 CRMW 代码、证券代码与子池重复", rows.get(4).getChkDscr());
+        assertEquals("2", rows.get(4).getChkRslt());
         verify(crmwPoolAdjustService, times(2)).checkExcelAdjust(any(AdjustCheckReq.class));
+
+        try {
+            service.submitImport(req);
+            fail();
+        } catch (BizException e) {
+            assertEquals("请先勾选要提交的调库项", e.getMessage());
+        }
+        CrmwPoolExcelImportCheckItemDto selected = result.getCheckItems().get(2);
+        req.setCheckItems(Arrays.asList(selected, selected));
+        try {
+            service.submitImport(req);
+            fail();
+        } catch (BizException e) {
+            assertEquals("调库校验结果已变更，请重新校验", e.getMessage());
+        }
+        req.setCheckItems(Collections.singletonList(selected));
+        service.submitImport(req);
+        ArgumentCaptor<CrmwPoolAdjustSubmitReq> submit = ArgumentCaptor.forClass(CrmwPoolAdjustSubmitReq.class);
+        verify(crmwPoolAdjustService).submitAdjustLog(submit.capture(), any(), any());
+        assertEquals("A.SZ", submit.getValue().getSecurityCode());
+        assertNull(submit.getValue().getSecurityInfo());
+        assertEquals("CERT1.IB", submit.getValue().getCrmwScode());
+        assertEquals(1, submit.getValue().getItems().size());
+        assertEquals("A.SZ", submit.getValue().getItems().get(0).getSecurityCode());
+        assertEquals("manual", submit.getValue().getItems().get(0).getItemTag());
+        assertEquals(Long.valueOf(11L), submit.getValue().getItems().get(0).getFlowId());
+        verify(importMapper).editItemSaveResult(rows.get(0));
+        verify(importMapper, never()).editItemSaveResult(rows.get(3));
     }
 
     /** 校验失败时仍展示来源行已保存的主体 */

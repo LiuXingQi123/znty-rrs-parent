@@ -21,7 +21,6 @@ import com.znty.rrs.entity.bo.PoolPermissionBo;
 import com.znty.rrs.entity.bo.SecurityInfoBo;
 import com.znty.rrs.entity.bo.SysImpTmpBo;
 import com.znty.rrs.entity.bo.SysImpTmpDetlBo;
-import com.znty.rrs.entity.common.SecurityMarketDto;
 import com.znty.rrs.entity.crmwpooladjust.AdjustCheckDto;
 import com.znty.rrs.entity.crmwpooladjust.AdjustCheckReq;
 import com.znty.rrs.entity.crmwpooladjust.AdjustSubmitDto;
@@ -55,6 +54,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -72,6 +72,9 @@ import java.util.stream.Collectors;
  */
 @Service
 public class CrmwPoolExcelImportService {
+
+    /** 同一目标池内重复导入同一凭证和标的组合的提示 */
+    private static final String DUPLICATE_COMBINATION = "Excel 内相同 CRMW 代码、证券代码与子池重复";
 
     /** 统一证券市场查询组件 */
     @Resource
@@ -289,9 +292,9 @@ public class CrmwPoolExcelImportService {
             if (securityCode.isEmpty()) {
                 preFail.add("证券代码为空");
             }
-            String uniq = crmwScode + "|" + securityCode;
+            String uniq = (crmwScode + "|" + securityCode).toUpperCase(Locale.ROOT);
             if (!crmwScode.isEmpty() && !securityCode.isEmpty() && !seenKeys.add(uniq)) {
-                preFail.add("Excel 内相同 CRMW 代码与证券代码重复");
+                preFail.add(DUPLICATE_COMBINATION);
             }
             // 回填凭证与标的主数据展示字段
             fillSecurityDisplay(item, infoCache);
@@ -598,7 +601,7 @@ public class CrmwPoolExcelImportService {
      *
      * 执行顺序：
      * 1. 检查批次未提交、明细非空，并校验目标池和当前用户导入权限
-     * 2. 检查本批 ABS 主体冲突，逐行回填凭证和标的主档，数据错误记为失败
+     * 2. 检查重复组合和本批 ABS 主体冲突，逐行回填凭证和标的主档
      * 3. 同凭证已展开的关联标的沿用校验结果，其余行执行 Excel 调库校验，保留业务提示
      * 4. 映射主项及联动、互斥、关联项，回写来源明细的校验状态
      * 5. 按实际组合、目标池和方向去重，显式手工项优先，再汇总可提交和失败条数
@@ -636,14 +639,22 @@ public class CrmwPoolExcelImportService {
         List<CrmwPoolExcelImportCheckItemDto> checkItems = new ArrayList<>();
         Map<String, CrmwPoolExcelImportCheckItemDto> expandedRelatedItems = new HashMap<>();
 
-        // 2. 检查同批 ABS 主体选择，随后核对逐行凭证与标的主档
+        // 2. 先排除重复组合，再检查同批 ABS 主体选择
+        Set<String> seenKeys = new HashSet<>();
+        Set<Long> duplicateIds = new HashSet<>();
         Map<String, Set<String>> selections = new HashMap<>();
         for (SysImpTmpDetlBo item : items) {
+            String crmwScode = trimToEmpty(item.getFld001());
+            String securityCode = trimToEmpty(item.getFld004());
+            String key = (crmwScode + "|" + securityCode).toUpperCase(Locale.ROOT);
+            if (!crmwScode.isEmpty() && !securityCode.isEmpty() && !seenKeys.add(key)) {
+                duplicateIds.add(item.getId());
+                continue;
+            }
             // 判断文本是否未填写，再清理文本并将空值统一为空字符串
             String selected = !isBlank(item.getFld014()) ? trimToEmpty(item.getFld014()) : trimToEmpty(item.getFld012());
             if (!selected.isEmpty()) {
-                // 清理文本并将空值统一为空字符串
-                selections.computeIfAbsent(trimToEmpty(item.getFld004()), key -> new HashSet<>()).add(selected);
+                selections.computeIfAbsent(securityCode, code -> new HashSet<>()).add(selected);
             }
         }
         Map<String, String> identityFailures = selections.values().stream().anyMatch(codes -> codes.size() > 1)
@@ -662,6 +673,9 @@ public class CrmwPoolExcelImportService {
             }
             if (securityCode.isEmpty()) {
                 preReasons.add("证券代码为空");
+            }
+            if (duplicateIds.contains(item.getId())) {
+                preReasons.add(DUPLICATE_COMBINATION);
             }
             // 回填凭证与标的主数据展示字段
             fillSecurityDisplay(item, infoCache);
@@ -859,7 +873,7 @@ public class CrmwPoolExcelImportService {
      * 执行顺序：
      * 1. 检查批次未提交，并筛选可提交校验项，没有有效项时结束并提示
      * 2. 确定经办人、调整原因和意见，复核批次目标池及当前用户导入权限
-     * 3. 检查展开项实际目标池的导入权限，按触发主组合分组并复核来源行的主体资格
+     * 3. 检查勾选项实际目标池的导入权限，按来源行分组并复核主体资格
      * 4. 存在直通项时，携带 Excel 来源按最终审批口径提前复核整批
      * 5. 保留实际流程选择，逐组委托核心服务写日志、步骤和申请快照
      * 6. 按手工主项回写来源明细保存结果，并更新批次提交状态和结果快照
@@ -888,11 +902,8 @@ public class CrmwPoolExcelImportService {
         if (savedCheckItems == null) {
             throw new BizException("校验结果数据不完整，请重新校验");
         }
-        // 从服务端校验结果选择可提交项，页面仅提供主项的流程选择
+        // 从服务端校验结果匹配本次勾选项及手工项的流程
         List<CrmwPoolExcelImportCheckItemDto> checkItems = filterSubmittableCheckItems(req, savedCheckItems);
-        if (checkItems.isEmpty()) {
-            throw new BizException("没有可提交的校验结果，请先校验");
-        }
         // 2. 确定经办人及原因意见，复核目标池导入权限
         String opterId = !isBlank(req.getCurrentUserId()) ? req.getCurrentUserId().trim() : batch.getOpterId();
         // 优先使用本次请求的经办人姓名，未填写时沿用批次姓名
@@ -918,10 +929,10 @@ public class CrmwPoolExcelImportService {
         // 校验 Excel 导入权限
         validateExcelImportPermission(opterId, pool.getId());
 
-        // 3. 检查各调整项的实际目标池权限，再按触发主组合分组
+        // 3. 检查各调整项的实际目标池权限，再按来源导入行分组
         Set<Long> permittedPoolIds = new HashSet<>();
         permittedPoolIds.add(pool.getId());
-        Map<String, List<CrmwPoolExcelImportCheckItemDto>> groupMap = new LinkedHashMap<>();
+        Map<Long, List<CrmwPoolExcelImportCheckItemDto>> groupMap = new LinkedHashMap<>();
         for (CrmwPoolExcelImportCheckItemDto ci : checkItems) {
             Long targetPoolId = ci.getTargetPoolId();
             if (targetPoolId == null) {
@@ -931,26 +942,23 @@ public class CrmwPoolExcelImportService {
                 // 同一批次内每个实际目标池只复核一次
                 validateExcelImportPermission(opterId, targetPoolId);
             }
-            // 优先按触发主组合分组，缺失时使用当前凭证与标的组合键
-            String groupKey = !isBlank(ci.getSourceSecurityCode())
-                    ? ci.getSourceSecurityCode()
-                    // 组合键：凭证|标的
-                    : buildCombinationKey(ci.getCrmwScode(), ci.getSecurityCode());
-            List<CrmwPoolExcelImportCheckItemDto> list = groupMap.get(groupKey);
-            if (list == null) {
-                list = new ArrayList<>();
-                groupMap.put(groupKey, list);
-            }
-            list.add(ci);
+            groupMap.computeIfAbsent(ci.getSourceItemId(), key -> new ArrayList<>()).add(ci);
         }
 
+        // 只勾选配套项时，使用同一来源行的默认流程
+        Map<Long, CrmwPoolExcelImportCheckItemDto> savedManualBySource = new HashMap<>();
+        for (CrmwPoolExcelImportCheckItemDto item : savedCheckItems) {
+            if (item.isCanAdjust() && isManualTag(item.getItemTag())) {
+                savedManualBySource.put(item.getSourceItemId(), item);
+            }
+        }
         Map<Long, SysImpTmpDetlBo> sourceMap = new HashMap<>();
         for (SysImpTmpDetlBo source : crmwPoolExcelImportMapper.queryAllByImpId(batch.getImpId())) {
             sourceMap.put(source.getId(), source);
         }
         List<CrmwPoolAdjustSubmitReq> submitRequests = new ArrayList<>();
         for (List<CrmwPoolExcelImportCheckItemDto> group : groupMap.values()) {
-            // 定位组合的手工主项及已通过校验的来源行
+            // 优先使用已勾选的手工项，只有配套项时由首个已勾选项发起
             CrmwPoolExcelImportCheckItemDto primary = resolvePrimaryItem(group);
             SysImpTmpDetlBo source = sourceMap.get(primary.getSourceItemId());
             if (source == null || !"1".equals(source.getChkRslt())) {
@@ -958,9 +966,15 @@ public class CrmwPoolExcelImportService {
             }
             // 复核导入行保存的关联主体或自选权益人
             RatingCompany company = resolveImportedRatingCompany(source, true);
+            CrmwPoolExcelImportCheckItemDto flowSource = savedManualBySource.get(primary.getSourceItemId());
+            if (flowSource == null || isBlank(flowSource.getSelectedFlowKey())) {
+                throw new BizException("来源主项没有可用的审批流程，请重新校验");
+            }
             // 保留已选流程，并用复核后的评级信息准备申请快照
-            CrmwPoolAdjustSubmitReq submitReq = buildSubmitReq(group, primary, batch, opterId, opterName, pool);
-            submitReq.setSecurityInfo(company.securityInfo);
+            CrmwPoolAdjustSubmitReq submitReq = buildSubmitReq(group, primary, flowSource, batch, opterId, opterName, pool);
+            if (primary.getSecurityCode().equals(company.securityInfo.getWindCode())) {
+                submitReq.setSecurityInfo(company.securityInfo);
+            }
             submitReq.setSelectedRatingCompany(company.selection);
             if (company.abs) {
                 submitReq.setGuarantorCode(source.getFld020());
@@ -973,7 +987,7 @@ public class CrmwPoolExcelImportService {
         }
 
         // 4. 存在直通项时，携带 Excel 来源复核整批
-        if (needsWholeBatchDirectRecheck(checkItems)) {
+        if (needsWholeBatchDirectRecheck(submitRequests)) {
             // 将 CRMW Excel 校验项转换为直通预检使用的日志
             crmwPoolAdjustService.recheckBeforeFinalApproval(buildDirectRecheckLogList(checkItems));
         }
@@ -993,15 +1007,8 @@ public class CrmwPoolExcelImportService {
 
         // 6. 回写来源明细和批次的提交结果及快照
         Date now = new Date();
-        for (CrmwPoolExcelImportCheckItemDto ci : checkItems) {
-            // 只回写手工主项对应的来源明细保存状态
-            if (!isManualTag(ci.getItemTag()) || ci.getSourceItemId() == null) {
-                continue;
-            }
-            SysImpTmpDetlBo source = sourceMap.get(ci.getSourceItemId());
-            if (source == null) {
-                continue;
-            }
+        for (Long sourceId : groupMap.keySet()) {
+            SysImpTmpDetlBo source = sourceMap.get(sourceId);
             source.setSaveRslt("1");
             source.setSaveDscr("提交成功");
             source.setUpdtTime(now);
@@ -1035,12 +1042,12 @@ public class CrmwPoolExcelImportService {
      * 组内关联项跟随触发它的手工主项提交，保留每项实际的标的代码
      *
      * 执行顺序：
-     * 1. 以组内手工主项填入凭证和标的信息，并带入批次说明和操作人
-     * 2. 复制各项的目标池、方向、分组和所选流程
-     * 3. 整理同组同券跨市场代码
+     * 1. 以本次发起项填写凭证和实际标的，并带入批次说明和操作人
+     * 2. 复制已勾选项的目标池、方向和分组，为本次发起项设置审批流程
      *
      * @param group 按来源组合分组的可提交结果
-     * @param primary 当前组合的手工主项
+     * @param primary 本次发起流程的调整项
+     * @param flowSource 保存所选或默认审批流程的来源手工项
      * @param batch 导入批次记录
      * @param opterId 本次提交的操作人 ID
      * @param opterName 本次提交的操作人姓名
@@ -1049,9 +1056,10 @@ public class CrmwPoolExcelImportService {
      */
     private CrmwPoolAdjustSubmitReq buildSubmitReq(List<CrmwPoolExcelImportCheckItemDto> group,
                                                    CrmwPoolExcelImportCheckItemDto primary,
+                                                    CrmwPoolExcelImportCheckItemDto flowSource,
                                                    SysImpTmpBo batch, String opterId, String opterName,
                                                    InvestmentPoolBo pool) {
-        // 1. 以组内手工主项填入凭证和标的信息，并带入批次说明和操作人
+        // 1. 以本次发起项填写凭证和实际标的
         CrmwPoolAdjustSubmitReq submitReq = new CrmwPoolAdjustSubmitReq();
         submitReq.setSecurityCode(primary.getSecurityCode());
         submitReq.setSecurityShortName(primary.getSecurityShortName());
@@ -1067,7 +1075,7 @@ public class CrmwPoolExcelImportService {
         submitReq.setAdjusterName(opterName);
 
         List<CrmwPoolAdjustSubmitReq.AdjustItem> submitItems = new ArrayList<>();
-        // 2. 复制各项的目标池、方向、分组和所选流程
+        // 2. 只创建已勾选的调整项，配套项单独提交时也能发起流程
         for (CrmwPoolExcelImportCheckItemDto ci : group) {
             CrmwPoolAdjustSubmitReq.AdjustItem si = new CrmwPoolAdjustSubmitReq.AdjustItem();
             si.setSecurityCode(ci.getSecurityCode());
@@ -1078,23 +1086,16 @@ public class CrmwPoolExcelImportService {
             si.setTargetPoolName(!isBlank(ci.getTargetPoolName()) ? ci.getTargetPoolName() : pool.getPoolName());
             si.setPoolType(PoolType.CRMW.getCode());
             si.setAdjustMode(ci.getAdjustMode());
-            // 检查该值是否已填写
-            si.setItemTag(isBlank(ci.getItemTag()) ? ItemType.MANUAL.getCode() : ci.getItemTag());
             si.setAdjustGroupKey(ci.getAdjustGroupKey());
-            si.setFlowId(ci.getFlowId());
-            si.setFlowKey(ci.getFlowKey());
-            si.setFlowType(ci.getFlowType());
+            si.setItemTag(ci == primary ? ItemType.MANUAL.getCode() : ci.getItemTag());
+            if (ci == primary) {
+                si.setFlowId(flowSource.getFlowId());
+                si.setFlowKey(flowSource.getFlowKey());
+                si.setFlowType(flowSource.getFlowType());
+            }
             si.setAdjustmentNote(ci.getAdjustNote());
             submitItems.add(si);
         }
-        // 3. 复用本次校验后传入的实际代码集合，提交阶段不再查询同券关系
-        submitReq.setRelatedMarketCodes(group.stream().map(item -> item.getSecurityCode())
-                .filter(code -> code != null && !code.equals(submitReq.getSecurityCode())).distinct()
-                .map(code -> {
-                    SecurityMarketDto related = new SecurityMarketDto();
-                    related.setWindCode(code);
-                    return related;
-                }).collect(Collectors.toList()));
         submitReq.setItems(submitItems);
         return submitReq;
     }
@@ -1105,20 +1106,13 @@ public class CrmwPoolExcelImportService {
      * 执行顺序：
      * 1. 遍历手工调整项，检查是否有流程无需人工审批即可完成
      *
-     * @param checkItems Excel 导入校验结果
+     * @param submitRequests 按来源行整理的调库请求
      * @return true=至少一个手工项可直接生效，需要整批复核，false=没有可直接生效的手工项，无需整批复核
      */
-    private boolean needsWholeBatchDirectRecheck(List<CrmwPoolExcelImportCheckItemDto> checkItems) {
-        for (CrmwPoolExcelImportCheckItemDto item : checkItems) {
-            // 判断 Excel 调整项是否为手工项
-            if (!isManualTag(item.getItemTag())) {
-                continue;
-            }
-            if (crmwPoolAdjustService.isDirectAdjustFlow(item.getFlowId(), item.getFlowKey())) {
-                return true;
-            }
-        }
-        return false;
+    private boolean needsWholeBatchDirectRecheck(List<CrmwPoolAdjustSubmitReq> submitRequests) {
+        return submitRequests.stream().flatMap(req -> req.getItems().stream())
+                .filter(item -> ItemType.MANUAL.getCode().equals(item.getItemTag()))
+                .anyMatch(item -> crmwPoolAdjustService.isDirectAdjustFlow(item.getFlowId(), item.getFlowKey()));
     }
 
     /**
@@ -1607,57 +1601,53 @@ public class CrmwPoolExcelImportService {
      *
      * 执行顺序：
      * 1. 按来源行和实际调整对象定位页面选中的调整项
-     * 2. 仅提交服务端最近校验通过的完整组
+     * 2. 仅保留服务端最近校验通过且本次已勾选的调整项
      * 3. 用校验候选核对手工项所选流程，并更新原列表中的对应项供提交后回显
      *
-     * @param req 带流程选择的提交请求
+     * @param req 带勾选结果和流程选择的提交请求
      * @param savedCheckItems 当前批次保存的完整校验结果
      * @return 可提交的服务端校验项
      */
     private List<CrmwPoolExcelImportCheckItemDto> filterSubmittableCheckItems(
             CrmwPoolExcelImportReq req, List<CrmwPoolExcelImportCheckItemDto> savedCheckItems) {
         Map<List<Object>, CrmwPoolExcelImportCheckItemDto> requested = new HashMap<>();
-        if (req.getCheckItems() != null) {
-            for (CrmwPoolExcelImportCheckItemDto item : req.getCheckItems()) {
-                if (item == null) {
-                    throw new BizException("调库校验结果已变更，请重新校验");
-                }
-                // 按来源行和实际调整项记录页面选择
-                requested.put(checkItemKey(item), item);
+        if (req.getCheckItems() == null || req.getCheckItems().isEmpty()) {
+            throw new BizException("请先勾选要提交的调库项");
+        }
+        for (CrmwPoolExcelImportCheckItemDto item : req.getCheckItems()) {
+            // 同一校验行只能勾选一次
+            if (item == null || !item.isCanAdjust() || requested.putIfAbsent(checkItemKey(item), item) != null) {
+                throw new BizException("调库校验结果已变更，请重新校验");
             }
         }
 
-        boolean hasRequestedItems = !requested.isEmpty();
         List<CrmwPoolExcelImportCheckItemDto> result = new ArrayList<>();
         for (CrmwPoolExcelImportCheckItemDto item : savedCheckItems) {
             if (!item.isCanAdjust()) {
                 continue;
             }
+            // 未勾选的行保留在校验结果中
+            CrmwPoolExcelImportCheckItemDto choice = requested.remove(checkItemKey(item));
+            if (choice == null) {
+                continue;
+            }
             if (item.getSelectedRatingCompany() == null) {
                 throw new BizException("校验结果缺少评级主体信息，请重新校验");
             }
-            if (hasRequestedItems) {
-                // 只接受最新校验结果中的调整项，避免旧页面提交过期选择
-                CrmwPoolExcelImportCheckItemDto choice = requested.remove(checkItemKey(item));
-                if (choice == null) {
-                    throw new BizException("调库校验结果已变更，请重新校验");
-                }
-                // 仅手工主项使用页面所选流程
-                if (isManualTag(item.getItemTag())) {
-                    CrmwPoolExcelImportCheckItemDto.FlowOptionDto flow = item.getFlowOptions().stream()
-                            .filter(option -> option.isSelectable()
-                                    && Objects.equals(option.getFlowId(), choice.getFlowId())
-                                    && Objects.equals(option.getFlowKey(), choice.getFlowKey())
-                                    && Objects.equals(option.getFlowType(), choice.getFlowType()))
-                            .findFirst().orElseThrow(() -> new BizException("所选审批流程已失效，请重新选择"));
-                    item.setSelectedFlowKey(choice.getSelectedFlowKey());
-                    item.setFlowId(flow.getFlowId());
-                    item.setFlowKey(flow.getFlowKey());
-                    item.setFlowType(flow.getFlowType());
-                    item.setFlowName(flow.getFlowName());
-                    // 判断文本是否未填写
-                    item.setDirectFlow(flow.getFlowId() == null && isBlank(flow.getFlowKey()));
-                }
+            // 只有勾选的手工项可以更改审批流程
+            if (isManualTag(item.getItemTag())) {
+                CrmwPoolExcelImportCheckItemDto.FlowOptionDto flow = item.getFlowOptions().stream()
+                        .filter(option -> option.isSelectable()
+                                && Objects.equals(option.getFlowId(), choice.getFlowId())
+                                && Objects.equals(option.getFlowKey(), choice.getFlowKey())
+                                && Objects.equals(option.getFlowType(), choice.getFlowType()))
+                        .findFirst().orElseThrow(() -> new BizException("所选审批流程已失效，请重新选择"));
+                item.setSelectedFlowKey(flow.getOptionKey());
+                item.setFlowId(flow.getFlowId());
+                item.setFlowKey(flow.getFlowKey());
+                item.setFlowType(flow.getFlowType());
+                item.setFlowName(flow.getFlowName());
+                item.setDirectFlow(flow.getFlowId() == null && isBlank(flow.getFlowKey()));
             }
             result.add(item);
         }
