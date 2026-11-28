@@ -26,6 +26,7 @@ import com.znty.rrs.exception.BizException;
 import com.znty.rrs.mapper.BatchSecurityCheckMapper;
 import com.znty.rrs.mapper.FlowMapper;
 import com.znty.rrs.mapper.InvestmentPoolMapper;
+import com.znty.rrs.mapper.SecurityPoolAdjustMapper;
 import com.znty.rrs.mapper.SecurityPoolExcelImportMapper;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
@@ -1013,6 +1014,63 @@ public class SecurityPoolExcelImportServiceTest {
         assertEquals("manual", bondItems.get(0).getItemTag());
         assertEquals(Long.valueOf(112L), companyItems.get(0).getFlowId());
         assertEquals(Long.valueOf(112L), bondItems.get(0).getFlowId());
+    }
+
+    /** 只选同券关联市场时，沿用来源流程且通过实际提交的同券复核 */
+    @Test
+    public void submitSecurityImportShouldAllowRelatedMarketsWithoutOriginal() {
+        SysImpTmpBo batch = new SysImpTmpBo();
+        batch.setImpId("IMP_RELATED_ONLY");
+        batch.setOptionJson("{\"importType\":\"security\"}");
+        batch.setChkRslt("1");
+        batch.setSaveRslt("0");
+        SecurityPoolExcelImportCheckItemDto main = selectionItem(10L, 23L, "manual", true);
+        main.setSecurityCode("A.IB");
+        main.setSelectedFlowKey("bond:normal");
+        main.setFlowId(112L);
+        main.setFailReasons(Collections.singletonList("债券已到期"));
+
+        SecurityPoolExcelImportCheckItemDto relatedB = selectionItem(10L, 23L, "related", true);
+        relatedB.setSecurityCode("A.SH");
+        SecurityPoolExcelImportCheckItemDto relatedC = selectionItem(10L, 23L, "related", true);
+        relatedC.setSecurityCode("A.SZ");
+        List<SecurityPoolExcelImportCheckItemDto> snapshot = Arrays.asList(main, relatedB, relatedC);
+        snapshot.forEach(item -> item.setSourceSecurityCode("A.IB"));
+        batch.setResultJson(ReflectionTestUtils.invokeMethod(service, "buildCheckResultJson",
+                snapshot, 3, 0, true, "security"));
+        when(importMapper.queryBatchByImpId(batch.getImpId())).thenReturn(batch);
+
+        SysImpTmpDetlBo source = new SysImpTmpDetlBo();
+        source.setId(10L);
+        source.setFld001("A.IB");
+        source.setFld009("23");
+        source.setChkRslt("1");
+        when(importMapper.queryBatchItemList(batch.getImpId())).thenReturn(Collections.singletonList(source));
+        when(batchSecurityCheckService.loadExcelRatingCandidates(eq(Collections.singletonList("A.IB")), anyList()))
+                .thenReturn(new BatchSecurityCheckData());
+
+        SecurityPoolExcelImportReq req = new SecurityPoolExcelImportReq();
+        req.setImpId(batch.getImpId());
+        req.setCurrentUserId("1");
+        req.setCheckItems(Arrays.asList(relatedB, relatedC));
+        service.submitImport(req);
+
+        ArgumentCaptor<List<SecurityPoolAdjustSubmitReq>> requests = ArgumentCaptor.forClass(List.class);
+        verify(batchSecurityAdjustSubmitService).submit(requests.capture(), any(), eq(false));
+        SecurityPoolAdjustSubmitReq submitted = requests.getValue().get(0);
+        List<SecurityPoolAdjustSubmitReq.AdjustItem> items = submitted.getItems();
+        assertEquals(2, items.size());
+        assertEquals("A.SH", items.get(0).getSecurityCode());
+        assertEquals("manual", items.get(0).getItemTag());
+        assertEquals(Long.valueOf(112L), items.get(0).getFlowId());
+        assertEquals("A.SZ", items.get(1).getSecurityCode());
+        assertEquals("related", items.get(1).getItemTag());
+
+        SecurityPoolAdjustService adjustService = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(adjustService, "securityPoolAdjustMapper", mock(SecurityPoolAdjustMapper.class));
+        SecurityInfoBo mainSecurity = new SecurityInfoBo();
+        mainSecurity.setWindCode("A.IB");
+        ReflectionTestUtils.invokeMethod(adjustService, "validateRelatedInboundItemsOnSubmit", submitted, mainSecurity, null);
     }
 
     private SecurityPoolExcelImportCheckItemDto selectionItem(Long sourceItemId, Long poolId, String itemTag,
