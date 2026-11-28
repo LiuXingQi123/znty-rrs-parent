@@ -241,6 +241,9 @@
         <where>
             AND si.security_status != 'D'
             AND si.security_source != 'temporary'
+            <if test="tempSecurityType == 'crmw'">
+                AND si.security_type = 'crmw'
+            </if>
             <if test="securityKeyword != null and securityKeyword != ''">
                 AND (si.wind_code LIKE CONCAT(#{securityKeyword}, '%')
                      OR si.short_name LIKE CONCAT('%', #{securityKeyword}, '%')
@@ -675,7 +678,6 @@
         WHERE is_deleted = 0
           AND crmw_scode = #{tempSecurityCode}
           AND crmw_stype = #{tempSecurityType}
-          AND crmw_mktcode = #{tempSecurityMarket}
           AND audit_status IN ('00', '11')
     </select>
 
@@ -686,7 +688,6 @@
         WHERE is_deleted = 0
           AND crmw_scode = #{tempSecurityCode}
           AND crmw_stype = #{tempSecurityType}
-          AND crmw_mktcode = #{tempSecurityMarket}
     </select>
 
     <!-- 查询 CRMW 池有效在池状态（security 为临时码） -->
@@ -751,7 +752,78 @@
         WHERE is_deleted = 0
           AND crmw_scode = #{tempSecurityCode}
           AND crmw_stype = #{tempSecurityType}
-          AND crmw_mktcode = #{tempSecurityMarket}
+    </select>
+
+    <!-- 查询新旧凭证的有效持仓，市场字段为空的记录也参与迁移 -->
+    <select id="queryActiveCrmwCredentialPoolStatusList" resultType="com.znty.rrs.entity.bo.IpPoolStatusBo">
+        SELECT *
+        FROM
+        <choose>
+            <when test="crmwPool">ip_pool_status_crmw</when>
+            <otherwise>ip_pool_status</otherwise>
+        </choose>
+        WHERE is_deleted = 0
+          AND audit_status = '20'
+          AND crmw_stype = #{bo.tempSecurityType}
+          AND crmw_scode IN (#{bo.tempSecurityCode}, #{bo.securityCode})
+        ORDER BY id
+    </select>
+
+    <!-- 正式组合已有在途，或原调入申请遇到正式组合已在池时，不合并审批 -->
+    <select id="queryCrmwCredentialConflict" resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
+        <!-- 收集两个凭证的当前在池组合和未结束申请，终态历史不参与判断 -->
+        WITH live_combinations AS (
+            SELECT crmw_scode
+                   , security_code
+                   , target_pool_id
+                   , target_pool_name
+                   , audit_status
+                   , adjust_mode
+            FROM ip_pool_status_crmw
+            WHERE is_deleted = 0
+              AND audit_status = '20'
+              AND crmw_stype = #{tempSecurityType}
+              AND crmw_scode IN (#{tempSecurityCode}, #{securityCode})
+            UNION ALL
+            SELECT crmw_scode
+                   , security_code
+                   , target_pool_id
+                   , target_pool_name
+                   , audit_status
+                   , adjust_mode
+            FROM ip_pool_status
+            WHERE is_deleted = 0
+              AND audit_status = '20'
+              AND crmw_stype = #{tempSecurityType}
+              AND crmw_scode IN (#{tempSecurityCode}, #{securityCode})
+            UNION ALL
+            SELECT crmw_scode
+                   , security_code
+                   , target_pool_id
+                   , target_pool_name
+                   , audit_status
+                   , adjust_mode
+            FROM ip_adjust_log
+            WHERE is_deleted = 0
+              AND audit_status IN ('00', '11')
+              AND crmw_stype = #{tempSecurityType}
+              AND crmw_scode IN (#{tempSecurityCode}, #{securityCode})
+        )
+        <!-- 按实际标的和目标池取首个有冲突的组合，供页面提示 -->
+        SELECT old_combo.security_code
+               , COALESCE(NULLIF(pool.pool_name, ''), NULLIF(old_combo.target_pool_name, '')
+                          , NULLIF(formal_combo.target_pool_name, ''), '名称未登记') AS target_pool_name
+        FROM live_combinations old_combo
+        INNER JOIN live_combinations formal_combo ON formal_combo.security_code = old_combo.security_code
+                                                   AND formal_combo.target_pool_id = old_combo.target_pool_id
+        LEFT JOIN ip_investment_pool pool ON pool.id = old_combo.target_pool_id
+        WHERE old_combo.crmw_scode = #{tempSecurityCode}
+          AND formal_combo.crmw_scode = #{securityCode}
+          AND (formal_combo.audit_status IN ('00', '11')
+              OR (old_combo.audit_status IN ('00', '11') AND old_combo.adjust_mode = '调入'))
+        ORDER BY old_combo.target_pool_id
+                 , old_combo.security_code
+        LIMIT 1
     </select>
 
     <!-- 批量替换在途调库日志证券引用 -->
@@ -770,11 +842,16 @@
     <!-- 批量替换在途调库日志 CRMW 引用 -->
     <update id="editAdjustLogCrmwReference">
         UPDATE ip_adjust_log
-        SET crmw_scode = #{bo.securityCode}
+        SET crmw_name = #{bo.securityName}
+           , crmw_scode = #{bo.securityCode}
            , crmw_mktcode = #{bo.securityMarket}
            , crmw_stype = #{bo.securityType}
            , updt_time = #{bo.updateTime}
-        WHERE id IN
+        WHERE is_deleted = 0
+          AND audit_status IN ('00', '11')
+          AND crmw_scode = #{bo.tempSecurityCode}
+          AND crmw_stype = #{bo.tempSecurityType}
+          AND id IN
         <foreach collection="idList" item="item" open="(" separator="," close=")">
             #{item}
         </foreach>
@@ -783,7 +860,8 @@
     <!-- 批量替换当前池状态 CRMW 引用（对齐老系统 findInvestPoolStatusLC，只改字段） -->
     <update id="editPoolStatusCrmwReference">
         UPDATE ip_pool_status
-        SET crmw_scode = #{bo.securityCode}
+        SET crmw_name = #{bo.securityName}
+           , crmw_scode = #{bo.securityCode}
            , crmw_mktcode = #{bo.securityMarket}
            , crmw_stype = #{bo.securityType}
            , updt_time = #{bo.updateTime}
@@ -796,7 +874,8 @@
     <!-- 批量替换 CRMW 池状态 CRMW 引用 -->
     <update id="editCrmwPoolStatusCrmwReference">
         UPDATE ip_pool_status_crmw
-        SET crmw_scode = #{bo.securityCode}
+        SET crmw_name = #{bo.securityName}
+           , crmw_scode = #{bo.securityCode}
            , crmw_mktcode = #{bo.securityMarket}
            , crmw_stype = #{bo.securityType}
            , updt_time = #{bo.updateTime}

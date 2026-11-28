@@ -333,7 +333,7 @@ public interface TempSecurityCodeMapper {
     /**
      * 查询核心业务表引用数量
      *
-     * @param bo 用于匹配记录的临时证券代码、临时证券类型、临时证券市场
+     * @param bo 用于匹配记录的临时证券代码和类型
      * @return 普通池和 CRMW 相关调库日志、池状态中的有效引用总数
      */
     int queryCoreReferenceCount(TempSecurityCodeBo bo);
@@ -377,7 +377,7 @@ public interface TempSecurityCodeMapper {
     /**
      * 查询在途调库日志 CRMW 引用 ID 列表
      *
-     * @param bo 用于匹配记录的临时证券代码、临时证券类型、临时证券市场
+     * @param bo 用于匹配记录的临时证券代码和类型
      * @return 以该临时代码为 CRMW 凭证代码的在途调库日志 ID 列表
      */
     List<Long> queryPendingAdjustLogCrmwReferenceIdList(TempSecurityCodeBo bo);
@@ -385,7 +385,7 @@ public interface TempSecurityCodeMapper {
     /**
      * 查询当前池状态 CRMW 引用 ID 列表
      *
-     * @param bo 用于匹配记录的临时证券代码、临时证券类型、临时证券市场
+     * @param bo 用于匹配记录的临时证券代码和类型
      * @return 以该临时代码为 CRMW 凭证代码的普通池状态 ID 列表
      */
     List<Long> queryPoolStatusCrmwReferenceIdList(TempSecurityCodeBo bo);
@@ -428,6 +428,24 @@ public interface TempSecurityCodeMapper {
     List<Long> queryCrmwPoolStatusCrmwReferenceIdList(TempSecurityCodeBo bo);
 
     /**
+     * 查询新旧 CRMW 凭证在同一标的和投资池中的有效记录冲突
+     *
+     * @param bo 本次换码的临时凭证和正式凭证
+     * @return 首个冲突的标的代码和投资池名称，无冲突时返回空
+     */
+    IpAdjustLogBo queryCrmwCredentialConflict(TempSecurityCodeBo bo);
+
+    /**
+     * 查询新旧 CRMW 凭证的当前在池状态，供旧组合调出及正式组合去重
+     *
+     * @param bo 本次换码的临时凭证和正式凭证
+     * @param crmwPool true 查 CRMW 池状态，false 查普通池状态
+     * @return 两个凭证的有效在池状态
+     */
+    List<IpPoolStatusBo> queryActiveCrmwCredentialPoolStatusList(@Param("bo") TempSecurityCodeBo bo,
+                                                               @Param("crmwPool") boolean crmwPool);
+
+    /**
      * 批量替换在途调库日志证券引用
      *
      * @param bo 要写入日志的正式证券代码、名称、类型和更新时间
@@ -438,15 +456,16 @@ public interface TempSecurityCodeMapper {
     /**
      * 批量替换在途调库日志 CRMW 引用
      *
-     * @param bo 要写入日志的正式凭证代码、市场、类型和更新时间
+     * @param bo 要写入日志的正式凭证名称、代码、市场、类型和更新时间
      * @param idList 调库日志 ID 列表
+     * @return 受影响的调库日志数量
      */
-    void editAdjustLogCrmwReference(@Param("bo") TempSecurityCodeBo bo, @Param("idList") List<Long> idList);
+    int editAdjustLogCrmwReference(@Param("bo") TempSecurityCodeBo bo, @Param("idList") List<Long> idList);
 
     /**
      * 批量替换当前池状态 CRMW 引用
      *
-     * @param bo 要写入池状态的正式凭证代码、市场、类型和更新时间
+     * @param bo 要写入池状态的正式凭证名称、代码、市场、类型和更新时间
      * @param idList 普通证券或主体池状态 ID 列表
      */
     void editPoolStatusCrmwReference(@Param("bo") TempSecurityCodeBo bo, @Param("idList") List<Long> idList);
@@ -454,7 +473,7 @@ public interface TempSecurityCodeMapper {
     /**
      * 批量替换 CRMW 池状态 CRMW 引用
      *
-     * @param bo 要写入 CRMW 池状态的正式凭证代码、市场、类型和更新时间
+     * @param bo 要写入 CRMW 池状态的正式凭证名称、代码、市场、类型和更新时间
      * @param idList CRMW 组合池状态 ID 列表
      */
     void editCrmwPoolStatusCrmwReference(@Param("bo") TempSecurityCodeBo bo, @Param("idList") List<Long> idList);
@@ -465,8 +484,9 @@ public interface TempSecurityCodeMapper {
      * 写入后将生成的主键回填到入参的 id 字段
      *
      * @param bo 待写入的证券或主体池状态
+     * @return 受影响的在池记录数量
      */
-    void addCrmwPoolStatus(IpPoolStatusBo bo);
+    int addCrmwPoolStatus(IpPoolStatusBo bo);
 
     /**
      * 新增临时代码替换日志，返回实际写入行数

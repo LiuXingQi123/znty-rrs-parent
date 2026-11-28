@@ -174,7 +174,7 @@ public class TempSecurityCodeService {
      * 远程查询正式证券选项（转正选券，代码/名称模糊，最多 50 条）
      *
      * 执行顺序：
-     * 1. 查询正式证券远程选项
+     * 1. 查询正式证券远程选项，临时 CRMW 只查询正式凭证
      * 2. 批量查询当前代码市场，避免列表与导出逐行查询
      *
      * @param req 证券临时代码查询或维护请求
@@ -204,7 +204,7 @@ public class TempSecurityCodeService {
      * 普通池流程中调库日志（audit_status=00/11）：替换主项并补同券市场关联项，沿用原审批
      * 普通池已在池状态（audit_status=20）：每个池「临时出库 +（正式组未在池则）整组入库」
      * CRMW 池在同一凭证下按标的全部市场代码转换，流程中沿用原审批
-     * 池/日志上 CRMW 字段指向临时码：仅字段替换
+     * 临时 CRMW 凭证转为正式 CRMW 凭证，单券业务按单码迁移，组合业务替换凭证引用
      *
      * 临时证券信息只读；正式证券必须从主数据远程选择
      *
@@ -484,12 +484,13 @@ public class TempSecurityCodeService {
     }
 
     /**
-     * 按人工或定时任务来源执行临时代码转正，包含正式证券的同券市场代码
+     * 按人工或定时任务来源执行临时代码转正
      *
      * 执行顺序：
-     * 1. 查询正式代码是否已被其他临时代码关联
-     * 2. 检查正式证券及同券市场代码是否已有调库日志
-     * 3. 检查通过后沿用原来的整组转换逻辑
+     * 1. 检查临时 CRMW 是否选择了正式 CRMW
+     * 2. 查询正式代码是否已被其他临时代码关联
+     * 3. 检查所选正式代码及适用的同券市场代码是否已有调库日志
+     * 4. 按凭证单码或普通证券同券整组转换
      *
      * @param oldBo 原临时代码记录
      * @param formalSecurity 已查询并校验通过的目标正式证券
@@ -500,11 +501,16 @@ public class TempSecurityCodeService {
             TempSecurityCodeBo oldBo,
             TempSecurityCodeDto.FormalSecurityOption formalSecurity,
             String oprtSource) {
-        // 1. 查询正式代码是否已被其他临时代码关联
+        // 1. 检查临时 CRMW 是否选择了正式 CRMW
+        boolean crmwCredential = "crmw".equals(oldBo.getTempSecurityType());
+        if (crmwCredential && !"crmw".equals(formalSecurity.getSecurityType())) {
+            throw new BizException("临时CRMW只能更新为正式CRMW凭证");
+        }
+        // 2. 查询正式代码是否已被其他临时代码关联
         validateFormalSecurityAssociation(oldBo.getId(), formalSecurity.getSecurityCode());
-        // 2. 检查正式证券及同券市场代码，已有调库日志时不进入后续转换
-        validateFormalSecurityAdjustHistory(formalSecurity.getSecurityCode());
-        // 3. 原人工和债券临时代码任务继续使用同券整组模式
+        // 3. 检查所选正式代码及适用的同券市场代码是否已有调库日志
+        validateFormalSecurityAdjustHistory(formalSecurity.getSecurityCode(), crmwCredential);
+        // 4. 按凭证单码或普通证券同券整组转换
         return editTempSecurityCodeToUpdated(oldBo, formalSecurity, oprtSource, false);
     }
 
@@ -532,16 +538,19 @@ public class TempSecurityCodeService {
      * 正式证券及同券市场代码存在任何调库日志时，拒绝临时代码转正
      *
      * 执行顺序：
-     * 1. 按共用市场集合读取同券代码
-     * 2. 正式证券及同券市场代码存在任何调库日志时，拒绝临时代码转正
+     * 1. 按共用市场集合读取同券代码，CRMW 凭证只检查选中的代码
+     * 2. 检查范围内存在任何调库日志时，拒绝临时代码转正
      *
      * @param securityCode 本次选定的正式证券代码
+     * @param crmwCredential 是否为 CRMW 凭证转正
      */
-    private void validateFormalSecurityAdjustHistory(String securityCode) {
+    private void validateFormalSecurityAdjustHistory(String securityCode, boolean crmwCredential) {
         Set<String> codes = new LinkedHashSet<>();
         codes.add(securityCode);
-        for (SecurityMarketDto related : securityMarketService.queryRelatedMarketCodes(securityCode)) {
-            codes.add(related.getWindCode());
+        if (!crmwCredential) {
+            for (SecurityMarketDto related : securityMarketService.queryRelatedMarketCodes(securityCode)) {
+                codes.add(related.getWindCode());
+            }
         }
         IpAdjustLogBo history = tempSecurityCodeMapper.queryFormalSecurityAdjustHistory(new ArrayList<>(codes));
         if (history != null) {

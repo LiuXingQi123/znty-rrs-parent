@@ -95,7 +95,7 @@ public class TempSecurityCodeBusinessConverter {
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public ConversionPlan prepareOrdinaryPoolConversion(TempSecurityCodeBo mapping) {
-        // 原临时转正继续按同券全部市场代码转换
+        // 准备普通池转换，CRMW 凭证只使用选中的正式代码
         return prepareConversion(mapping, false);
     }
 
@@ -133,6 +133,7 @@ public class TempSecurityCodeBusinessConverter {
     private ConversionPlan prepareConversion(TempSecurityCodeBo mapping, boolean singleCode) {
         ConversionPlan plan = new ConversionPlan();
         plan.singleCode = singleCode;
+        plan.crmwCredential = "crmw".equals(mapping.getTempSecurityType()) && "crmw".equals(mapping.getSecurityType());
         if (TempOprtSource.JOB.getCode().equals(mapping.getOprtSource())) {
             plan.taskLabel = ScheduledAdjustLogHelper.taskLabel(
                     singleCode ? WindCodeSyncService.TASK_NAME : BondTempCodeReplaceService.TASK_NAME);
@@ -171,7 +172,7 @@ public class TempSecurityCodeBusinessConverter {
      * 查询选中正式码及同券其他市场代码，逐码检查主数据是否可用，保存主数据和市场
      * 例如选中 A，查到同券 B、C，则为后续整组换码准备 A、B、C 的信息
      * 此处查询市场；是否符合目标池允许的市场，在第5步校验
-     * Wind 换码只查询 selectedCode，不查询其他市场代码
+     * Wind 换码和 CRMW 凭证只查询选中的代码
      *
      * 执行顺序：
      * 1. 先加入所选正式代码，允许同券多市场换码时追加关联市场的代码
@@ -185,7 +186,7 @@ public class TempSecurityCodeBusinessConverter {
     private List<String> loadFormalGroup(ConversionPlan plan, String selectedCode) {
         Set<String> codes = new LinkedHashSet<>();
         codes.add(selectedCode);
-        if (!plan.singleCode) {
+        if (!plan.singleCode && !plan.crmwCredential) {
             for (SecurityMarketDto related : securityMarketService.queryRelatedMarketCodes(selectedCode)) {
                 codes.add(related.getWindCode());
             }
@@ -196,7 +197,8 @@ public class TempSecurityCodeBusinessConverter {
                     || member.getSecuritySource() == null
                     || "temporary".equals(member.getSecuritySource())
                     || (!plan.singleCode && "D".equals(member.getSecurityStatus()))
-                    || "crmw".equals(member.getSecurityType()) || "company".equals(member.getSecurityType())) {
+                    || (!plan.crmwCredential && "crmw".equals(member.getSecurityType()))
+                    || "company".equals(member.getSecurityType())) {
                 throw new BizException("正式关联证券不存在或不可用，securityCode=" + code);
             }
             plan.members.add(member);
@@ -600,27 +602,40 @@ public class TempSecurityCodeBusinessConverter {
     }
 
     /**
-     * 查出哪些 CRMW 凭证用到了旧代码，逐个检查它们的在池记录和待审批申请
+     * 检查 CRMW 凭证换码冲突，并准备临时标的的转换数据
      * 每个凭证分开检查和处理，避免把不同凭证下的记录混在一起
      *
      * 执行顺序：
-     * 1. 查询临时标的已在池和流程中的 CRMW 记录；没有业务时不扩展标的代码
-     * 2. 与普通池共用同一正式代码组；仅有 CRMW 业务时在此查询
-     * 3. 按凭证分组，避免同一标的在不同凭证下相互去重或覆盖申请
-     * 4. 每个凭证分别检查整组在池、流程中冲突、市场和池关系
+     * 1. 凭证转正时检查正式组合是否与原审批冲突
+     * 2. 查询临时标的已在池和流程中的记录，凭证不能作为组合标的
+     * 3. 复用普通池已查出的正式代码组，尚未查到时在这里查询
+     * 4. 按凭证分组，避免同一标的在不同凭证下相互去重或覆盖申请
+     * 5. 每个凭证分别检查整组在池、流程中冲突、市场和池关系
      *
-     * @param mapping 旧标的代码、目标代码及本次操作信息
+     * @param mapping 新旧证券代码及本次操作信息
      * @param plan 前面查出的数据，这里继续放入各 CRMW 凭证的记录和检查结果
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public void prepareCrmwConversion(TempSecurityCodeBo mapping, ConversionPlan plan) {
-        // 1. 查询临时标的已在池和流程中的 CRMW 记录；没有业务时不扩展标的代码
+        // 1. 检查正式组合是否与原审批冲突
+        if (plan.crmwCredential && !plan.singleCode) {
+            IpAdjustLogBo conflict = tempSecurityCodeMapper.queryCrmwCredentialConflict(mapping);
+            if (conflict != null) {
+                throw new BizException("正式CRMW凭证下已有同一标的的在池记录或在途申请，凭证代码："
+                        + mapping.getSecurityCode() + "，标的代码：" + conflict.getSecurityCode()
+                        + "，投资池：" + conflict.getTargetPoolName());
+            }
+        }
+        // 2. 查询临时标的的在池记录和在途申请，凭证不能作为组合标的
         List<IpPoolStatusBo> active = tempSecurityCodeMapper.queryActiveCrmwPoolStatusList(mapping);
         List<IpAdjustLogBo> pending = tempSecurityCodeMapper.queryCrmwPendingLogList(mapping);
         if (active.isEmpty() && pending.isEmpty()) {
             return;
         }
-        // 2. 与普通池共用同一正式代码组；仅有 CRMW 业务时在此查询
+        if (plan.crmwCredential) {
+            throw new BizException("CRMW凭证不能作为组合标的，证券代码：" + mapping.getTempSecurityCode());
+        }
+        // 3. 复用普通池已查出的正式代码组，尚未查到时在这里查询
         List<String> codes = new ArrayList<>();
         if (plan.members.isEmpty()) {
             // 查询并检查正式标的主数据，保存每个代码的市场
@@ -630,7 +645,7 @@ public class TempSecurityCodeBusinessConverter {
                 codes.add(member.getWindCode());
             }
         }
-        // 3. 按凭证分组，避免同一标的在不同凭证下相互去重或覆盖申请
+        // 4. 按凭证分组，避免同一标的在不同凭证下相互去重或覆盖申请
         for (IpPoolStatusBo state : active) {
             // 当前凭证单独放一份数据，记下旧标的在哪些池里
             crmwPlanForCredential(plan, state.getCrmwScode(), state.getCrmwStype()).active.add(state);
@@ -640,7 +655,7 @@ public class TempSecurityCodeBusinessConverter {
             crmwPlanForCredential(plan, log.getCrmwScode(), log.getCrmwStype()).pending.add(log);
         }
         List<PoolRelationBo> relations = securityPoolAdjustMapper.queryAllPoolRelationList();
-        // 4. 每个凭证分别检查整组在池、流程中冲突、市场和池关系
+        // 5. 每个凭证分别检查整组在池、流程中冲突、市场和池关系
         for (ConversionPlan group : plan.crmwPlans.values()) {
             Set<Long> poolIds = new LinkedHashSet<>();
             for (IpPoolStatusBo state : group.active) {
@@ -1028,21 +1043,36 @@ public class TempSecurityCodeBusinessConverter {
         // 1. 将准备好的正式证券信息复制到新快照
         AdjustSecuritySnapshotBo snapshot = new AdjustSecuritySnapshotBo();
         BeanUtils.copyProperties(member, snapshot);
-        // 2. 主档 ID 不能当作快照 ID，清空后让数据库生成新 ID，再关联本次调库记录
-        snapshot.setId(null);
-        snapshot.setAdjustLogId(log.getId());
-        // 3. 填入本条目标证券的代码、名称、类型和本次转换时间
         snapshot.setWindCode(member.getWindCode());
         snapshot.setFullName(member.getFullName());
         snapshot.setShortName(member.getShortName());
         snapshot.setSecurityType(member.getSecurityType());
+        // 为本次调库日志追加快照
+        insertOrdinaryConversionSnapshot(log, snapshot, mapping);
+    }
+
+    /**
+     * 为普通池的换码调库流水新增快照
+     *
+     * 执行顺序：
+     * 1. 关联本次流水并填写提交信息和时间
+     * 2. 新增快照，写入失败时中止转换
+     *
+     * @param log 本次调库流水
+     * @param snapshot 要写入的证券资料
+     * @param mapping 本次旧新代码映射和换码时间
+     */
+    private void insertOrdinaryConversionSnapshot(IpAdjustLogBo log, AdjustSecuritySnapshotBo snapshot,
+                                                   TempSecurityCodeBo mapping) {
+        // 1. 新快照关联本次调库流水
+        snapshot.setId(null);
+        snapshot.setAdjustLogId(log.getId());
         snapshot.setUpdtTime(mapping.getUpdateTime());
-        // 4. 补齐这份新快照的提交人、提交时间和创建信息
         snapshot.setSubmitterId(log.getAdjusterId());
         snapshot.setSubmitTime(log.getSubmitTime());
         snapshot.setCrteTime(mapping.getUpdateTime());
         snapshot.setIsDeleted(0);
-        // 5. 只新增，不修改旧快照；没有成功写入一条就抛错，让整次转换回滚
+        // 2. 只新增，保留历史快照
         if (securityPoolAdjustMapper.addAdjustSecuritySnapshot(snapshot) != 1) {
             throw new BizException("转正证券快照写入失败，logId=" + log.getId());
         }
@@ -1101,7 +1131,7 @@ public class TempSecurityCodeBusinessConverter {
      * 执行顺序：
      * 1. 按凭证分组迁移当前在池记录并保存换码审计，正式代码组已完整在池时只清理临时标的
      * 2. 替换在途申请的临时标的，补齐关联市场记录并沿用原审批
-     * 3. 将业务记录中与临时代码匹配的凭证字段替换为正式代码
+     * 3. 凭证转正时先迁移当前持仓，再给原在途申请换凭证
      *
      * @param plan 前面按 CRMW 凭证分开查出并检查过的记录
      * @param mapping 本次旧新代码映射、操作来源及更新时间
@@ -1114,12 +1144,171 @@ public class TempSecurityCodeBusinessConverter {
             // 2. 替换在途申请的临时标的，补齐关联市场记录并沿用原审批
             convertPendingLogs(group, mapping);
         }
-        // 3. 将业务记录中与临时代码匹配的凭证字段替换为正式代码
-        replaceCrmwCredentialReferences(mapping);
+        if (plan.crmwCredential && !plan.singleCode) {
+            // 3. 临时组合出库、正式组合按需入库，再保留原审批更新凭证
+            convertActiveCrmwCredential(plan, mapping, true);
+            convertActiveCrmwCredential(plan, mapping, false);
+            replacePendingCrmwCredential(mapping);
+        } else {
+            // 其他换码继续处理凭证字段引用
+            replaceCrmwCredentialReferences(mapping);
+        }
     }
 
     /**
-     * CRMW 凭证字段的旧替换分支，不对凭证自身扩展多市场
+     * 将已入库的临时凭证组合调出，再为同一个标的调入正式凭证组合
+     *
+     * 执行顺序：
+     * 1. 读取新旧凭证当前持仓，按标的和池判断正式组合是否已在池
+     * 2. 写系统调出日志并使旧持仓失效，正式组合已在池时保留其现有持仓
+     * 3. 需要入库时同批写系统调入日志、正式持仓、标的快照及替换明细
+     *
+     * @param plan 本次转换批次及任务来源
+     * @param mapping 临时和正式凭证信息
+     * @param crmwPool true 迁移 CRMW 池持仓，false 迁移普通池中的凭证引用持仓
+     */
+    private void convertActiveCrmwCredential(ConversionPlan plan, TempSecurityCodeBo mapping, boolean crmwPool) {
+        List<IpPoolStatusBo> states = tempSecurityCodeMapper.queryActiveCrmwCredentialPoolStatusList(mapping, crmwPool);
+        Map<Long, Set<String>> formalCodesByPool = new HashMap<>();
+        for (IpPoolStatusBo state : states) {
+            if (mapping.getSecurityCode().equals(state.getCrmwScode())) {
+                formalCodesByPool.computeIfAbsent(state.getTargetPoolId(), key -> new HashSet<>())
+                        .add(state.getSecurityCode());
+            }
+        }
+        String poolTable = crmwPool ? "ip_pool_status_crmw" : "ip_pool_status";
+        for (IpPoolStatusBo state : states) {
+            if (!mapping.getTempSecurityCode().equals(state.getCrmwScode())) {
+                continue;
+            }
+            IpAdjustLogBo out = new IpAdjustLogBo();
+            BeanUtils.copyProperties(state, out, "id", "adjustLogId", "flowId", "flowKey", "flowType");
+            out.setAdjustMode(AdjustMode.OUT.getCode());
+            out.setAdjustType(ADJUST_TYPE_TEMP_OUT);
+            out.setAdjusterId(SYSTEM_ADJUSTER_ID);
+            out.setAdjusterName(SYSTEM_ADJUSTER_NAME);
+            out.setAdjustBatchNo(plan.batchNo);
+            out.setSubmitTime(mapping.getUpdateTime());
+            out.setAuditStatus(AuditStatus.APPROVED.getCode());
+            String replacement = "CRMW凭证：" + mapping.getTempSecurityCode() + "→" + mapping.getSecurityCode();
+            out.setAdjustReason(ScheduledAdjustLogHelper.appendDetails(plan.labelReason("CRMW临时凭证调出"), replacement));
+            out.setAdjustAdvice(TempOprtSource.JOB.getCode().equals(mapping.getOprtSource()) ? null : out.getAdjustReason());
+            if (securityPoolAdjustMapper.addAdjustLog(out) != 1) {
+                throw new BizException("临时CRMW凭证调出日志写入失败，投资池：" + state.getTargetPoolName());
+            }
+            int deleted = crmwPool
+                    ? tempSecurityCodeMapper.deleteCrmwPoolStatusSoftById(state.getId(), mapping.getUpdateTime())
+                    : tempSecurityCodeMapper.deleteOrdinaryPoolStatusForConversion(state.getId(), mapping.getUpdateTime());
+            if (deleted != 1) {
+                throw new BizException("临时CRMW凭证在池状态已变化，投资池：" + state.getTargetPoolName());
+            }
+            // 保存旧持仓失效的替换明细
+            addAudit(mapping, poolTable + ".crmw", state.getId());
+            if (!formalCodesByPool.computeIfAbsent(state.getTargetPoolId(), key -> new HashSet<>())
+                    .add(state.getSecurityCode())) {
+                continue;
+            }
+
+            IpAdjustLogBo in = new IpAdjustLogBo();
+            BeanUtils.copyProperties(out, in, "id");
+            in.setCrmwName(mapping.getSecurityName());
+            in.setCrmwScode(mapping.getSecurityCode());
+            in.setCrmwStype(mapping.getSecurityType());
+            in.setCrmwMktcode(mapping.getSecurityMarket());
+            in.setAdjustType(state.getAdjustType());
+            in.setAdjustMode(AdjustMode.IN.getCode());
+            String reason = StringUtils.hasText(state.getAdjustReason()) ? state.getAdjustReason() : "CRMW正式凭证调入";
+            in.setAdjustReason(ScheduledAdjustLogHelper.appendDetails(plan.labelReason(reason), replacement));
+            in.setAdjustAdvice(TempOprtSource.JOB.getCode().equals(mapping.getOprtSource()) ? null : in.getAdjustReason());
+            if (securityPoolAdjustMapper.addAdjustLog(in) != 1) {
+                throw new BizException("正式CRMW凭证调入日志写入失败，投资池：" + state.getTargetPoolName());
+            }
+            in.setAdjustLogId(in.getId());
+            if (crmwPool) {
+                IpPoolStatusBo formalState = new IpPoolStatusBo();
+                BeanUtils.copyProperties(in, formalState, "id");
+                formalState.setEntryTime(mapping.getUpdateTime());
+                formalState.setCrteTime(mapping.getUpdateTime());
+                formalState.setUpdtTime(mapping.getUpdateTime());
+                if (tempSecurityCodeMapper.addCrmwPoolStatus(formalState) != 1) {
+                    throw new BizException("正式CRMW凭证入池失败，投资池：" + state.getTargetPoolName());
+                }
+            } else if (securityPoolAdjustMapper.addPoolStatus(in) != 1) {
+                throw new BizException("正式CRMW凭证入池失败，投资池：" + state.getTargetPoolName());
+            }
+            // 标的没有换码，正式组合延续原持仓的标的资料
+            saveCrmwCredentialEntrySnapshot(state, in, mapping, crmwPool);
+            // 新日志按凭证旧新代码写入替换明细
+            addAudit(mapping, "ip_adjust_log.crmw", in.getId());
+        }
+    }
+
+    /**
+     * 保存正式凭证入库时的标的快照
+     *
+     * 执行顺序：
+     * 1. 优先沿用旧持仓的标的快照，没有快照时使用标的主档
+     * 2. 为新日志保存快照，CRMW 快照使用本次入库的正式凭证信息
+     *
+     * @param state 临时凭证的原持仓
+     * @param log 正式凭证调入日志
+     * @param mapping 本次旧新代码映射及更新时间
+     * @param crmwPool 是否使用 CRMW 快照表
+     */
+    private void saveCrmwCredentialEntrySnapshot(IpPoolStatusBo state, IpAdjustLogBo log,
+                                                 TempSecurityCodeBo mapping, boolean crmwPool) {
+        if (state.getAdjustLogId() != null) {
+            if (crmwPool) {
+                AdjustSecuritySnapshotCrmwBo original = tempSecurityCodeMapper.queryCrmwConversionSnapshot(state.getAdjustLogId());
+                if (original != null) {
+                    // 保留原标的快照里已选择的主体和申请资料
+                    insertCrmwConversionSnapshot(log, original, mapping);
+                    return;
+                }
+            } else {
+                AdjustSecuritySnapshotBo original = tempSecurityCodeMapper.queryConversionSnapshot(state.getAdjustLogId());
+                if (original != null) {
+                    // 为正式组合原样保留标的快照资料
+                    insertOrdinaryConversionSnapshot(log, original, mapping);
+                    return;
+                }
+            }
+        }
+        SecurityInfoBo member = securityPoolAdjustMapper.querySecurityBoByCode(state.getSecurityCode());
+        if (member == null) {
+            throw new BizException("CRMW标的缺少快照和主档，证券代码：" + state.getSecurityCode());
+        }
+        if (crmwPool) {
+            // 将正式凭证及原标的资料保存到 CRMW 快照
+            saveCrmwSnapshot(log, member, mapping);
+        } else {
+            // 普通池仍使用普通证券快照
+            saveSnapshot(log, member, mapping);
+        }
+    }
+
+    /**
+     * 更新在途申请的凭证，保留原标的资料、批次、状态和审批步骤
+     *
+     * 执行顺序：
+     * 1. 查询未结束申请并替换凭证字段
+     * 2. 按原申请 ID 保存换码明细
+     *
+     * @param mapping 本次旧新凭证信息
+     */
+    private void replacePendingCrmwCredential(TempSecurityCodeBo mapping) {
+        List<Long> pendingIds = tempSecurityCodeMapper.queryPendingAdjustLogCrmwReferenceIdList(mapping);
+        if (!pendingIds.isEmpty()) {
+            if (tempSecurityCodeMapper.editAdjustLogCrmwReference(mapping, pendingIds) != pendingIds.size()) {
+                throw new BizException("CRMW凭证在途申请换码失败，凭证代码：" + mapping.getTempSecurityCode());
+            }
+            // 保留在途申请的换码明细
+            addReplaceLogList(mapping, "ip_adjust_log.crmw", pendingIds);
+        }
+    }
+
+    /**
+     * 更新 CRMW 凭证引用，凭证自身按单码处理
      *
      * 执行顺序：
      * 1. 分别查找在途调库日志、普通池和 CRMW 池中引用临时凭证代码的记录
@@ -1165,24 +1354,40 @@ public class TempSecurityCodeBusinessConverter {
         // 1. 将准备好的正式标的信息复制到新快照
         AdjustSecuritySnapshotCrmwBo snapshot = new AdjustSecuritySnapshotCrmwBo();
         BeanUtils.copyProperties(member, snapshot);
-        // 2. 清空主档带来的 ID，关联本次调库日志并使用目标证券身份
-        snapshot.setId(null);
-        snapshot.setAdjustLogId(log.getId());
         snapshot.setWindCode(member.getWindCode());
         snapshot.setFullName(member.getFullName());
         snapshot.setShortName(member.getShortName());
         snapshot.setSecurityType(member.getSecurityType());
-        // 3. 凭证仍取当前业务记录，避免把证券主档字段当成凭证信息
+        // 2. 使用本次日志中的凭证身份保存快照
+        insertCrmwConversionSnapshot(log, snapshot, mapping);
+    }
+
+    /**
+     * 为 CRMW 池的换码调库流水新增标的快照
+     *
+     * 执行顺序：
+     * 1. 使用本次调库流水的凭证身份及提交信息
+     * 2. 新增快照，写入失败时中止转换
+     *
+     * @param log 本次 CRMW 调库流水
+     * @param snapshot 要写入的标的资料
+     * @param mapping 本次旧新代码映射和换码时间
+     */
+    private void insertCrmwConversionSnapshot(IpAdjustLogBo log, AdjustSecuritySnapshotCrmwBo snapshot,
+                                               TempSecurityCodeBo mapping) {
+        // 1. 新快照关联本次流水并使用其凭证资料
+        snapshot.setId(null);
+        snapshot.setAdjustLogId(log.getId());
         snapshot.setCrmwName(log.getCrmwName());
         snapshot.setCrmwScode(log.getCrmwScode());
         snapshot.setCrmwMktcode(log.getCrmwMktcode());
         snapshot.setCrmwStype(log.getCrmwStype());
         snapshot.setUpdtTime(mapping.getUpdateTime());
-        // 4. 填写新快照的提交和创建信息，只执行新增，写入失败则整次转换回滚
         snapshot.setSubmitterId(log.getAdjusterId());
         snapshot.setSubmitTime(log.getSubmitTime());
         snapshot.setCrteTime(mapping.getUpdateTime());
         snapshot.setIsDeleted(0);
+        // 2. 只新增，保留历史快照
         if (crmwPoolAdjustMapper.addAdjustSecuritySnapshotCrmw(snapshot) != 1) {
             throw new BizException("CRMW转正证券快照写入失败，logId=" + log.getId());
         }
@@ -1217,6 +1422,9 @@ public class TempSecurityCodeBusinessConverter {
 
         /** 是否只处理 Wind 这条变更指定的新代码 */
         private boolean singleCode;
+
+        /** 本次换码的证券是否为 CRMW 凭证 */
+        private boolean crmwCredential;
 
         /** 这些记录是否属于某个 CRMW 凭证的标的债券 */
         private boolean crmw;

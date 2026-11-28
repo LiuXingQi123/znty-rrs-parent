@@ -70,6 +70,8 @@ import org.springframework.transaction.interceptor.TransactionInterceptor;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /** 使用生产 DDL、真实 Mapper 和 Spring 事务验证临时证券 ID，不连接业务数据库。 */
@@ -222,6 +224,252 @@ public class TempSecurityCodePersistenceTest {
         if (jdbc != null) {
             jdbc.execute("SET DB_CLOSE_DELAY 0");
         }
+    }
+
+    /** 临时 CRMW 只能搜索正式凭证，人工和定时转正均拒绝普通债券 */
+    @Test
+    public void crmwCredentialShouldOnlyConvertToFormalCrmw() throws Exception {
+        TempSecurityCodeDto temp = addTemporaryCrmw();
+        TempSecurityCodeReq search = new TempSecurityCodeReq();
+        search.setTempSecurityType("crmw");
+        assertThat(service.queryFormalSecurityOptionList(search))
+                .extracting(TempSecurityCodeDto.FormalSecurityOption::getSecurityCode).containsExactly("FORMAL-CRMW.IB");
+
+        assertThatThrownBy(() -> service.editTempSecurityCodeToUpdated(operation(temp.getId(), "FORMAL.IB")))
+                .hasMessageContaining("只能更新为正式CRMW凭证");
+        jdbc.update("UPDATE rrs_temp_security_code SET security_code='FORMAL.IB' WHERE id=?", temp.getId());
+        assertThatThrownBy(() -> service.editTempSecurityCodeToUpdatedByJob(temp.getId()))
+                .hasMessageContaining("只能更新为正式CRMW凭证");
+        assertThat(mapper.queryTempSecurityCodeById(temp.getId()).getStatus()).isEqualTo("temporary");
+        assertThat(count("SELECT COUNT(*) FROM rrs_temp_security_code_update_log")).isZero();
+    }
+
+    /** CRMW 作为单券已在池且待调出时，迁移持仓与原审批，仅处理选中的正式代码 */
+    @Test
+    public void crmwCredentialShouldConvertStandaloneActiveAndPendingBySingleCode() throws Exception {
+        TempSecurityCodeDto temp = addTemporaryCrmw();
+        addPool(100L, "[\"NIB\"]", 10);
+        IpAdjustLogBo log = baseLog("TEMP-CRMW.IB", 100L);
+        log.setSecurityType("crmw");
+        log.setAuditStatus("20");
+        adjustMapper.addAdjustLog(log);
+        log.setAdjustLogId(log.getId());
+        adjustMapper.addPoolStatus(log);
+        log.setId(null);
+        log.setAuditStatus("00");
+        log.setAdjustMode("调出");
+        log.setAdjustBatchNo("CRMW_SINGLE");
+        adjustMapper.addAdjustLog(log);
+
+        assertThat(service.editTempSecurityCodeToUpdated(operation(temp.getId(), "FORMAL-CRMW.IB")).getStatus())
+                .isEqualTo("updated");
+        verify(markets, never()).queryRelatedMarketCodes("FORMAL-CRMW.IB");
+        assertThat(activeCodes(100L)).containsExactly("FORMAL-CRMW.IB");
+        assertThat(jdbc.queryForMap("SELECT security_code,audit_status,adjust_batch_no FROM ip_adjust_log WHERE id=?",
+                log.getId())).containsEntry("security_code", "FORMAL-CRMW.IB")
+                .containsEntry("audit_status", "00").containsEntry("adjust_batch_no", "CRMW_SINGLE");
+    }
+
+    /** 只有登记时仅完成转正，终态历史不生成新调库记录 */
+    @Test
+    public void crmwCredentialShouldOnlyUpdateRegistrationWithoutLiveBusiness() throws Exception {
+        TempSecurityCodeDto temp = addTemporaryCrmw();
+        IpAdjustLogBo history = addCredentialCombo("TEMP-CRMW.IB", "TARGET.IB", "21");
+
+        assertThat(service.editTempSecurityCodeToUpdated(operation(temp.getId(), "FORMAL-CRMW.IB")).getStatus())
+                .isEqualTo("updated");
+        assertThat(count("SELECT COUNT(*) FROM ip_adjust_log")).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT crmw_scode FROM ip_adjust_log WHERE id=?", String.class, history.getId()))
+                .isEqualTo("TEMP-CRMW.IB");
+        assertThat(count("SELECT COUNT(*) FROM ip_pool_status_crmw")).isZero();
+        assertThat(count("SELECT COUNT(*) FROM rrs_temp_security_code_update_log")).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT security_status FROM rrs_securityinfo WHERE wind_code='TEMP-CRMW.IB'",
+                String.class)).isEqualTo("D");
+    }
+
+    /** 只有在途申请时原位换码，兼容空市场，保留申请人、批次、流程和状态 */
+    @Test
+    public void crmwCredentialShouldKeepPendingApprovalWithoutCreatingPositions() throws Exception {
+        TempSecurityCodeDto temp = addTemporaryCrmw();
+        IpAdjustLogBo pending = addCredentialCombo("TEMP-CRMW.IB", "TARGET.IB", "11");
+
+        service.editTempSecurityCodeToUpdated(operation(temp.getId(), "FORMAL-CRMW.IB"));
+
+        assertThat(jdbc.queryForMap("SELECT * FROM ip_adjust_log WHERE id=?", pending.getId()))
+                .containsEntry("crmw_scode", "FORMAL-CRMW.IB").containsEntry("crmw_name", "正式凭证")
+                .containsEntry("crmw_mktcode", "NIB").containsEntry("audit_status", "11")
+                .containsEntry("security_code", "TARGET.IB").containsEntry("adjust_mode", "调入")
+                .containsEntry("adjust_batch_no", "CRMW-ORIGINAL").containsEntry("flow_id", 17L)
+                .containsEntry("adjuster_id", "1");
+        assertThat(count("SELECT COUNT(*) FROM ip_adjust_log")).isEqualTo(1);
+        assertThat(count("SELECT COUNT(*) FROM ip_pool_status_crmw")).isZero();
+    }
+
+    /** 已在池且有待调出申请时，先换持仓再换原申请，原入库历史和快照仍保留 */
+    @Test
+    public void crmwCredentialShouldReplaceActivePositionAndKeepPendingOut() throws Exception {
+        TempSecurityCodeDto temp = addTemporaryCrmw();
+        IpAdjustLogBo original = addCredentialCombo("TEMP-CRMW.IB", "TARGET.IB", "20");
+        IpAdjustLogBo pending = addCredentialCombo("TEMP-CRMW.IB", "TARGET.IB", "00");
+        jdbc.update("UPDATE ip_adjust_log SET adjust_mode='调出' WHERE id=?", pending.getId());
+        AdjustSecuritySnapshotCrmwBo snapshot = new AdjustSecuritySnapshotCrmwBo();
+        snapshot.setAdjustLogId(original.getId());
+        snapshot.setCrmwScode("TEMP-CRMW.IB");
+        snapshot.setWindCode("TARGET.IB");
+        snapshot.setAnalysis("原标的分析");
+        snapshot.setAbsOriginatorName("原权益人");
+        snapshot.setCompanySelector("原主体选择");
+        snapshot.setIsDeleted(0);
+        crmwMapper.addAdjustSecuritySnapshotCrmw(snapshot);
+
+        service.editTempSecurityCodeToUpdated(operation(temp.getId(), "FORMAL-CRMW.IB"));
+
+        assertThat(jdbc.queryForMap("SELECT * FROM ip_pool_status_crmw WHERE adjust_log_id=?", original.getId()))
+                .containsEntry("crmw_scode", "TEMP-CRMW.IB").containsEntry("is_deleted", 1);
+        Map<String, Object> newState = jdbc.queryForMap("SELECT * FROM ip_pool_status_crmw WHERE is_deleted=0");
+        assertThat(newState).containsEntry("crmw_scode", "FORMAL-CRMW.IB").containsEntry("crmw_mktcode", "NIB")
+                .containsEntry("crmw_name", "正式凭证").containsEntry("security_code", "TARGET.IB");
+        assertThat(jdbc.queryForList("SELECT CONCAT(adjust_mode,'/',crmw_scode,'/',audit_status,'/',adjuster_id)"
+                + " FROM ip_adjust_log WHERE adjust_batch_no=? ORDER BY id", String.class, newState.get("adjust_batch_no")))
+                .containsExactly("调出/TEMP-CRMW.IB/20/0", "调入/FORMAL-CRMW.IB/20/0");
+        assertThat(jdbc.queryForMap("SELECT * FROM ip_adjust_log WHERE id=?", pending.getId()))
+                .containsEntry("crmw_scode", "FORMAL-CRMW.IB").containsEntry("adjust_mode", "调出")
+                .containsEntry("audit_status", "00").containsEntry("adjust_batch_no", "CRMW-ORIGINAL");
+        assertThat(jdbc.queryForMap("SELECT * FROM ip_adjust_log WHERE id=?", original.getId()))
+                .containsEntry("crmw_scode", "TEMP-CRMW.IB").containsEntry("adjust_mode", "调入");
+        assertThat(mapper.queryCrmwConversionSnapshot(original.getId()).getCrmwScode()).isEqualTo("TEMP-CRMW.IB");
+        AdjustSecuritySnapshotCrmwBo newSnapshot = mapper.queryCrmwConversionSnapshot((Long) newState.get("adjust_log_id"));
+        assertThat(newSnapshot.getCrmwScode()).isEqualTo("FORMAL-CRMW.IB");
+        assertThat(newSnapshot.getAnalysis()).isEqualTo("原标的分析");
+        assertThat(newSnapshot.getAbsOriginatorName()).isEqualTo("原权益人");
+        assertThat(newSnapshot.getCompanySelector()).isEqualTo("原主体选择");
+    }
+
+    /** 定时转正对仅已入库的 CRMW 组合写同批出入库记录，保留同池其他标的 */
+    @Test
+    public void crmwCredentialShouldReenterActiveComboByJob() throws Exception {
+        TempSecurityCodeDto temp = addTemporaryCrmw();
+        addCredentialCombo("TEMP-CRMW.IB", "FORMAL.IB", "20");
+        IpAdjustLogBo other = addCredentialCombo("FORMAL-CRMW.IB", "OTHER.IB", "20");
+        jdbc.update("UPDATE rrs_temp_security_code SET security_code='FORMAL-CRMW.IB' WHERE id=?", temp.getId());
+
+        assertThat(service.editTempSecurityCodeToUpdatedByJob(temp.getId()).getStatus()).isEqualTo("updated");
+
+        assertThat(jdbc.queryForList("SELECT security_code FROM ip_pool_status_crmw WHERE is_deleted=0"
+                + " AND crmw_scode='FORMAL-CRMW.IB' ORDER BY id", String.class))
+                .containsExactly("OTHER.IB", "FORMAL.IB");
+        assertThat(count("SELECT COUNT(*) FROM ip_pool_status_crmw WHERE adjust_log_id=" + other.getId()
+                + " AND is_deleted=0")).isEqualTo(1);
+        assertThat(jdbc.queryForList("SELECT adjust_mode FROM ip_adjust_log"
+                + " WHERE adjuster_id='0' AND adjust_advice IS NULL ORDER BY id", String.class))
+                .containsExactly("调出", "调入");
+    }
+
+    /** 已入库的普通池凭证引用也生成出入库流水，正式组合缺少原快照时使用标的主档 */
+    @Test
+    public void crmwCredentialShouldReenterLegacyOrdinaryPoolPosition() throws Exception {
+        TempSecurityCodeDto temp = addTemporaryCrmw();
+        IpAdjustLogBo original = addCredentialCombo("TEMP-CRMW.IB", "FORMAL.IB", "21");
+        original.setAuditStatus("20");
+        original.setTargetPoolId(100L);
+        original.setPoolType("credit_bond");
+        original.setAdjustLogId(original.getId());
+        adjustMapper.addPoolStatus(original);
+
+        service.editTempSecurityCodeToUpdated(operation(temp.getId(), "FORMAL-CRMW.IB"));
+
+        assertThat(jdbc.queryForList("SELECT CONCAT(crmw_scode,'/',is_deleted) FROM ip_pool_status ORDER BY id", String.class))
+                .containsExactly("TEMP-CRMW.IB/1", "FORMAL-CRMW.IB/0");
+        assertThat(jdbc.queryForList("SELECT CONCAT(adjust_mode,'/',crmw_scode) FROM ip_adjust_log"
+                + " WHERE audit_status='20' ORDER BY id", String.class))
+                .containsExactly("调出/TEMP-CRMW.IB", "调入/FORMAL-CRMW.IB");
+        assertThat(count("SELECT COUNT(*) FROM ip_adjust_security_snapshot WHERE wind_code='FORMAL.IB'")).isEqualTo(1);
+    }
+
+    /** 正式组合已在同池时仅调出临时组合，保留正式组合原入库记录 */
+    @Test
+    public void crmwCredentialShouldOnlyExitWhenFormalComboAlreadyActive() throws Exception {
+        TempSecurityCodeDto temp = addTemporaryCrmw();
+        addCredentialCombo("TEMP-CRMW.IB", "TARGET.IB", "20");
+        IpAdjustLogBo formal = addCredentialCombo("FORMAL-CRMW.IB", "TARGET.IB", "20");
+
+        service.editTempSecurityCodeToUpdated(operation(temp.getId(), "FORMAL-CRMW.IB"));
+
+        assertThat(jdbc.queryForList("SELECT adjust_log_id FROM ip_pool_status_crmw WHERE is_deleted=0", Long.class))
+                .containsExactly(formal.getId());
+        assertThat(count("SELECT COUNT(*) FROM ip_adjust_log WHERE crmw_scode='TEMP-CRMW.IB' AND adjust_mode='调出'"))
+                .isEqualTo(1);
+        assertThat(count("SELECT COUNT(*) FROM ip_adjust_log WHERE crmw_scode='FORMAL-CRMW.IB'")).isEqualTo(1);
+    }
+
+    /** 正式组合有独立在途，或者旧调入与正式持仓冲突时，整次转正失败 */
+    @Test
+    public void crmwCredentialShouldRejectConflictingPendingCombo() throws Exception {
+        TempSecurityCodeDto temp = addTemporaryCrmw();
+        addCrmwPool(200L, "[]");
+        IpAdjustLogBo pending = addCredentialCombo("TEMP-CRMW.IB", "TARGET.IB", "00");
+        addCredentialCombo("FORMAL-CRMW.IB", "TARGET.IB", "20");
+        TempSecurityCodeReq req = operation(temp.getId(), "FORMAL-CRMW.IB");
+
+        assertThatThrownBy(() -> service.editTempSecurityCodeToUpdated(req))
+                .hasMessageContaining("已有同一标的", "FORMAL-CRMW.IB", "TARGET.IB", "CRMW池");
+        jdbc.update("UPDATE ip_pool_status_crmw SET is_deleted=1 WHERE crmw_scode='FORMAL-CRMW.IB'");
+        addCredentialCombo("FORMAL-CRMW.IB", "TARGET.IB", "11");
+        assertThatThrownBy(() -> service.editTempSecurityCodeToUpdated(req))
+                .hasMessageContaining("已有同一标的", "FORMAL-CRMW.IB", "TARGET.IB", "CRMW池");
+
+        assertThat(mapper.queryTempSecurityCodeById(temp.getId()).getStatus()).isEqualTo("temporary");
+        assertThat(jdbc.queryForObject("SELECT crmw_scode FROM ip_adjust_log WHERE id=?", String.class, pending.getId()))
+                .isEqualTo("TEMP-CRMW.IB");
+        assertThat(count("SELECT COUNT(*) FROM rrs_temp_security_code_update_log")).isZero();
+    }
+
+    /** 正式组合无法写入快照时，已写的调出、调入及持仓变更全部回滚 */
+    @Test
+    public void crmwCredentialShouldRollBackWhenFormalEntrySnapshotCannotBeWritten() throws Exception {
+        TempSecurityCodeDto temp = addTemporaryCrmw();
+        IpAdjustLogBo original = addCredentialCombo("TEMP-CRMW.IB", "FORMAL.IB", "20");
+        jdbc.execute("ALTER TABLE ip_adjust_security_snapshot_crmw ADD CONSTRAINT reject_formal_credential"
+                + " CHECK(crmw_scode <> 'FORMAL-CRMW.IB')");
+
+        assertThatThrownBy(() -> service.editTempSecurityCodeToUpdated(operation(temp.getId(), "FORMAL-CRMW.IB")))
+                .isInstanceOf(DataIntegrityViolationException.class);
+
+        assertThat(mapper.queryTempSecurityCodeById(temp.getId()).getStatus()).isEqualTo("temporary");
+        assertThat(count("SELECT COUNT(*) FROM ip_adjust_log")).isEqualTo(1);
+        assertThat(jdbc.queryForList("SELECT adjust_log_id FROM ip_pool_status_crmw WHERE is_deleted=0", Long.class))
+                .containsExactly(original.getId());
+        assertThat(count("SELECT COUNT(*) FROM rrs_temp_security_code_update_log")).isZero();
+    }
+
+    /** 准备一条临时 CRMW 登记及其可选的正式凭证 */
+    private TempSecurityCodeDto addTemporaryCrmw() throws Exception {
+        jdbc.update("INSERT INTO dict_security_type VALUES ('crmw','CRMW凭证','bond',0)");
+        jdbc.update("INSERT INTO rrs_securityinfo(wind_code,short_name,security_type,security_status,security_source,market)"
+                + " VALUES ('FORMAL-CRMW.IB','正式凭证','crmw','L','official','NIB')");
+        when(markets.queryMarketCode("FORMAL-CRMW.IB")).thenReturn("NIB");
+        TempSecurityCodeReq req = addReq("TEMP-CRMW.IB");
+        req.setTempSecurityType("crmw");
+        return service.addTempSecurityCode(req);
+    }
+
+    /** 通过 CRMW 调库 Mapper 建立不带凭证市场的业务记录 */
+    private IpAdjustLogBo addCredentialCombo(String credential, String securityCode, String auditStatus) {
+        IpAdjustLogBo log = baseLog(securityCode, 200L);
+        log.setPoolType("crmw");
+        log.setTargetPoolName("CRMW池");
+        log.setCrmwName(credential);
+        log.setCrmwScode(credential);
+        log.setCrmwStype("crmw");
+        log.setAdjustBatchNo("CRMW-ORIGINAL");
+        log.setFlowId(17L);
+        log.setAuditStatus(auditStatus);
+        crmwMapper.addAdjustLog(log);
+        if ("20".equals(auditStatus)) {
+            log.setAdjustLogId(log.getId());
+            crmwMapper.addPoolStatus(log);
+        }
+        return log;
     }
 
     /** 没有调库业务时也只能成功关联一次，第二个临时代码保持未转正状态 */
