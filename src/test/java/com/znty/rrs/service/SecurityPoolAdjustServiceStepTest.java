@@ -3063,7 +3063,7 @@ public class SecurityPoolAdjustServiceStepTest {
                 new HashMap<Long, Map<String, List<Long>>>(),
                 snapshotMap,
                 batchNoContext,
-                null);
+                new SecurityPoolAdjustService.SelectedRatingCompanyData());
     }
 
     /** 构建直通调入提交请求。 */

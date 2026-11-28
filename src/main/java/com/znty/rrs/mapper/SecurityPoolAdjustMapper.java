@@ -475,7 +475,7 @@ public interface SecurityPoolAdjustMapper {
                                                       @Param("days") int days);
 
     /**
-     * 按实际入库时间查询同发行人已通过调入业务是否有非空证券分析，已出池历史仍计
+     * 按分析原始来源时间查询同发行人已通过调入业务是否有非空证券分析，已出池历史仍计
      *
      * @param securityCode 证券代码
      * @param days 向前查询的天数
@@ -485,7 +485,7 @@ public interface SecurityPoolAdjustMapper {
                                                    @Param("days") int days);
 
     /**
-     * 按实际入库时间查询同发行人近指定天数内最新已审批通过调入业务的证券分析
+     * 按分析原始来源时间查询同发行人近指定天数内最新已审批通过调入业务的证券分析
      *
      * @param securityCode 证券代码
      * @param days 向前查询的天数

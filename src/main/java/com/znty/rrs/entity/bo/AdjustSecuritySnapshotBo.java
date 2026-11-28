@@ -109,6 +109,13 @@ public class AdjustSecuritySnapshotBo {
     /** 证券分析 */
     private String analysis;
 
+    /**
+     * 自动沿用的证券分析原始来源时间
+     *
+     * 空值时按本笔调库日志的创建时间计算分析时效
+     */
+    private Date analysisSourceTime;
+
     /** 证券期限(年) */
     private BigDecimal termYear;
 

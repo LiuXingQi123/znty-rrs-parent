@@ -223,7 +223,7 @@ POST /api/v1/batchSecurityPoolAdjust/checkAdjust
 2. **参数初始化**（`loadSubmitSharedData`，注入共享 `BatchNoContext`）。
 3. **调入处理**（`executeInboundSubmit`）：直通判断用流程快照 `isDirectFlow`（与对外 `isDirectAdjustFlow` 口径一致）；直通写 `audit_status='20'` 并落 `ip_pool_status`，非直通写 `'00'` 并建初始步骤。
 4. **调出处理**（`executeOutboundSubmit`）：对称；生效时 `deletePoolStatusSoft`。
-5. **后续处理**（`postSubmitProcess`）：担保债按每条调库日志的实际证券代码保存快照，同组关联项沿用提交时复核的担保人及内评。ABS 另按主体身份规则保存权益人快照。普通非担保债无需保存快照。
+5. **后续处理**（`postSubmitProcess`）保存担保债和 ABS 的快照。调入快照的证券分析为空时，按发债主体集中查询近 180 天最新有效分析，保存正文和原始来源时间。普通非担保债的近期分析通过证券详情查询。
 
 **批次号规则**（单券 `buildAdjustBatchNo`）：`BOND + batchTimeText + 4位序号`；调入 `1000+`、调出 `2000+`、无流程 `3000+`。同 `adjustGroupKey` 共用批次号。批量共享同一个 `BatchNoContext`，跨主券组序号递增。
 

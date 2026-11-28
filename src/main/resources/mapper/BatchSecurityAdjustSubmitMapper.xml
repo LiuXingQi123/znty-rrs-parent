@@ -51,7 +51,7 @@
             , maturity_date, info_pledge_ratio, rating_bond_agency, rating_bond, rating_bondissuer
             , rating_outlook, guarantor, guarantor_id, agency_name, inner_issuer_rating, security_type
             , sec_typename, date_call_exists, inner_guarantor_rating, date_exists, date_exists_str, fund_use
-            , prompt_reason, analysis, term_year, term_day, maturityembedded_desc, comp_type
+            , prompt_reason, analysis, analysis_source_time, term_year, term_day, maturityembedded_desc, comp_type
             , issue_amountact, date_repurchase_exists, abs_flag, guarant_flag, guarant_type
             , rating_bondissuer_agency, agency_nameid, bond_biz_type, abs_originator_name, abs_share_ratio
             , expected_maturity_date, legal_maturity_date, abs_report_org, abs_custodian, company_selector
@@ -64,7 +64,7 @@
                 , #{row.maturityDate}, #{row.infoPledgeRatio}, #{row.ratingBondAgency}, #{row.ratingBond}, #{row.ratingBondissuer}
                 , #{row.ratingOutlook}, #{row.guarantor}, #{row.guarantorId}, #{row.agencyName}, #{row.innerIssuerRating}, #{row.securityType}
                 , #{row.secTypename}, #{row.dateCallExists}, #{row.innerGuarantorRating}, #{row.dateExists}, #{row.dateExistsStr}, #{row.fundUse}
-                , #{row.promptReason}, #{row.analysis}, #{row.termYear}, #{row.termDay}, #{row.maturityembeddedDesc}, #{row.compType}
+                , #{row.promptReason}, #{row.analysis}, #{row.analysisSourceTime}, #{row.termYear}, #{row.termDay}, #{row.maturityembeddedDesc}, #{row.compType}
                 , #{row.issueAmountact}, #{row.dateRepurchaseExists}, #{row.absFlag}, #{row.guarantFlag}, #{row.guarantType}
                 , #{row.ratingBondissuerAgency}, #{row.agencyNameid}, #{row.bondBizType}, #{row.absOriginatorName}, #{row.absShareRatio}
                 , #{row.expectedMaturityDate}, #{row.legalMaturityDate}, #{row.absReportOrg}, #{row.absCustodian}, #{row.companySelector}

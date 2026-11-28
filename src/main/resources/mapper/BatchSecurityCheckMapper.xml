@@ -530,12 +530,14 @@
           )
     </select>
 
-    <!-- 按发行人批量查询近180天内审批通过的调入记录中是否有证券分析 -->
+    <!-- 按分析原始来源时间批量查询满足近期证券分析条件的发行人 -->
     <select id="queryRecentAnalysisIssuers" resultType="java.lang.String">
         SELECT DISTINCT si.issuer_code
         FROM ip_adjust_log l
         INNER JOIN rrs_securityinfo si ON si.wind_code = l.security_code
         INNER JOIN ip_adjust_security_snapshot snap ON snap.adjust_log_id = l.id
+                                                    AND snap.wind_code = l.security_code
+                                                    AND snap.is_deleted = 0
         WHERE si.issuer_code IN
         <foreach collection="companyCodes" item="code" open="(" separator="," close=")">
             #{code}
@@ -544,9 +546,44 @@
           AND l.adjust_mode = '调入'
           AND l.audit_status = '20'
           AND l.is_deleted = 0
-          AND l.crte_time >= DATE_SUB(NOW(), INTERVAL #{days} DAY)
+          AND COALESCE(snap.analysis_source_time, l.crte_time) >= DATE_SUB(NOW(), INTERVAL #{days} DAY)
           AND snap.analysis IS NOT NULL
           AND TRIM(snap.analysis) != ''
+    </select>
+
+    <!-- 按发行人批量取最新有效正文，沿用历史分析时按原始来源时间计算 -->
+    <select id="queryLatestAnalysisByIssuers"
+            resultType="com.znty.rrs.entity.securitypooladjust.BatchSecurityCheckData$Row">
+        <!-- 从已通过的调入日志及对应券码的有效快照取正文，按原始来源时间和日志、快照 ID 排序 -->
+        WITH ranked_analysis AS (
+            SELECT si.issuer_code AS company_code
+                   , snap.analysis
+                   , COALESCE(snap.analysis_source_time, l.crte_time) AS analysis_source_time
+                   , ROW_NUMBER() OVER (
+                       PARTITION BY si.issuer_code
+                       ORDER BY COALESCE(snap.analysis_source_time, l.crte_time) DESC, l.id DESC, snap.id DESC
+                   ) AS row_num
+            FROM ip_adjust_log l
+            INNER JOIN rrs_securityinfo si ON si.wind_code = l.security_code
+            INNER JOIN ip_adjust_security_snapshot snap ON snap.adjust_log_id = l.id
+                                                        AND snap.wind_code = l.security_code
+                                                        AND snap.is_deleted = 0
+            WHERE si.issuer_code IN
+            <foreach collection="companyCodes" item="code" open="(" separator="," close=")">
+                #{code}
+            </foreach>
+              AND l.adjust_mode = '调入'
+              AND l.audit_status = '20'
+              AND l.is_deleted = 0
+              AND COALESCE(snap.analysis_source_time, l.crte_time) >= DATE_SUB(NOW(), INTERVAL #{days} DAY)
+              AND TRIM(snap.analysis) != ''
+        )
+        <!-- 取每个发行人排序第一的分析，供本次提交沿用 -->
+        SELECT company_code
+               , analysis
+               , analysis_source_time
+        FROM ranked_analysis
+        WHERE row_num = 1
     </select>
 
     <!-- 查询满足同发行人信评报告豁免条件的主体，按调入日志创建时间筛选，起点为从当前时刻往前推六个月（近六个自然月） -->

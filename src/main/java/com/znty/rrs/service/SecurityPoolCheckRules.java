@@ -1878,7 +1878,7 @@ class SecurityPoolCheckRules {
             }
         }
 
-        // 4. 证券分析按所属调入业务的实际入库时间计算180天，快照须有非空证券分析内容
+        // 4. 按证券分析原始来源时间计算 180 天，快照须有有效正文
         if (batchData == null ? securityPoolAdjustMapper.queryIssuerHasRecentAnalysisWithinDays(
                 req.getSecurityCode(), SIMPLE_INBOUND_HISTORY_DAYS) : batchData.recentAnalysisIssuers.contains(issuer)) {
             matchReasons.add("同发行人180天内已入库的调入业务有有效证券分析");

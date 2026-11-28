@@ -70,6 +70,7 @@ CREATE TABLE `ip_adjust_security_snapshot`
     `fund_use`                   LONGTEXT       DEFAULT NULL COMMENT '资金募集用途',
     `prompt_reason`              LONGTEXT       DEFAULT NULL COMMENT '观察事项',
     `analysis`                   LONGTEXT       DEFAULT NULL COMMENT '证券分析，最大输入长度 5000 字，允许 NULL 或空字符串',
+    `analysis_source_time`       DATETIME       DEFAULT NULL COMMENT '自动沿用的证券分析原始来源时间，空值时按本笔调库日志创建时间计算时效',
 
     -- ========== 预留：与 rrs_securityinfo 对应的仍用同名同类型 ==========
     `term_year`                  DECIMAL(10, 4) DEFAULT NULL COMMENT '证券期限(年)',

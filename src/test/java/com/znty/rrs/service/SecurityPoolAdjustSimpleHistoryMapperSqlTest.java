@@ -15,6 +15,7 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import java.io.InputStream;
 import java.sql.Timestamp;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -22,15 +23,17 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** 使用实际 Mapper 的完整 SQL 验证简易流程所需的非简易入库历史。 */
+/** 使用实际 Mapper 查询验证简易入库经历和证券分析时效 */
 public class SecurityPoolAdjustSimpleHistoryMapperSqlTest {
 
-    /** 固定当前时间，确保自然月边界测试不受执行时间影响 */
+    /** 固定查询时点，确保 180 天边界测试不受执行日期影响 */
     private static final String REFERENCE_TIME = "2026-10-08 12:00:00";
     /** 最近半年内的入池时间 */
     private static final String RECENT_ENTRY_TIME = "2026-09-01 12:00:00";
     /** 独立内存数据库访问组件 */
     private JdbcTemplate jdbc;
+    /** 实际单笔和批量调整查询 */
+    private Configuration configuration;
     /** 从实际 XML 加载的非简易入库历史查询 */
     private MappedStatement historyStatement;
 
@@ -55,11 +58,12 @@ public class SecurityPoolAdjustSimpleHistoryMapperSqlTest {
                 + "('NULL_CURRENT',NULL),('NULL_HISTORY',NULL)");
         jdbc.update("INSERT INTO dict_security_type VALUES ('company_bond','bond',0),"
                 + "('stock','stock',0),('deleted_bond','bond',1)");
-        Configuration configuration = new Configuration();
-        String resource = "mapper/SecurityPoolAdjustMapper.xml";
-        try (InputStream xml = getClass().getClassLoader().getResourceAsStream(resource)) {
-            assertThat(xml).as("证券池调整 Mapper XML 应存在").isNotNull();
-            new XMLMapperBuilder(xml, configuration, resource, configuration.getSqlFragments()).parse();
+        configuration = new Configuration();
+        for (String resource : Arrays.asList("mapper/SecurityPoolAdjustMapper.xml", "mapper/BatchSecurityCheckMapper.xml")) {
+            try (InputStream xml = getClass().getClassLoader().getResourceAsStream(resource)) {
+                assertThat(xml).as("证券池调整 Mapper XML 应存在").isNotNull();
+                new XMLMapperBuilder(xml, configuration, resource, configuration.getSqlFragments()).parse();
+            }
         }
         historyStatement = configuration.getMappedStatement("com.znty.rrs.mapper.SecurityPoolAdjustMapper."
                 + "queryIssuerHasNonSimpleCreditBondInboundWithinDays");
@@ -197,6 +201,50 @@ public class SecurityPoolAdjustSimpleHistoryMapperSqlTest {
         }
     }
 
+    /** 按分析来源时间选最新正文，引用了过期分析的新日志不满足单笔和批量资格 */
+    @Test
+    public void shouldUseOriginalAnalysisDateForSelectionAndQualification() {
+        // 1. 准备原始正文和后来引用的快照，区分日志创建时间与分析来源时间
+        jdbc.execute("CREATE TABLE ip_adjust_log (id BIGINT, security_code VARCHAR(40), adjust_mode VARCHAR(20),"
+                + " audit_status VARCHAR(10), is_deleted INT, crte_time TIMESTAMP)");
+        jdbc.execute("CREATE TABLE ip_adjust_security_snapshot (id BIGINT, adjust_log_id BIGINT, wind_code VARCHAR(40),"
+                + " analysis VARCHAR(100), analysis_source_time TIMESTAMP, is_deleted INT)");
+        jdbc.update("INSERT INTO ip_adjust_log VALUES"
+                + " (1,'SAME_ISSUER','调入','20',0,'2026-10-07 12:00:00'),"
+                + " (2,'SAME_ISSUER','调入','20',0,'2026-09-01 12:00:00'),"
+                + " (3,'SAME_ISSUER','调入','20',0,'2026-10-06 12:00:00'),"
+                + " (4,'OTHER_ISSUER','调入','20',0,'2026-10-07 12:00:00')");
+        jdbc.update("INSERT INTO ip_adjust_security_snapshot VALUES"
+                + " (1,1,'SAME_ISSUER','过期引用','2026-04-01 12:00:00',0),"
+                + " (2,2,'SAME_ISSUER','最新正文',NULL,0),"
+                + " (3,3,'SAME_ISSUER','较旧引用','2026-07-08 12:00:00',0),"
+                + " (4,4,'OTHER_ISSUER','其他主体的过期引用','2026-04-01 12:00:00',0)");
+
+        // 2. 用同一查询时点检查批量取正文及单笔、批量资格
+        Map<String, Object> params = new HashMap<>();
+        params.put("companyCodes", Arrays.asList("C001", "C002"));
+        params.put("securityCode", "CURRENT");
+        params.put("days", 180);
+        BoundSql latest = configuration.getMappedStatement("com.znty.rrs.mapper.BatchSecurityCheckMapper."
+                + "queryLatestAnalysisByIssuers").getBoundSql(params);
+        BoundSql eligible = configuration.getMappedStatement("com.znty.rrs.mapper.BatchSecurityCheckMapper."
+                + "queryRecentAnalysisIssuers").getBoundSql(params);
+        BoundSql single = configuration.getMappedStatement("com.znty.rrs.mapper.SecurityPoolAdjustMapper."
+                + "queryIssuerHasRecentAnalysisWithinDays").getBoundSql(params);
+
+        Map<String, Object> selected = jdbc.queryForMap(compatibleSql(latest), bind(latest, params));
+        assertThat(selected).containsEntry("company_code", "C001").containsEntry("analysis", "最新正文")
+                .containsEntry("analysis_source_time", Timestamp.valueOf(RECENT_ENTRY_TIME));
+        assertThat(jdbc.queryForList(compatibleSql(eligible), String.class, bind(eligible, params))).containsExactly("C001");
+        assertThat(jdbc.queryForObject(compatibleSql(single), Boolean.class, bind(single, params))).isTrue();
+
+        // 3. 作废近期快照，验证新日志里的过期引用无法续期
+        jdbc.update("UPDATE ip_adjust_security_snapshot SET is_deleted = 1 WHERE id IN (2, 3)");
+        assertThat(jdbc.queryForList(compatibleSql(latest), bind(latest, params))).isEmpty();
+        assertThat(jdbc.queryForList(compatibleSql(eligible), String.class, bind(eligible, params))).isEmpty();
+        assertThat(jdbc.queryForObject(compatibleSql(single), Boolean.class, bind(single, params))).isFalse();
+    }
+
     /** 写入一条审批通过的一般债券历史，其他测试条件在各场景中独立调整。 */
     private void insertHistory(String securityCode, String flowType, String entryTime) {
         jdbc.update("INSERT INTO ip_pool_status VALUES (?, 'company_bond', 2, 'credit_bond',"
@@ -209,15 +257,25 @@ public class SecurityPoolAdjustSimpleHistoryMapperSqlTest {
         parameters.put("securityCode", securityCode);
         parameters.put("days", days);
         BoundSql boundSql = historyStatement.getBoundSql(parameters);
+        return Boolean.TRUE.equals(jdbc.queryForObject(compatibleSql(boundSql), Boolean.class, bind(boundSql, parameters)));
+    }
+
+    /** 仅翻译 MySQL 日期函数，并固定测试当前时间 */
+    private String compatibleSql(BoundSql boundSql) {
         String sql = boundSql.getSql();
         assertThat(sql).contains("DATE_SUB(NOW(), INTERVAL ? DAY)");
         sql = sql.replace("DATE_SUB(NOW(), INTERVAL ? DAY)",
                 "DATEADD('DAY', -CAST(? AS INT), TIMESTAMP '" + REFERENCE_TIME + "')");
-        sql = sql.replace("NOW()", "TIMESTAMP '" + REFERENCE_TIME + "'");
+        return sql.replace("NOW()", "TIMESTAMP '" + REFERENCE_TIME + "'");
+    }
+
+    /** 按 MyBatis 生成的顺序绑定 SQL 参数 */
+    private Object[] bind(BoundSql boundSql, Map<String, Object> parameters) {
         List<Object> values = new ArrayList<>();
         for (ParameterMapping mapping : boundSql.getParameterMappings()) {
-            values.add(parameters.get(mapping.getProperty()));
+            String name = mapping.getProperty();
+            values.add(boundSql.hasAdditionalParameter(name) ? boundSql.getAdditionalParameter(name) : parameters.get(name));
         }
-        return Boolean.TRUE.equals(jdbc.queryForObject(sql, Boolean.class, values.toArray()));
+        return values.toArray();
     }
 }

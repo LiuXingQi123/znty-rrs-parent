@@ -968,12 +968,14 @@
           )
     </select>
 
-    <!-- 查询同发行人近180天内审批通过的调入记录中是否有证券分析 -->
+    <!-- 按分析原始来源时间判断同发行人是否有近期有效证券分析 -->
     <select id="queryIssuerHasRecentAnalysisWithinDays" resultType="boolean">
         SELECT COUNT(1) > 0
         FROM ip_adjust_log l
         INNER JOIN rrs_securityinfo si ON si.wind_code = l.security_code
         INNER JOIN ip_adjust_security_snapshot snap ON snap.adjust_log_id = l.id
+                                                    AND snap.wind_code = l.security_code
+                                                    AND snap.is_deleted = 0
         WHERE si.issuer_code = (
             SELECT issuer_code
             FROM rrs_securityinfo
@@ -984,17 +986,19 @@
           AND l.adjust_mode = '调入'
           AND l.audit_status = '20'
           AND l.is_deleted = 0
-          AND l.crte_time >= DATE_SUB(NOW(), INTERVAL #{days} DAY)
+          AND COALESCE(snap.analysis_source_time, l.crte_time) >= DATE_SUB(NOW(), INTERVAL #{days} DAY)
           AND snap.analysis IS NOT NULL
           AND TRIM(snap.analysis) != ''
     </select>
 
-    <!-- 查询同发行人近180天内最新审批通过的调入记录中的证券分析 -->
+    <!-- 按分析原始来源时间取同发行人已通过调入业务的最新有效分析 -->
     <select id="queryLatestAnalysisByIssuerWithinDays" resultType="java.lang.String">
         SELECT snap.analysis
         FROM ip_adjust_log l
         INNER JOIN rrs_securityinfo si ON si.wind_code = l.security_code
         INNER JOIN ip_adjust_security_snapshot snap ON snap.adjust_log_id = l.id
+                                                    AND snap.wind_code = l.security_code
+                                                    AND snap.is_deleted = 0
         WHERE si.issuer_code = (
             SELECT issuer_code
             FROM rrs_securityinfo
@@ -1005,11 +1009,12 @@
           AND l.adjust_mode = '调入'
           AND l.audit_status = '20'
           AND l.is_deleted = 0
-          AND l.crte_time >= DATE_SUB(NOW(), INTERVAL #{days} DAY)
+          AND COALESCE(snap.analysis_source_time, l.crte_time) >= DATE_SUB(NOW(), INTERVAL #{days} DAY)
           AND snap.analysis IS NOT NULL
           AND TRIM(snap.analysis) != ''
-        ORDER BY l.crte_time DESC
+        ORDER BY COALESCE(snap.analysis_source_time, l.crte_time) DESC
                  , l.id DESC
+                  , snap.id DESC
         LIMIT 1
     </select>
 
@@ -1505,7 +1510,7 @@
             , maturity_date, info_pledge_ratio, rating_bond_agency, rating_bond, rating_bondissuer, rating_outlook
             , guarantor, guarantor_id, agency_name, inner_issuer_rating, security_type, sec_typename
             , date_call_exists, inner_guarantor_rating, date_exists, date_exists_str, fund_use, prompt_reason
-            , analysis, term_year, term_day, maturityembedded_desc, comp_type, issue_amountact
+            , analysis, analysis_source_time, term_year, term_day, maturityembedded_desc, comp_type, issue_amountact
             , date_repurchase_exists, abs_flag, guarant_flag, guarant_type, rating_bondissuer_agency, agency_nameid
             , bond_biz_type, abs_originator_name, abs_share_ratio, expected_maturity_date, legal_maturity_date, abs_report_org
             , abs_custodian, company_selector, extra_ind_1, extra_ind_2, extra_ind_3, is_deleted
@@ -1516,7 +1521,7 @@
             , #{maturityDate}, #{infoPledgeRatio}, #{ratingBondAgency}, #{ratingBond}, #{ratingBondissuer}, #{ratingOutlook}
             , #{guarantor}, #{guarantorId}, #{agencyName}, #{innerIssuerRating}, #{securityType}, #{secTypename}
             , #{dateCallExists}, #{innerGuarantorRating}, #{dateExists}, #{dateExistsStr}, #{fundUse}, #{promptReason}
-            , #{analysis}, #{termYear}, #{termDay}, #{maturityembeddedDesc}, #{compType}, #{issueAmountact}
+            , #{analysis}, #{analysisSourceTime}, #{termYear}, #{termDay}, #{maturityembeddedDesc}, #{compType}, #{issueAmountact}
             , #{dateRepurchaseExists}, #{absFlag}, #{guarantFlag}, #{guarantType}, #{ratingBondissuerAgency}, #{agencyNameid}
             , #{bondBizType}, #{absOriginatorName}, #{absShareRatio}, #{expectedMaturityDate}, #{legalMaturityDate}, #{absReportOrg}
             , #{absCustodian}, #{companySelector}, #{extraInd1}, #{extraInd2}, #{extraInd3}, #{isDeleted}

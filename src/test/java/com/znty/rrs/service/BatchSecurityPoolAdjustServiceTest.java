@@ -28,6 +28,7 @@ import org.junit.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -35,6 +36,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -264,7 +266,7 @@ public class BatchSecurityPoolAdjustServiceTest {
         assertThat(captor.getAllValues().get(1).getAdjustBatchNo()).matches("BOND\\d{17}1002");
     }
 
-    /** 验证普通债直通调入按批取数，保留容量和在途检查并跳过快照写入 */
+    /** 验证普通债直通按批取数，保留容量和在途检查并跳过快照写入 */
     @Test
     public void directSubmitShouldBatchQueriesAndKeepCapacityAndPendingChecks() {
         SecurityPoolAdjustService submit = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
@@ -340,6 +342,7 @@ public class BatchSecurityPoolAdjustServiceTest {
         clearInvocations(batch, adjust, pools);
         when(batch.querySecurities(anyList())).thenReturn(masters.subList(0, 500), masters.subList(500, 1000));
         when(batch.queryPendingPools(anyList())).thenReturn(Collections.emptyList());
+        masters.get(0).setIssuerCode("C10001");
         doAnswer(call -> {
             IpAdjustLogBo log = call.getArgument(0);
             log.setId((long) log.getSecurityCode().hashCode());
@@ -360,11 +363,12 @@ public class BatchSecurityPoolAdjustServiceTest {
         verify(adjust, never()).querySecurityCurrentPoolIdList(anyString());
         verify(adjust, never()).queryPoolCurrentCount(anyLong());
         verify(adjust, times(1000)).addPoolStatus(any());
+        verify(batch, never()).queryLatestAnalysisByIssuers(anyList(), eq(180));
         verify(adjust, never()).addAdjustSecuritySnapshot(any());
         verify(reports, never()).addInternalReportsOnFinish(anyList());
     }
 
-    /** 验证担保债批量调入及互斥调出分别保存本次选择的担保人和内评 */
+    /** 验证担保债按本次选择保存担保人和内评，近期分析只补到调入快照 */
     @Test
     public void addAdjustLogShouldSaveSelectedGuarantorForInboundAndMutexOutbound() {
         BatchSecurityPoolAdjustMapper mapper = mock(BatchSecurityPoolAdjustMapper.class);
@@ -394,10 +398,18 @@ public class BatchSecurityPoolAdjustServiceTest {
                 .thenReturn(submissionFiles);
         SecurityInfoBo security = new SecurityInfoBo();
         security.setWindCode("106006789");
+        security.setIssuerCode("C10001");
         security.setGuarantFlag(1);
         security.setGuarantorId("C10010,C10008");
         security.setInnerGuarantorRating("1,1");
         when(adjustMapper.querySecurityBoByCode("106006789")).thenReturn(security);
+        when(submitMapper.querySecurities(anyList())).thenReturn(Collections.singletonList(security));
+        Row analysis = new Row();
+        analysis.setCompanyCode("C10001");
+        analysis.setAnalysis("近期主体分析");
+        analysis.setAnalysisSourceTime(Timestamp.valueOf("2026-09-01 12:00:00"));
+        when(submitMapper.queryLatestAnalysisByIssuers(Collections.singletonList("C10001"), 180))
+                .thenReturn(Collections.singletonList(analysis));
         RelatedRatingCompanyDto guarantor = new RelatedRatingCompanyDto();
         guarantor.setSecurityCode("106006789");
         guarantor.setCompanyCode("C10008");
@@ -452,9 +464,13 @@ public class BatchSecurityPoolAdjustServiceTest {
                 .containsOnly(captor.getAllValues().get(0).getAdjustBatchNo());
 
         ArgumentCaptor<AdjustSecuritySnapshotBo> snapshots = ArgumentCaptor.forClass(AdjustSecuritySnapshotBo.class);
+        verify(submitMapper).queryLatestAnalysisByIssuers(Collections.singletonList("C10001"), 180);
         verify(adjustMapper, times(2)).addAdjustSecuritySnapshot(snapshots.capture());
-        assertThat(snapshots.getAllValues()).extracting(AdjustSecuritySnapshotBo::getAdjustLogId)
-                .containsExactlyInAnyOrder(captor.getAllValues().get(0).getId(), captor.getAllValues().get(1).getId());
+        assertThat(snapshots.getAllValues()).extracting(AdjustSecuritySnapshotBo::getAdjustLogId,
+                        AdjustSecuritySnapshotBo::getAnalysis, AdjustSecuritySnapshotBo::getAnalysisSourceTime)
+                .containsExactlyInAnyOrder(
+                        tuple(captor.getAllValues().get(0).getId(), analysis.getAnalysis(), analysis.getAnalysisSourceTime()),
+                        tuple(captor.getAllValues().get(1).getId(), null, null));
         assertThat(snapshots.getAllValues()).extracting(AdjustSecuritySnapshotBo::getWindCode).containsOnly("106006789");
         assertThat(snapshots.getAllValues()).extracting(AdjustSecuritySnapshotBo::getGuarantorId).containsOnly("C10008");
         assertThat(snapshots.getAllValues()).extracting(AdjustSecuritySnapshotBo::getGuarantor)

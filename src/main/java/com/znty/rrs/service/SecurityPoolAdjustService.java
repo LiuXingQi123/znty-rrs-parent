@@ -47,6 +47,7 @@ import com.znty.rrs.entity.securitypooladjust.AdjustCheckReq;
 import com.znty.rrs.entity.securitypooladjust.AdjustLogDto;
 import com.znty.rrs.entity.securitypooladjust.AdjustSharedData;
 import com.znty.rrs.entity.securitypooladjust.BatchSecurityCheckData;
+import com.znty.rrs.entity.securitypooladjust.BatchSecurityCheckData.Row;
 import com.znty.rrs.mapper.BatchSecurityCheckMapper;
 import com.znty.rrs.entity.securitypooladjust.AdjustSubmitDto;
 import com.znty.rrs.entity.bo.FlowDefinitionBo;
@@ -86,6 +87,7 @@ import com.znty.rrs.entity.bo.RoleBo;
 import com.znty.rrs.entity.bo.UserBo;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
+import org.springframework.util.StringUtils;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -1601,21 +1603,21 @@ public class SecurityPoolAdjustService {
     }
 
     /**
-     * 复用本次 Excel 清空已读取的主档，只查询配套项缺少的代码
+     * 准备本批调库提交共用的证券资料、池配置和近期分析
      *
      * 执行顺序：
-     * 1. 逐项查询投资池列表
-     * 2. 与单券使用相同的池关系口径
-     * 3. 逐项解析调库项实际证券代码：item 级优先，否则回退请求级主券代码
-     * 4. 逐项查询证券
+     * 1. 复用 Excel 已读取的证券主档，并加载本批池配置和池关系
+     * 2. 收集各项实际证券代码，按批补查缺少的主档
+     * 3. 按需要保存快照的调入组集中查发行人分析，逐条保存时从内存取用
      *
      * @param requests 本批调库请求
-     * @param ratingData Excel 本次读取的评级候选
+     * @param ratingData Excel 已读取的证券主档和代码映射，手动批量提交时为空
      * @return 本次事务内使用的提交数据
      */
     private BatchSubmitData loadBatchSubmitData(List<SecurityPoolAdjustSubmitReq> requests,
                                                 BatchSecurityCheckData ratingData) {
         BatchSubmitData batch = new BatchSubmitData();
+        // 1. 复用已读取的证券主档，再加载池配置和池关系
         if (ratingData != null) {
             batch.data.securities.putAll(ratingData.securities);
             batch.data.excelSecurityCodes.putAll(ratingData.excelSecurityCodes);
@@ -1623,8 +1625,9 @@ public class SecurityPoolAdjustService {
         for (InvestmentPoolBo pool : investmentPoolMapper.queryPoolList()) {
             batch.data.pools.put(pool.getId(), pool);
         }
-        // 与单券使用相同的池关系口径
+        // 按单券口径准备本批使用的池关系
         batch.data.relations.putAll(buildPoolRelationMap(securityPoolAdjustMapper.queryAllPoolRelationList()));
+        // 2. 收集实际调库券码，按批补查缺少的主档
         Set<String> requestedCodes = new LinkedHashSet<>();
         for (SecurityPoolAdjustSubmitReq request : requests) {
             requestedCodes.add(request.getSecurityCode());
@@ -1644,6 +1647,25 @@ public class SecurityPoolAdjustService {
             for (SecurityInfoBo master : batchSecurityCheckMapper.querySecurities(chunk)) {
                 batch.data.securities.put(master.getWindCode(), master);
                 batch.data.excelSecurityCodes.put(master.getWindCode(), master.getWindCode());
+            }
+        }
+        // 3. 按需要保存快照的调入组集中查询分析，写快照时只查内存
+        List<String> issuers = requests.stream()
+                .filter(request -> request.getItems() != null && request.getItems().stream()
+                        .anyMatch(item -> AdjustMode.IN.getCode().equals(item.getAdjustMode())))
+                .map(request -> {
+                    String securityCode = batch.data.resolveExcelSecurityCode(request.getSecurityCode());
+                    SecurityInfoBo master = batch.data.securities.get(securityCode);
+                    boolean savesSnapshot = request.getSecurityInfo() != null || isExcelAdjustType(request.getAdjustType())
+                            || CreditBondSpecialInboundRule.isGuaranteed(master) || CreditBondSpecialInboundRule.isAbs(master);
+                    return savesSnapshot ? master : null;
+                }).filter(Objects::nonNull)
+                .map(SecurityInfoBo::getIssuerCode).filter(StringUtils::hasText).distinct().collect(Collectors.toList());
+        for (int offset = 0; offset < issuers.size(); offset += size) {
+            List<String> chunk = issuers.subList(offset, Math.min(offset + size, issuers.size()));
+            for (Row analysis : batchSecurityCheckMapper.queryLatestAnalysisByIssuers(
+                    chunk, SecurityPoolCheckRules.SIMPLE_INBOUND_HISTORY_DAYS)) {
+                batch.latestAnalyses.put(analysis.getCompanyCode(), analysis);
             }
         }
         return batch;
@@ -2179,8 +2201,10 @@ public class SecurityPoolAdjustService {
     /**
      * 使用指定批次号上下文加载证券池调库提交数据
      *
+     * 证券分析按主档发债主体匹配，ABS 权益人和担保人选择用于本次评级
+     *
      * 执行顺序：
-     * 1. 优先使用页面提供的快照来源，再使用本次批量读取的普通债主档
+     * 1. 优先使用页面提供的证券资料，缺少时读取主档，分析为空时从批量数据取可沿用的正文
      * 2. 提交时重新校验并读取最终评级主体，ABS 必须选择权益人或自选权益人
      * 3. 全量投资池，构建 ID → Bo 索引，供后续快速查找池详情
      * 4. 独立调入的证券代码在批内只出现一次，共用本次读取的状态
@@ -2209,6 +2233,9 @@ public class SecurityPoolAdjustService {
         if (securityInfo == null) {
             throw new BizException("证券不存在");
         }
+        // 证券分析按发债主体匹配，使用评级主体覆盖前的发行人代码
+        Row inheritedAnalysis = batch != null && !StringUtils.hasText(securityInfo.getAnalysis())
+                ? batch.latestAnalyses.get(securityInfo.getIssuerCode()) : null;
         // 2. 提交时重新校验并读取最终评级主体，ABS 必须选择权益人或自选权益人
         SelectedRatingCompanyData selectedRatingCompany = applySelectedRatingCompanyInternal(
                 securityInfo, req.getGuarantorCode(), req.getRightsHolderCode(), req.getSelfSelectedRightsHolderCode(),
@@ -2284,6 +2311,7 @@ public class SecurityPoolAdjustService {
                 selectedRatingCompany
         );
         shared.resolvedFlowIdsByKey.putAll(resolvedFlowIdsByKey);
+        shared.inheritedAnalysis = inheritedAnalysis;
         return shared;
     }
 
@@ -2782,19 +2810,18 @@ public class SecurityPoolAdjustService {
     }
 
     /**
-     * 为本次调库日志保存证券信息和评级主体快照
+     * 为本次调库日志逐条写入证券快照
      *
-     * 合并主档与前端可编辑字段后，仅按本次提交的每个调库日志写入证券信息快照；
-     * 不修改主档 {@code rrs_securityinfo}（主档仍为全站真相源，调库页改动只作本笔留痕）
+     * 页面填写内容和可沿用的分析保存在本次证券快照
      *
      * 执行顺序：
-     * 1. 合并本次可编辑的证券信息与校验后的评级主体，按调库日志立即写入快照
+     * 1. 准备本次证券资料后逐条写入快照
      *
      * @param req 调库提交请求
      * @param shared 本次提交的共享数据，快照按其中的调库记录逐条写各自的证券代码
      */
     private void postSubmitProcess(SecurityPoolAdjustSubmitReq req, SubmitSharedData shared) {
-        // 合并本次证券快照数据，批量路径先收集再写入
+        // 按逐条写库的方式保存本次快照
         postSubmitProcess(req, shared, null);
     }
 
@@ -2802,39 +2829,33 @@ public class SecurityPoolAdjustService {
      * 合并本次证券快照数据，批量路径先收集再写入
      *
      * 执行顺序：
-     * 1. 合并主档当前值与前端传入字段，作为本笔快照内容（不回写主档）
-     * 2. 主体与评级字段按本次校验后的结果原样落快照，不在下游再按证券类型挑字段
-     * 3. 按调库日志落证券信息快照
+     * 1. 本组未准备快照资料时结束处理
+     * 2. 合并页面填写内容，主体与评级沿用本次复核结果
+     * 3. 按日志保存快照，并给调入项补入可沿用的分析
      *
      * @param req 调库提交请求
      * @param shared 已完成前置检查的独立提交上下文
-     * @param snapshots 本次待批量写入的快照
+     * @param snapshots 用于收集待批量写入的快照，传入 null 时逐条写入
      */
     private void postSubmitProcess(SecurityPoolAdjustSubmitReq req, SubmitSharedData shared,
                                    List<AdjustSecuritySnapshotBo> snapshots) {
+        // 1. 本组未准备快照资料时结束处理
         if (req.getSecurityInfo() == null) {
             return;
         }
-        // 1. 合并主档当前值与前端传入字段，作为本笔快照内容（不回写主档）
-        SecurityInfoBo mergedSecurityInfo = buildMergedSecurityInfo(req.getSecurityCode(), req.getSecurityInfo(), shared.securityInfo);
-        // 2. 主体与评级字段按本次校验后的结果原样落快照，不在下游再按证券类型挑字段
-        mergedSecurityInfo.setIssuer(shared.securityInfo.getIssuer());
-        mergedSecurityInfo.setIssuerCode(shared.securityInfo.getIssuerCode());
-        mergedSecurityInfo.setInnerIssuerRating(shared.securityInfo.getInnerIssuerRating());
-        mergedSecurityInfo.setRatingBondissuer(shared.securityInfo.getRatingBondissuer());
-        mergedSecurityInfo.setRatingBondissuerAgency(shared.securityInfo.getRatingBondissuerAgency());
-        mergedSecurityInfo.setGuarantor(shared.securityInfo.getGuarantor());
-        mergedSecurityInfo.setGuarantorId(shared.securityInfo.getGuarantorId());
-        mergedSecurityInfo.setInnerGuarantorRating(shared.securityInfo.getInnerGuarantorRating());
-        req.setSecurityInfo(mergedSecurityInfo);
-        // 3. 按调库日志落证券信息快照
-        if (CreditBondSpecialInboundRule.isAbs(shared.securityInfo) && snapshots == null) {
-            absIdentityService.saveSnapshots(mergedSecurityInfo, shared.submittedLogs, req.getAdjusterId(),
-                    shared.selectedRatingCompany.rightsHolderName, shared.selectedRatingCompany.selfSelectedRightsHolderName);
-        } else {
-            // 为本次提交的每个调库日志写入证券信息快照
-            saveAdjustSecuritySnapshots(req, shared.submittedLogs, shared.selectedRatingCompany, snapshots);
-        }
+        // 2. 合并页面填写内容，主体与评级沿用本次复核结果
+        SecurityInfoBo merged = buildMergedSecurityInfo(req.getSecurityCode(), req.getSecurityInfo(), shared.securityInfo);
+        merged.setIssuer(shared.securityInfo.getIssuer());
+        merged.setIssuerCode(shared.securityInfo.getIssuerCode());
+        merged.setInnerIssuerRating(shared.securityInfo.getInnerIssuerRating());
+        merged.setRatingBondissuer(shared.securityInfo.getRatingBondissuer());
+        merged.setRatingBondissuerAgency(shared.securityInfo.getRatingBondissuerAgency());
+        merged.setGuarantor(shared.securityInfo.getGuarantor());
+        merged.setGuarantorId(shared.securityInfo.getGuarantorId());
+        merged.setInnerGuarantorRating(shared.securityInfo.getInnerGuarantorRating());
+        req.setSecurityInfo(merged);
+        // 3. 按日志保存快照，并给调入项补入可沿用的分析
+        saveAdjustSecuritySnapshots(req, shared, snapshots);
     }
 
     /**
@@ -2844,39 +2865,39 @@ public class SecurityPoolAdjustService {
      * 若统一记成主码，按「日志 ID + 证券代码」精确回查时会查不到快照
      *
      * 执行顺序：
-     * 1. 从合并后的证券信息拷贝同名字段，并补齐快照关联字段
-     * 2. 用当前调库记录自身的证券代码覆盖快照代码，保证快照与日志一一对应
-     * 3. 补齐本次选定评级主体的权益人留痕字段后保存快照
+     * 1. 复制证券资料并填写日志对应的实际证券代码和本次权益人
+     * 2. 调入项沿用近期分析时，同时保存正文和原始来源时间
+     * 3. 直接写入快照，或加入 Excel 待批量写入的集合
      *
      * @param req 调库提交请求
-     * @param logs 本次提交生成的调库记录，按日志 ID 索引
-     * @param selectedRatingCompany 本次提交选定的评级主体
-     * @param snapshots 本次待批量写入的快照
+     * @param shared 本次调库日志、评级主体及可沿用的分析
+     * @param snapshots 用于收集待批量写入的快照，传入 null 时逐条写入
      */
-    private void saveAdjustSecuritySnapshots(SecurityPoolAdjustSubmitReq req, Map<Long, IpAdjustLogBo> logs,
-                                             SelectedRatingCompanyData selectedRatingCompany,
+    private void saveAdjustSecuritySnapshots(SecurityPoolAdjustSubmitReq req, SubmitSharedData shared,
                                              List<AdjustSecuritySnapshotBo> snapshots) {
-        if (logs == null || logs.isEmpty() || req.getSecurityInfo() == null) {
-            return;
-        }
         Date now = new Date();
-        for (IpAdjustLogBo log : logs.values()) {
-            if (log == null || log.getId() == null) {
+        SecurityInfoBo securityInfo = req.getSecurityInfo();
+        boolean abs = CreditBondSpecialInboundRule.isAbs(securityInfo);
+        for (IpAdjustLogBo log : shared.submittedLogs.values()) {
+            if (log.getId() == null) {
                 continue;
             }
-            // 从合并后的证券信息拷贝同名字段，并补齐快照关联字段
-            AdjustSecuritySnapshotBo snapshot = buildAdjustSecuritySnapshot(req.getSecurityInfo(), log.getId(),
+            // 1. 按实际日志保留证券资料及本次使用的评级主体
+            AdjustSecuritySnapshotBo snapshot = buildAdjustSecuritySnapshot(securityInfo, log.getId(),
                     req.getAdjusterId(), now);
-            // 快照证券代码以本条调库记录为准，关联市场代码不能记成主码
             snapshot.setWindCode(log.getSecurityCode());
-            if (selectedRatingCompany != null) {
-                snapshot.setAbsOriginatorName(selectedRatingCompany.rightsHolderName);
-                snapshot.setCompanySelector(selectedRatingCompany.selfSelectedRightsHolderName);
+            snapshot.setAbsOriginatorName(shared.selectedRatingCompany.rightsHolderName);
+            snapshot.setCompanySelector(shared.selectedRatingCompany.selfSelectedRightsHolderName);
+            // 2. 只给调入项补入近期分析和原始来源时间
+            if (shared.inheritedAnalysis != null && AdjustMode.IN.getCode().equals(log.getAdjustMode())) {
+                snapshot.setAnalysis(shared.inheritedAnalysis.getAnalysis());
+                snapshot.setAnalysisSourceTime(shared.inheritedAnalysis.getAnalysisSourceTime());
             }
-            if (snapshots == null) {
-                securityPoolAdjustMapper.addAdjustSecuritySnapshot(snapshot);
-            } else {
+            // 3. Excel 直通先收集快照，其他提交直接写入
+            if (snapshots != null) {
                 snapshots.add(snapshot);
+            } else if (securityPoolAdjustMapper.addAdjustSecuritySnapshot(snapshot) != 1 && abs) {
+                throw new BizException("ABS[" + log.getSecurityCode() + "]申请主体快照保存失败");
             }
         }
     }
@@ -5757,6 +5778,9 @@ public class SecurityPoolAdjustService {
         /** 证券基础信息（来自 rrs_securityinfo） */
         final SecurityInfoBo securityInfo;
 
+        /** 可沿用到本组调入项的证券分析及原始来源时间 */
+        Row inheritedAnalysis;
+
         /** 全量投资池索引（ID → Bo），用于快速查找池详情和构建池路径名称 */
         final Map<Long, InvestmentPoolBo> poolMap;
 
@@ -5882,6 +5906,9 @@ public class SecurityPoolAdjustService {
     private static class BatchSubmitData {
         /** 已读取的证券、池配置及独立调入状态 */
         final BatchSecurityCheckData data = new BatchSecurityCheckData();
+
+        /** 按发行人保存本批可沿用的近期证券分析 */
+        final Map<String, Row> latestAnalyses = new HashMap<>();
 
         /** 已解析的流程 Key */
         final Map<String, Long> flowIds = new HashMap<>();

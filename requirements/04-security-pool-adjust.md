@@ -362,7 +362,7 @@
 
 **报告条件：**`queryIssuerHasRecentCreditReportWithinDays(securityCode, 180)` 查询同发行人债券的已通过调入业务：通过 `ip_pool_status.adjust_log_id` 关联 `ip_adjust_log`，证券发行人代码与当前券非空 `issuer_code` 相同，池状态与调库日志均为 `audit_status=20`、`adjust_mode=调入`，日志未删除。近180天统一按池状态的实际入库时间 `entry_time` 判断，包含边界、不接受未来或缺失时间，日志创建、报告创建和附件绑定时间均不参与计算。业务下存在未删除的信评附件（`sys_attachment.table_name=ip_adjust_log`、`main_id=调库日志ID`、`attachment_category=credit_report_hand/credit_report_in/credit_report_out`）即可；手工上传、内部引用和外部引用均计入，不检查原报告主体、类型或创建时间，出库业务及其他材料不计入。已出池软删的历史入库记录仍计入。**非简易信用债入库经历与信评附件条件仍独立判断，不要求来自同一笔业务；信评附件所在入库业务不额外限制流程类型或目标池类型**。简易流程不复用“半年调入日志带报告”的提交报告豁免条件，该豁免仍沿用原有6个自然月和日志创建时间口径。
 
-**证券分析条件：**`queryIssuerHasRecentAnalysisWithinDays(securityCode, 180)` 查询同发行人债券已审批通过的调入记录：通过 `ip_adjust_log` 关联 `rrs_securityinfo` 与 `ip_adjust_security_snapshot`，证券发行人代码与当前券非空 `issuer_code` 相同，调库日志为 `audit_status=20`、`adjust_mode=调入`、未删除，近180天按日志创建时间 `crte_time` 判断。对应快照存在非空、非空白内容的「证券分析」（`snap.analysis IS NOT NULL AND TRIM(snap.analysis) != ''`）。发起调库申请时（`querySecurityDetail` 无历史 logId 时），默认调用 `queryLatestAnalysisByIssuerWithinDays(securityCode, 180)` 带出同发行人近180天内最新的证券分析文本。
+**证券分析条件。** `queryIssuerHasRecentAnalysisWithinDays(securityCode, 180)` 查询同发行人已审批通过的调入日志及本券有效快照，正文须有内容。按分析的原始来源时间算近 180 天。人工批量沿用的分析按快照 `analysis_source_time` 判断，其他分析按对应日志的 `crte_time` 判断。发起单笔调库时，`queryLatestAnalysisByIssuerWithinDays(securityCode, 180)` 按同一口径带出最新正文。
 
 旧简易流程的“本券剩余天数≤同主体目标池最大剩余天数”“同目标池180天内非简易入池”及原主体/展望/担保人评级下调条件不再参与简易命中。
 

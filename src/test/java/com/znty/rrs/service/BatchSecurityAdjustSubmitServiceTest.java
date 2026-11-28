@@ -10,6 +10,7 @@ import com.znty.rrs.entity.bo.NodeApprovalConfigBo;
 import com.znty.rrs.entity.bo.SecurityInfoBo;
 import com.znty.rrs.entity.securitypooladjust.AdjustSubmitDto;
 import com.znty.rrs.entity.securitypooladjust.BatchSecurityCheckData;
+import com.znty.rrs.entity.securitypooladjust.BatchSecurityCheckData.Row;
 import com.znty.rrs.entity.securitypooladjust.RatingCompanySelectionReq;
 import com.znty.rrs.entity.securitypooladjust.SecurityPoolAdjustSubmitReq;
 import com.znty.rrs.mapper.BatchSecurityCheckMapper;
@@ -35,6 +36,7 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.sql.ResultSet;
 import java.sql.Statement;
+import java.sql.Timestamp;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -73,9 +75,18 @@ public class BatchSecurityAdjustSubmitServiceTest {
                 master.setWindCode(code);
                 master.setSecurityType(code.startsWith("ABS") ? "abs" : "mtn");
                 master.setIssuerCode("OLD");
+                if ("B2.IB".equals(code)) {
+                    master.setAnalysis("本次证券分析");
+                }
                 data.securities.put(code, master);
                 data.excelSecurityCodes.put(code, code);
             }
+            Row analysis = new Row();
+            analysis.setCompanyCode("OLD");
+            analysis.setAnalysis("沿用的主体分析");
+            analysis.setAnalysisSourceTime(Timestamp.valueOf("2026-09-01 12:00:00"));
+            when(fixture.reads.queryLatestAnalysisByIssuers(Collections.singletonList("OLD"), 180))
+                    .thenReturn(Collections.singletonList(analysis));
             when(fixture.legacy.querySecurityBoByCode("ABS.IB")).thenReturn(data.securities.get("ABS.IB"));
             SecurityPoolAdjustSubmitReq first = request("B1.SH", "调入", item("B1.SH", "调入", "manual"),
                     item("B1.IB", "调入", "related"));
@@ -96,6 +107,10 @@ public class BatchSecurityAdjustSubmitServiceTest {
                     + " ON s.adjust_log_id=l.id AND s.wind_code=l.security_code"));
             assertEquals(1, count(sql, "SELECT COUNT(*) FROM ip_adjust_security_snapshot"
                     + " WHERE wind_code='ABS.IB' AND issuer_code='RIGHTS' AND abs_originator_name='权益人'"));
+            assertEquals(4, count(sql, "SELECT COUNT(*) FROM ip_adjust_security_snapshot"
+                    + " WHERE analysis='沿用的主体分析' AND analysis_source_time='2026-09-01 12:00:00'"));
+            assertEquals(1, count(sql, "SELECT COUNT(*) FROM ip_adjust_security_snapshot"
+                    + " WHERE wind_code='B2.IB' AND analysis='本次证券分析' AND analysis_source_time IS NULL"));
             assertEquals(5, count(sql, "SELECT COUNT(*) FROM ip_pool_status p JOIN ip_adjust_log l"
                     + " ON p.adjust_log_id=l.id AND p.security_code=l.security_code AND p.target_pool_id=l.target_pool_id"
                     + " WHERE p.is_deleted=0"));
@@ -115,6 +130,7 @@ public class BatchSecurityAdjustSubmitServiceTest {
             verify(fixture.legacy, never()).querySecurityCurrentPoolIdList(anyString());
             verify(fixture.legacy, never()).addAdjustLog(any());
             verify(fixture.reads, never()).querySecurities(anyList());
+            verify(fixture.reads).queryLatestAnalysisByIssuers(Collections.singletonList("OLD"), 180);
             verify(fixture.flows).queryFlowById(112L);
             session.rollback(true);
             assertEquals(0, count(sql, "SELECT COUNT(*) FROM ip_adjust_log"));

@@ -178,10 +178,20 @@ public interface BatchSecurityCheckMapper {
      * 按发行人批量查询简易资格所需的历史证券分析
      *
      * @param companyCodes 发行主体代码列表
-     * @param days 按实际入池日期回溯的天数
+     * @param days 按证券分析原始来源时间回溯的天数
      * @return 存在有效证券分析的发行人代码列表
      */
     List<String> queryRecentAnalysisIssuers(@Param("companyCodes") List<String> companyCodes,
+            @Param("days") int days);
+
+    /**
+     * 按发行人批量查询近指定天数内最新的证券分析及原始来源时间
+     *
+     * @param companyCodes 发行人代码列表
+     * @param days 按证券分析原始来源时间回溯的天数
+     * @return 有效的正文和原始来源时间，每个发行人最多一条
+     */
+    List<Row> queryLatestAnalysisByIssuers(@Param("companyCodes") List<String> companyCodes,
             @Param("days") int days);
 
     /**

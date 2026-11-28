@@ -162,8 +162,14 @@ public class BatchSecurityCheckData {
         /** 传入的证券代码 */
         private String securityCode;
 
-        /** 主档确认或在途申请使用的 ABS 主体 */
+        /** 发行人代码或主档确认、在途申请使用的 ABS 主体 */
         private String companyCode;
+
+        /** 发行人近 180 天内最新的证券分析 */
+        private String analysis;
+
+        /** 证券分析的原始来源时间 */
+        private Date analysisSourceTime;
 
         /** 是否已有在库或在途记录但尚未确认主体 */
         private boolean unconfirmedIdentity;
