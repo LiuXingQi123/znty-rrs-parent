@@ -197,6 +197,14 @@ public interface TempSecurityCodeMapper {
     TempSecurityCodeDto.CompanyOption queryCompanyByCode(@Param("companyCode") String companyCode);
 
     /**
+     * 按主体代码查询 AIS 最新内评分
+     *
+     * @param companyCode 发行主体代码
+     * @return 最新内评分，未评级时为 null
+     */
+    String queryIssuerInnerRating(@Param("companyCode") String companyCode);
+
+    /**
      * 按关键字远程查询正式证券（rrs_securityinfo，最多 50 条）
      *
      * @param req 正式证券选项查询条件
@@ -256,9 +264,9 @@ public interface TempSecurityCodeMapper {
     int querySecurityInfoCount(@Param("securityCode") String securityCode);
 
     /**
-     * 新增证券信息
+     * 新增临时证券占位主档
      *
-     * @param bo 待写入的证券临时代码登记
+     * @param bo 待写入主档的临时证券信息及发行主体内评分
      */
     void addSecurityInfo(TempSecurityCodeBo bo);
 

@@ -113,6 +113,8 @@ public class TempSecurityCodePersistenceTest {
             createSchema(file);
         }
         jdbc.execute("CREATE ALIAS DATE_FORMAT FOR 'com.znty.rrs.service.TempSecurityCodePersistenceTest.formatDate'");
+        jdbc.execute("CREATE SCHEMA ais_inv_analysis");
+        jdbc.execute("CREATE TABLE ais_inv_analysis.v_inv_grade_result (windcode VARCHAR(100), total_score VARCHAR(50), ts TIMESTAMP)");
         jdbc.execute("CREATE SCHEMA ais_inv_ods");
         jdbc.execute("CREATE TABLE ais_inv_ods.wind_compintroduction (COMP_ID VARCHAR(40),COMP_NAME VARCHAR(200),"
                 + "COMP_SNAME VARCHAR(100),REGISTERNUMBER VARCHAR(30))");
@@ -181,6 +183,8 @@ public class TempSecurityCodePersistenceTest {
     /** 验证发行主体直接限制 100 条，并可组合使用三个弹窗条件 */
     @Test
     public void issuerOptionListShouldLimitMatchedRowsAndApplyFilters() {
+        // 测试库移除内评来源，确认主体列表只依赖公司简介
+        jdbc.execute("DROP TABLE ais_inv_analysis.v_inv_grade_result");
         jdbc.update("INSERT INTO ais_inv_ods.wind_compintroduction (COMP_ID, COMP_NAME, REGISTERNUMBER)"
                 + " SELECT CONCAT('B', X), '测试发行主体', '913100000000000002' FROM SYSTEM_RANGE(1, 105)");
         jdbc.update("INSERT INTO ais_inv_ods.wind_compintroduction (COMP_ID, COMP_NAME, REGISTERNUMBER) VALUES"
@@ -1102,6 +1106,21 @@ public class TempSecurityCodePersistenceTest {
                 .isEqualTo("TEMP_001.IB");
         assertThat(jdbc.queryForObject("SELECT sec_id FROM rrs_securityinfo WHERE wind_code='001.IB'", String.class))
                 .isEqualTo("TEMP_001.IB");
+    }
+
+    /** 新增时保存所选主体的最新内评分，未评级也能新增 */
+    @Test
+    public void addShouldPersistLatestIssuerRating() throws Exception {
+        service.addTempSecurityCode(addReq("UNRATED.IB"));
+        String sql = "SELECT inner_issuer_rating FROM rrs_securityinfo WHERE wind_code = ?";
+        assertThat(jdbc.queryForObject(sql, String.class, "UNRATED.IB")).isNull();
+
+        jdbc.update("INSERT INTO ais_inv_analysis.v_inv_grade_result VALUES"
+                + " ('C10001','2+',TIMESTAMP '2026-11-02 00:00:00'),"
+                + " ('OTHER','4',TIMESTAMP '2026-11-04 00:00:00'),"
+                + " ('C10001','1',TIMESTAMP '2026-11-03 00:00:00')");
+        service.addTempSecurityCode(addReq("RATED.IB"));
+        assertThat(jdbc.queryForObject(sql, String.class, "RATED.IB")).isEqualTo("1");
     }
 
     /** 新增临时代码时，三个常用市场都同步写入临时代码表和证券表。 */

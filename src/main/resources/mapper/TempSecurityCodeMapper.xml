@@ -220,6 +220,15 @@
         LIMIT 1
     </select>
 
+    <!-- 按主体代码取 AIS 更新时间最新的一条内评分 -->
+    <select id="queryIssuerInnerRating" resultType="string">
+        SELECT grade.total_score
+        FROM ais_inv_analysis.v_inv_grade_result grade
+        WHERE grade.windcode = #{companyCode}
+        ORDER BY grade.ts DESC
+        LIMIT 1
+    </select>
+
     <!-- 按关键字远程查询正式证券（对齐老系统债券选券：代码/名称模糊，排除临时代码占位与退市，最多 50 条） -->
     <select id="queryFormalSecurityOptionList" resultType="com.znty.rrs.entity.tempsecuritycode.TempSecurityCodeDto$FormalSecurityOption">
         SELECT si.wind_code AS securityCode
@@ -317,18 +326,16 @@
         WHERE wind_code = #{securityCode}
     </select>
 
-    <!-- 新增临时代码占位证券，状态写 L 表示上市中 -->
+    <!-- 写入临时证券占位主档和已查到的主体内评分，状态写 L 表示上市中 -->
     <insert id="addSecurityInfo">
         INSERT INTO rrs_securityinfo (
-            wind_code, sec_id, full_name, short_name, security_type
-            , abs_flag, market, issuer, issuer_code
-            , firstissue_date, maturity_date, security_status, security_source
-            , create_time, ts
+            wind_code, full_name, short_name, security_type, issuer, issuer_code
+            , firstissue_date, maturity_date, create_time, ts
+            , security_status, security_source, inner_issuer_rating, abs_flag, sec_id, market
         ) VALUES (
-            #{securityCode}, #{secId}, #{securityName}, #{securityName}, #{securityType}
-            , CASE WHEN #{securityType} = 'abs' THEN 1 ELSE NULL END, #{securityMarket}, #{tempCompanyNameSnapshot}, #{tempCompanyCode}
-            , DATE_FORMAT(#{tempIssueDate}, '%Y%m%d'), DATE_FORMAT(#{tempMaturityDate}, '%Y%m%d'), 'L', #{securitySource}
-            , #{updateTime}, #{updateTime}
+            #{securityCode}, #{securityName}, #{securityName}, #{securityType}, #{tempCompanyNameSnapshot}, #{tempCompanyCode}
+            , DATE_FORMAT(#{tempIssueDate}, '%Y%m%d'), DATE_FORMAT(#{tempMaturityDate}, '%Y%m%d'), #{updateTime}, #{updateTime}
+            , 'L', #{securitySource}, #{innerIssuerRating}, CASE WHEN #{securityType} = 'abs' THEN 1 ELSE NULL END, #{secId}, #{securityMarket}
         )
     </insert>
 

@@ -36,6 +36,9 @@ public class TempSecurityCodeBo {
     /** 临时关联主体名称快照 */
     private String tempCompanyNameSnapshot;
 
+    /** 主体内评分（用于写入临时证券占位主档） */
+    private String innerIssuerRating;
+
     /** 临时发行日期 */
     private Date tempIssueDate;
 

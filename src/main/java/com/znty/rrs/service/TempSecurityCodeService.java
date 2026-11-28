@@ -126,26 +126,26 @@ public class TempSecurityCodeService {
      * 新增临时代码
      *
      * 执行顺序：
-     * 1. 校验新增请求参数
-     * 2. 查询发行主体并生成快照
-     * 3. 解析主体展示名称
-     * 4. 页面人工新增
-     * 5. 同步临时代码证券主数据
-     * 6. 查询新增后的临时代码详情
+     * 1. 校验新增请求，临时代码已登记时拒绝
+     * 2. 按代码查找发行主体，查不到时拒绝
+     * 3. 保存临时代码登记，主体名称优先取全称
+     * 4. 同步临时证券占位主档和主体内评分
+     * 5. 返回新增后的登记详情
      *
-     * @param req 证券临时代码查询或维护请求
-     * @return 临时证券代码
+     * @param req 临时代码新增请求
+     * @return 新增后的临时代码详情
      */
     @Transactional(rollbackFor = Exception.class)
     public TempSecurityCodeDto addTempSecurityCode(TempSecurityCodeReq req) {
         // 1. 校验新增请求参数
         validateAddReq(req);
         Date now = new Date();
-        // 2. 查询发行主体并生成快照
+        // 2. 按代码查找发行主体，查不到时拒绝新增
         TempSecurityCodeDto.CompanyOption company = tempSecurityCodeMapper.queryCompanyByCode(req.getTempCompanyCode());
         if (company == null) {
             throw new BizException("发行主体不存在，tempCompanyCode=" + req.getTempCompanyCode());
         }
+        // 3. 准备并保存人工新增的临时代码登记
         TempSecurityCodeBo bo = new TempSecurityCodeBo();
         bo.setTempSecurityName(req.getTempSecurityName());
         bo.setTempSecurityCode(req.getTempSecurityCode());
@@ -154,20 +154,19 @@ public class TempSecurityCodeService {
         bo.setTempSecurityType(req.getTempSecurityType());
         bo.setTempMitigationCode(req.getTempMitigationCode());
         bo.setTempCompanyCode(req.getTempCompanyCode());
-        // 3. 解析主体展示名称
+        // 优先用全称记录主体名称，没有全称时用简称
         bo.setTempCompanyNameSnapshot(resolveCompanyName(company));
         bo.setTempIssueDate(req.getTempIssueDate());
         bo.setTempMaturityDate(req.getTempMaturityDate());
         bo.setStatus(TempStatus.TEMPORARY.getCode());
-        // 4. 页面人工新增
         bo.setOprtSource(TempOprtSource.MANUAL.getCode());
         bo.setIsDeleted(0);
         bo.setCrteTime(now);
         bo.setUpdtTime(now);
         tempSecurityCodeMapper.addTempSecurityCode(bo);
-        // 5. 同步临时代码证券主数据
+        // 4. 同步临时证券占位主档和主体内评分
         addTempSecurityInfo(bo);
-        // 6. 查询新增后的临时代码详情
+        // 5. 查询并返回新增后的临时代码详情
         return queryTempSecurityCodeDetail(bo.getId());
     }
 
@@ -860,15 +859,19 @@ public class TempSecurityCodeService {
     }
 
     /**
-     * 同步新增临时代码证券主数据
+     * 新增临时证券占位主档
+     *
+     * 主体内评分以提交时查到的结果为准，查不到评分时留空
      *
      * 执行顺序：
-     * 1. 查询证券信息数量
-     * 2. 新增证券信息
+     * 1. 临时代码已被证券主档占用时拒绝新增
+     * 2. 按发行主体代码查询最新内评分
+     * 3. 保存临时证券占位主档
      *
-     * @param sourceBo 来源记录
+     * @param sourceBo 已保存的临时代码登记
      */
     private void addTempSecurityInfo(TempSecurityCodeBo sourceBo) {
+        // 1. 临时代码已被证券主档占用时拒绝新增
         int count = tempSecurityCodeMapper.querySecurityInfoCount(sourceBo.getTempSecurityCode());
         if (count > 0) {
             throw new BizException("临时证券代码已存在于证券主数据，tempSecurityCode=" + sourceBo.getTempSecurityCode());
@@ -881,10 +884,13 @@ public class TempSecurityCodeService {
         bo.setSecurityType(sourceBo.getTempSecurityType());
         bo.setTempCompanyCode(sourceBo.getTempCompanyCode());
         bo.setTempCompanyNameSnapshot(sourceBo.getTempCompanyNameSnapshot());
+        // 2. 按发行主体代码查询最新内评分
+        bo.setInnerIssuerRating(tempSecurityCodeMapper.queryIssuerInnerRating(sourceBo.getTempCompanyCode()));
         bo.setTempIssueDate(sourceBo.getTempIssueDate());
         bo.setTempMaturityDate(sourceBo.getTempMaturityDate());
         bo.setUpdateTime(sourceBo.getCrteTime());
         bo.setSecuritySource("temporary");
+        // 3. 写入占位主档，供后续调库查询
         tempSecurityCodeMapper.addSecurityInfo(bo);
     }
 

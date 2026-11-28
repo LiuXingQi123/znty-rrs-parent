@@ -72,6 +72,8 @@
 
 新增临时代码时，「资产支持证券」（`abs`）的占位主档写入 `abs_flag=1`，可在「禁投池调整 → ABS」中查询。其他类型（含「资产证券化」`abs_all`）的占位标识为空。
 
+提交新增时，后端按主体代码单独查询一次 `ais_inv_analysis.v_inv_grade_result`，取 `ts` 最新记录的 `total_score`，写入占位主档的 `inner_issuer_rating`。无评分时写 `NULL`，仍可新增。
+
 ### 3.2 更新为正式证券 `editTempSecurityCodeToUpdated`（`@Transactional`）
 
 对齐老系统 `TempSecurityInfoTableAction#refreshTempSecurity`，**流程中 vs 已在池分叉处理**（逻辑不同）：

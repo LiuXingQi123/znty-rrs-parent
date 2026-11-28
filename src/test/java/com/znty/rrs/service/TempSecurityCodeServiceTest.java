@@ -42,7 +42,7 @@ import static org.mockito.Mockito.doAnswer;
 /** 临时代码管理服务测试。 */
 public class TempSecurityCodeServiceTest {
 
-    /** 验证新增临时代码时同步写入证券主数据。 */
+    /** 验证新增临时代码时只查一次主体内评分，并同步写入证券主档 */
     @Test
     public void addTempSecurityCodeShouldSyncSecurityInfo() throws Exception {
         TempSecurityCodeMapper mapper = mock(TempSecurityCodeMapper.class);
@@ -53,6 +53,7 @@ public class TempSecurityCodeServiceTest {
         company.setCompanyCode("C10001");
         company.setFullName("某交投集团");
         when(mapper.queryCompanyByCode("C10001")).thenReturn(company);
+        when(mapper.queryIssuerInnerRating("C10001")).thenReturn("2+");
         when(mapper.querySecurityTypeCount("mtn")).thenReturn(1);
         when(mapper.queryTempSecurityCodeCount("TMP001", null)).thenReturn(0);
         when(mapper.querySecurityInfoCount("TMP001")).thenReturn(0);
@@ -61,6 +62,8 @@ public class TempSecurityCodeServiceTest {
 
         ArgumentCaptor<TempSecurityCodeBo> captor = ArgumentCaptor.forClass(TempSecurityCodeBo.class);
         verify(mapper).addSecurityInfo(captor.capture());
+        verify(mapper).queryIssuerInnerRating("C10001");
+        assertThat(captor.getValue().getInnerIssuerRating()).isEqualTo("2+");
         assertThat(captor.getValue().getSecurityCode()).isEqualTo("TMP001");
         assertThat(captor.getValue().getSecId()).isEqualTo("TEMP_TMP001");
         ArgumentCaptor<TempSecurityCodeBo> tempCaptor = ArgumentCaptor.forClass(TempSecurityCodeBo.class);
